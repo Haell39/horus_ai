@@ -1,0 +1,93 @@
+/* ==========================
+   PRELOADER
+========================== */
+.preloader-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: none; /* começa oculto */
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  background-color: var(--bg-principal); /* usa cor do tema atual */
+  z-index: 99999;
+  transition: background 0.3s ease;
+}
+
+.preloader-container.show {
+  display: flex;
+}
+
+.preloader-container.hide {
+  display: none;
+}
+
+/* ==========================
+   GIF
+========================== */
+.gif {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1%;
+}
+
+.gif img {
+  width: 240px;
+}
+
+/* ==========================
+   SPINNER
+========================== */
+.spinner.loader {
+  width: 50px;
+  aspect-ratio: 1;
+  display: grid;
+  border: 4px solid transparent;
+  border-radius: 50%;
+  border-color: var(--texto-cor) transparent; /* cor do tema */
+  animation: spin 1s infinite linear;
+}
+
+.spinner.loader::before,
+.spinner.loader::after {
+  content: "";
+  grid-area: 1/1;
+  margin: 2px;
+  border: inherit;
+  border-radius: 50%;
+}
+
+.spinner.loader::before {
+  border-color: var(--texto-cor) transparent;
+  animation: inherit;
+  animation-duration: 0.5s;
+  animation-direction: reverse;
+}
+
+.spinner.loader::after {
+  margin: 8px;
+}
+
+/* ==========================
+   ANIMAÇÃO DO SPINNER
+========================== */
+@keyframes spin {
+  100% {
+    transform: rotate(1turn);
+  }
+}
+
+/* ==========================
+   RESPONSIVIDADE
+========================== */
+@media screen and (max-width: 850px) {
+  .gif img {
+    width: 40%;
+  }
+
+  .spinner.loader {
+    width: 40px;
+  }
+}

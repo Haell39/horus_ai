@@ -1,0 +1,78 @@
+<app-sidebar></app-sidebar>
+
+<div class="configuracoes-container">
+  <h2>Configurações</h2>
+
+  <div class="cards-container">
+
+    <!-- Tema -->
+    <div class="card">
+      <h3>Tema</h3>
+      <div class="linha">
+        <label>Modo Escuro</label>
+        <label class="switch">
+          <input type="checkbox" [checked]="isModoEscuro" (change)="alternarTema()">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <p class="descricao">
+        Tema escuro {{ isModoEscuro ? 'ativado' : 'desativado' }}
+      </p>
+    </div>
+
+    <!-- Armazenamento -->
+    <div class="card card-armazenamento" (click)="abrirGerenciarClipes()">
+
+      <h3>Armazenamento</h3>
+      <div class="linha">
+        <label>Gerenciar espaço em disco</label>
+        <div class="espaco-usado">
+          <span>Usado</span>
+          <strong>{{ storageUsed.toFixed(2) }} GB / {{ storageTotal }} GB</strong>
+        </div>
+        <div class="barra">
+          <div class="progresso" [style.width.%]="storagePercent"></div>
+        </div>
+      </div>
+      <p class="descricao">
+        {{ (storageTotal - storageUsed).toFixed(2) }} GB disponíveis
+      </p>
+    </div>
+
+    <!-- Notificações -->
+    <div class="card">
+      <h3>Notificações</h3>
+      <div class="linha">
+        <label>Som de Alerta</label>
+        <select [(ngModel)]="configuracoes.somAlerta">
+          <option value="beep">Alerta Curto (Padrão)</option>
+          <option value="digital">Alerta Digital</option>
+          <option value="alerta">Alerta Sutil</option>
+        </select>
+        <button class="testar-som" (click)="testarSom()">🔊 Testar</button>
+      </div>
+    </div>
+
+    <!-- Exportação -->
+    <div class="card">
+      <h3>Exportação</h3>
+      <div class="linha">
+        <label>Formato de Relatórios</label>
+        <select [(ngModel)]="configuracoes.formatoRelatorio">
+          <option value="padrao">Formato Padrão</option>
+          <option value="csv">CSV</option>
+          <option value="pdf">PDF</option>
+        </select>
+      </div>
+    </div>
+
+  </div>
+
+  <button class="salvar-tudo" (click)="salvarTudo()">Salvar Alterações</button>
+</div>
+
+<!-- Modal Gerenciar Clipes -->
+<app-gerenciar-clipes
+  *ngIf="mostrarModal"
+  (fechar)="fecharGerenciarClipes()">
+</app-gerenciar-clipes>

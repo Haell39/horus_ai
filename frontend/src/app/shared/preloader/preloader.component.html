@@ -1,0 +1,12 @@
+<div
+  class="preloader-container"
+  [ngClass]="{
+    'show': loading$ | async,
+    'hide': !(loading$ | async)
+  }"
+>
+  <div class="gif">
+    <img src="gif.gif" alt="carregando..." />
+  </div>
+  <div class="spinner loader"></div>
+</div>

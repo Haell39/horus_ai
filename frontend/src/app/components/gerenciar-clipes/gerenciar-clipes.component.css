@@ -1,0 +1,235 @@
+.modal-backdrop {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 999;
+  }
+  
+  .modal-container {
+    background: var(--card-bg, #242830);
+    color: var(--texto-cor, #e5e7eb);
+    width: 600px;
+    max-height: 80vh;
+    border-radius: 10px;
+    padding: 20px;
+    overflow-y: auto;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+  }
+  
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .modal-header h3 {
+    margin: 0;
+  }
+  
+  .fechar {
+    cursor: pointer;
+    font-size: 1.2rem;
+  }
+  
+  .descricao {
+    font-size: 0.9rem;
+    color: #bbb;
+    margin-bottom: 1rem;
+  }
+  
+  /* Barra de progresso */
+  .barra-container {
+    margin-bottom: 1rem;
+  }
+  
+  .barra {
+    width: 100%;
+    height: 10px;
+    background: #444;
+    border-radius: 5px;
+    margin-bottom: 5px;
+  }
+  
+  .progresso {
+    height: 100%;
+    background: var(--btn-bg, #007bff);
+    border-radius: 5px;
+    transition: width 0.3s;
+  }
+  
+  .info {
+    display: flex;
+    justify-content: space-between;
+  }
+  
+  /* Ações */
+  .acoes {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+  }
+  
+  button {
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+  }
+  
+  .btn-vermelho { background: #e74c3c; color: white; }
+  .btn-vermelho:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-selecionar { background: #3498db; color: white; }
+  
+  /* Lista de clipes */
+  .lista-clipes {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .clip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: var(--input-bg, #2a2f3a);
+    border-radius: 6px;
+  }
+  
+  .info-clip {
+    display: flex;
+    flex-direction: column;
+  }
+  
+
+  .lista-falhas {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    background: var(--card-bg, #1e2128);
+    padding: 15px;
+    border-radius: 12px;
+    overflow-y: auto;
+    max-height: 65vh;
+  }
+  
+  .lista-falhas li {
+    display: flex;
+    align-items: center;
+    background: var(--input-bg, #2a2f3a);
+    border-radius: 10px;
+    padding: 10px;
+    gap: 14px;
+    transition: 0.2s ease;
+    cursor: pointer;
+  }
+  
+  .lista-falhas li:hover {
+    background: var(--btn-hover-bg, #353b47);
+  }
+  
+  .lista-falhas::-webkit-scrollbar {
+    width: 8px;
+  }
+  .lista-falhas::-webkit-scrollbar-thumb {
+    background: var(--btn-bg, #007bff);
+    border-radius: 10px;
+  }
+  
+  /* === Paginação === */
+  .paginacao-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    background: var(--card-bg, #1e2128);
+    padding: 10px 18px;
+    border-radius: 10px;
+    color: var(--cor-10, #c5c9d3);
+    font-size: 0.95rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    margin-top: 10px;
+  }
+  
+  .btn-paginacao {
+    background: transparent;
+    border: none;
+    color: var(--texto-cor, #dce0e8);
+    font-weight: 600;
+    cursor: pointer;
+  }
+  
+  .pagina-info {
+    font-weight: 600;
+    color: var(--texto-cor, #fff);
+  }
+  
+  /* Dropdown */
+  .menu-itens {
+    position: relative;
+  }
+  .menu-btn {
+    background: transparent;
+    border: none;
+    color: var(--texto-cor, #dce0e8);
+    font-size: 1.3rem;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+  .menu-btn:hover {
+    color: var(--btn-bg, #3399ff);
+  }
+  .dropdown-itens {
+    position: absolute;
+    bottom: 35px;
+    right: 0;
+    background: var(--input-bg, #2c313b);
+    padding: 10px 14px;
+    border-radius: 8px;
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.5);
+    z-index: 5;
+  }
+  .dropdown-itens label {
+    font-size: 0.85rem;
+    color: var(--cor-16, #b6bac6);
+  }
+  .dropdown-itens select {
+    background: var(--card-bg, #1e2128);
+    color: var(--texto-cor, #dce0e8);
+    border: none;
+    border-radius: 6px;
+    padding: 4px 6px;
+  }
+  .menu-itens:hover .dropdown-itens {
+    display: flex;
+  }
+  /* Scroll personalizado do modal */
+.lista-clipes {
+  max-height: 400px; /* ou a altura que quiser */
+  overflow-y: auto;
+}
+
+/* Largura da barra */
+.lista-clipes::-webkit-scrollbar {
+  width: 8px;
+}
+
+/* Cor do “polegar” do scroll (a parte que você arrasta) */
+.lista-clipes::-webkit-scrollbar-thumb {
+  background: var(--btn-bg, #007bff); /* azul igual ao botão */
+  border-radius: 10px;
+}
+
+/* Cor do track (fundo da barra) */
+.lista-clipes::-webkit-scrollbar-track {
+  background: var(--card-bg, #2b2f3b); /* cor de fundo do modal/card */
+  border-radius: 10px;
+}

@@ -1,0 +1,96 @@
+<app-sidebar></app-sidebar>
+
+<div id="conteudo-geral">
+  <h1>Monitoramento</h1>
+
+  <div class="grid">
+    <div class="video-card">
+      <div class="transmissoes">
+        <button
+          *ngFor="let video of videos; let i = index"
+          (click)="trocarTransmissao(i)"
+          [class.ativo]="videoIndex === i"
+        >
+          {{ video.label ? video.label : "Transmissão " + (i + 1) }}
+        </button>
+      </div>
+
+      <video
+        #videoPlayer
+        controls
+        (play)="onPlayVideo()"
+        (ended)="playNextVideo()"
+      >
+        <source [src]="videos[videoIndex].src" type="video/mp4" />
+        Seu navegador não suporta vídeo.
+      </video>
+    </div>
+
+    <div class="stats">
+      <div class="card blue">
+        <p>Total de Ocorrências</p>
+        <p>{{ totalOcorrencias }}</p>
+      </div>
+      <div class="card red">
+        <p>Falhas Graves</p>
+        <p>{{ falhasGraves }}</p>
+      </div>
+      <div class="card yellow">
+        <p>Última Falha</p>
+        <p>{{ ultimaFalha || "N/A" }}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="historicos">
+    <div class="chart-card">
+      <h2>Histórico em Tempo Real</h2>
+      <apx-chart
+        [series]="chartOptions.series"
+        [chart]="chartOptions.chart"
+        [xaxis]="chartOptions.xaxis"
+        [yaxis]="chartOptions.yaxis"
+        [stroke]="chartOptions.stroke"
+        [dataLabels]="chartOptions.dataLabels"
+        [labels]="chartOptions.labels"
+        [legend]="chartOptions.legend"
+        [tooltip]="chartOptions.tooltip"
+      >
+      </apx-chart>
+    </div>
+
+    <div class="alertas">
+      <h2>Alertas Recentes</h2>
+      <ul>
+        <li
+          *ngFor="let alerta of alertas"
+          [ngClass]="['alerta', alerta.tipo, alerta.animacao]"
+        >
+          <div class="alerta-header">
+            <span class="titulo">{{ alerta.mensagem }}</span>
+            <span class="badge" [ngClass]="alerta.tipo">
+              {{ alerta.tipo }} -
+              {{
+                alerta.tipo === "A"
+                  ? "Grave"
+                  : alerta.tipo === "B"
+                  ? "Médio"
+                  : alerta.tipo === "C"
+                  ? "Leve"
+                  : alerta.tipo === "X"
+                  ? "Gravíssima"
+                  : "Info"
+              }}
+            </span>
+          </div>
+          <div class="alerta-meta">
+            <span class="hora">
+              <i class="fa-regular fa-clock"></i> {{ alerta.hora }}
+            </span>
+            <span class="origem">• {{ alerta.origem }}</span>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>

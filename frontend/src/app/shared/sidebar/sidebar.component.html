@@ -1,0 +1,39 @@
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css">
+<nav id="nav">
+  <div class="menu-cabecalho">
+    <h2 class="logo">
+      <img width="50%" [src]="logoSrc" alt="logo" />
+    </h2>
+    <i id="icon-hambur" class="bi bi-list" (click)="toggleMenu()"></i>
+  </div>
+
+  <ul>
+    <li routerLinkActive="active" class="itens-menu">
+      <a [routerLink]="'/monitoramento'">
+        <i class="bi bi-display"></i>
+        <label class="text-menu">Monitoramento</label>
+      </a>
+    </li>
+
+    <li routerLinkActive="active" class="itens-menu">
+      <a [routerLink]="'/cortes'">
+        <i class="bi bi-camera-video-fill"></i>
+        <label class="text-menu">Cortes</label>
+      </a>
+    </li>
+
+    <li routerLinkActive="active" class="itens-menu">
+      <a [routerLink]="'/dados'">
+        <i class="bi bi-archive-fill"></i>
+        <label class="text-menu">Dados</label>
+      </a>
+    </li>
+
+    <li routerLinkActive="active" class="itens-menu">
+      <a [routerLink]="'/configuracoes'">
+        <i class="bi bi-gear-fill"></i>
+        <label class="text-menu">Configurações</label>
+      </a>
+    </li>
+  </ul>
+</nav>

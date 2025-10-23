@@ -1,0 +1,288 @@
+/* ===============================
+   SIDEBAR
+================================= */
+nav {
+    background: #1b1e25;
+    width: 195px;
+    min-width: 70px;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 99;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: start;
+    transition: 0.5s ease-in-out;
+    box-shadow: 7px 0px 18px -12px rgba(0, 0, 0, 0.655);
+}
+
+/* Scroll da sidebar */
+nav::-webkit-scrollbar {
+    width: 5px;
+}
+
+nav::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+nav::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 20px;
+}
+
+/* Toggle de expandir/recolher */
+.toggle-sidebar {
+    position: absolute;
+    top: 10px;
+    right: -15px;
+    width: 30px;
+    height: 30px;
+    background-color: white;
+    border-radius: 50%;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 100;
+}
+
+/* Cabeçalho com logo */
+.menu-cabecalho {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0% 8% 0% 2%;
+}
+
+.logo {
+    width: 100%;
+    display: flex;
+    justify-content: space-around;
+    font-size: 1.8rem;
+}
+
+/* Lista de menus */
+nav ul {
+    list-style: none;
+    padding: 0;
+    margin-top: 35%;
+}
+
+nav ul li {
+    display: flex;
+    align-items: center;
+    padding: 12px 10px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #ffffff;
+    margin-top: 0.25px;
+    transition: 1s ease-in-out;
+}
+
+nav ul li.active,
+nav ul li:hover {
+    background: #2090E7;
+}
+
+nav ul li.active i,
+nav ul li:hover i,
+nav ul li.active label,
+nav ul li:hover label {
+    color: var(--cor-4);
+}
+
+nav ul li a {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+    color: inherit;
+    width: 100%;
+    justify-content: end;
+}
+
+nav ul li i {
+    font-size: 1.2rem;
+    margin-right: 10px;
+}
+
+.text-menu {
+    font-weight: 500;
+    white-space: nowrap;
+    width: 80%;
+    cursor: pointer;
+}
+
+/* Área do usuário */
+.usuario {
+    display: flex;
+    align-items: center;
+    padding: 1px;
+    border-top: 1px solid #eeeeee2d;
+    margin-top: auto;
+}
+
+.usuario-icon {
+    background-color: #d6cfe5;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 10px;
+}
+
+.usuario-icon i {
+    font-size: 2rem;
+    color: #3c1d75;
+}
+
+.usuario .nome {
+    font-weight: 600;
+    color: var(--cor-1);
+    font-size: 14px;
+}
+
+.nome, .funcao {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+}
+
+.funcao {
+    font-size: 10px;
+    color: var(--cor-11);
+}
+
+.contain-nome-user {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.usuario a {
+    font-size: 15px;
+    color: #888;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.usuario a:hover {
+    text-decoration: underline;
+}
+
+/* Ícones da sidebar */
+#icon-hambur {
+    border: 1px solid #b8b8b8;
+    color: var(--cor-1);
+    border-radius: 100px;
+    width: 15px;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+#icon-notification {
+    color: var(--cor-1);
+    cursor: pointer;
+    transition: 0.7s;
+    margin-top: -0.4vh;
+    margin-left: -3vh;
+}
+
+#icon-notification:hover {
+    opacity: 0.6;
+}
+
+.notificacao {
+    display: flex;
+}
+
+.ponto-notificacao {
+    width: 5px;
+    height: 5px;
+    border-radius: 100px;
+    background-color: red;
+    z-index: 1;
+}
+
+/* ===============================
+   TEMA CLARO
+================================= */
+.sidebar-clara {
+    background-color: #ffffff !important;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.sidebar-clara .text-menu,
+.sidebar-clara li,
+.sidebar-clara i {
+    color: #1b1e25 !important;
+}
+
+.sidebar-clara li.active,
+.sidebar-clara li:hover {
+    background: #e9f3ff !important;
+}
+
+/* ===============================
+   RESPONSIVIDADE
+================================= */
+@media screen and (max-width: 850px) {
+    nav {
+        position: fixed;
+        top: 0;
+        width: 96%;
+        height: 65px;
+        flex-direction: column;
+        border-radius: 10px;
+        margin: 2%;
+        overflow: hidden;
+    }
+
+    nav ul {
+        width: 95%;
+        display: flex;
+        flex-direction: column;
+        overflow: overlay;
+        margin-top: 15%;
+    }
+
+    nav ul li {
+        flex: 0 0 auto;
+        padding: 10px 30px;
+        border-radius: 0 10px 10px 0;
+    }
+
+    nav ul li a {
+        justify-content: start;
+    }
+
+    .logo {
+        font-size: 1.5rem;
+        padding: 5px 15px;
+        justify-content: start;
+    }
+
+    .logo img {
+        width: 10vh;
+    }
+
+    .toggle-sidebar {
+        bottom: 10px;
+        top: auto;
+        right: 10px;
+    }
+
+    #icon-notification {
+        margin-top: 0 !important;
+    }
+}

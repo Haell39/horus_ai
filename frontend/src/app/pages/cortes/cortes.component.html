@@ -1,0 +1,103 @@
+<app-sidebar></app-sidebar>
+
+<h2 class="nome-pagina">Clipes de Falhas</h2>
+
+<div class="container-falhas">
+  <!-- FILTROS -->
+  <div class="filtros">
+    <div class="pesquisa">
+      <i class="bi bi-search"></i>
+      <input
+        type="text"
+        placeholder="Pesquisar por título ou descrição"
+        [(ngModel)]="filtroTexto"
+      />
+    </div>
+
+    <div class="tipo">
+      <select [(ngModel)]="filtroTipo">
+        <option value="">Tipos de falha</option>
+        <option *ngFor="let tipo of tiposFalha" [value]="tipo">{{ tipo }}</option>
+      </select>
+    </div>
+
+    <div class="data">
+      <input type="date" [(ngModel)]="filtroData" />
+    </div>
+  </div>
+
+  <!-- CONTEÚDO -->
+  <div class="conteudo" [class.expandido]="!falhaSelecionada">
+    <!-- Lista lateral -->
+    <ul class="lista-falhas">
+      <li
+        *ngFor="let falha of falhasFiltradas"
+        (click)="selecionarFalha(falha)"
+        [class.selecionada]="falha === falhaSelecionada"
+      >
+        <div class="selo" *ngIf="falha === falhaSelecionada"></div>
+        <i [class]="falha.icone" [ngStyle]="{ color: getCor(falha) }"></i>
+        <div>
+          <strong>{{ falha.titulo }}</strong>
+          <div class="data">{{ falha.data }}</div>
+          <div class="descricao">{{ getDescricaoCurta(falha.descricao, 30) }}</div>
+        </div>
+      </li>
+    </ul>
+
+    <!-- Painel de detalhes -->
+    <div class="detalhes" *ngIf="falhaSelecionada">
+      <video controls>
+        <source [src]="falhaSelecionada.videoUrl" type="video/mp4" />
+        Seu navegador não suporta vídeo.
+      </video>
+
+      <div class="info-bloco">
+        <h3>{{ falhaSelecionada.titulo }}</h3>
+        <p><b>Descrição:</b> {{ falhaSelecionada.descricao }}</p>
+        <p><b>Horário:</b> {{ falhaSelecionada.horario }}</p>
+        <p><b>Data:</b> {{ falhaSelecionada.dataCompleta }}</p>
+        <p><b>Programa:</b> {{ falhaSelecionada.programa }}</p>
+        <p><b>Duração:</b> {{ falhaSelecionada.duracao }}</p>
+      </div>
+
+      <div class="acoes">
+        <button class="btn-azul" (click)="downloadClip(falhaSelecionada!)">⬇️ Download Clipe</button>
+        <button class="btn-verde">✔️ Marcar como Resolvido</button>
+        <button class="btn-vermelho">📩 Abrir Ticket</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGINAÇÃO -->
+  <div class="paginacao-container">
+    <button class="btn-paginacao" (click)="paginaAnterior()" [disabled]="paginaAtual === 1">
+      Anterior
+    </button>
+
+    <span class="pagina-info">{{ paginaAtual }} de {{ totalPaginas }}</span>
+
+    <button class="btn-paginacao" (click)="proximaPagina()" [disabled]="paginaAtual === totalPaginas">
+      Próximo
+    </button>
+
+    <div class="paginacao-separador">•</div>
+    <div class="paginacao-separador">•</div>
+
+    <div class="menu-itens">
+      <button class="menu-btn" (click)="toggleDropdown()">
+        <i class="bi bi-list"></i>
+      </button>
+
+      <div class="dropdown-itens" [style.display]="mostrarDropdown ? 'flex' : 'none'">
+        <label>Itens por página</label>
+        <select [value]="itensPorPagina" (change)="mudarItensPorPagina($event)">
+          <option [value]="10">10</option>
+          <option [value]="20">20</option>
+          <option [value]="50">50</option>
+          <option [value]="100">100</option>
+        </select>
+      </div>
+    </div>
+  </div>
+</div>

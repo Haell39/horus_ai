@@ -1,0 +1,82 @@
+<app-sidebar></app-sidebar>
+
+<div class="conteudo-dados">
+  <h2 class="titulo-pagina">Dados de Falhas</h2>
+
+  <!-- 🔍 FILTROS INTERATIVOS -->
+  <div class="filtros-container">
+    <div class="filtro">
+      <label>Período:</label>
+      <select [(ngModel)]="periodoSelecionado" (change)="aplicarFiltros()">
+        <option value="7d">Últimos 7 dias</option>
+        <option value="30d">Últimos 30 dias</option>
+        <option value="2m">Últimos 2 meses</option>
+      </select>
+    </div>
+
+    <div class="filtro">
+      <label>Tipo de Erro:</label>
+      <select [(ngModel)]="tipoErroSelecionado" (change)="aplicarFiltros()">
+        <option value="todos">Todos</option>
+        <option value="grave">Erro Grave</option>
+        <option value="simples">Erro Simples</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="dashboard-container">
+    <!-- COLUNA ESQUERDA -->
+    <div class="coluna-esquerda">
+      <div class="card-grafico grande">
+        <h3 class="titulo-grafico">Volume de Erros ao Longo do Tempo</h3>
+        <apx-chart
+          #barChart
+          [series]="barChartOptions.series!"
+          [chart]="barChartOptions.chart!"
+          [plotOptions]="barChartOptions.plotOptions!"
+          [dataLabels]="barChartOptions.dataLabels!"
+          [stroke]="barChartOptions.stroke!"
+          [xaxis]="barChartOptions.xaxis!"
+          [yaxis]="barChartOptions.yaxis!"
+          [fill]="barChartOptions.fill!"
+          [tooltip]="barChartOptions.tooltip!"
+          [legend]="barChartOptions.legend!"
+        ></apx-chart>
+      </div>
+    </div>
+
+    <!-- COLUNA DIREITA -->
+    <div class="coluna-direita">
+      <div class="card-grafico combinado">
+        <div class="parte-superior">
+          <h3 class="titulo-grafico">Distribuição de Tipos de Erro</h3>
+          <apx-chart
+            #donutChart
+            [series]="donutChartOptions.series!"
+            [chart]="donutChartOptions.chart!"
+            [labels]="donutChartOptions.labels!"
+            [responsive]="donutChartOptions.responsive!"
+            [dataLabels]="donutChartOptions.dataLabels!"
+            [legend]="donutChartOptions.legend!"
+            [colors]="donutChartOptions.colors!"
+          ></apx-chart>
+        </div>
+
+        <div class="parte-inferior">
+          <h3 class="titulo-grafico">Maiores Erros</h3>
+          <apx-chart
+            #horizontalChart
+            [series]="horizontalChartOptions.series!"
+            [chart]="horizontalChartOptions.chart!"
+            [dataLabels]="horizontalChartOptions.dataLabels!"
+            [plotOptions]="horizontalChartOptions.plotOptions!"
+            [xaxis]="horizontalChartOptions.xaxis!"
+            [legend]="horizontalChartOptions.legend!"
+            [yaxis]="horizontalChartOptions.yaxis!"
+            [fill]="horizontalChartOptions.fill!"
+          ></apx-chart>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
