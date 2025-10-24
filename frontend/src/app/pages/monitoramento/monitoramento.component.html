@@ -68,19 +68,9 @@
         >
           <div class="alerta-header">
             <span class="titulo">{{ alerta.mensagem }}</span>
-            <span class="badge" [ngClass]="alerta.tipo">
-              {{ alerta.tipo }} -
-              {{
-                alerta.tipo === "A"
-                  ? "Grave"
-                  : alerta.tipo === "B"
-                  ? "Médio"
-                  : alerta.tipo === "C"
-                  ? "Leve"
-                  : alerta.tipo === "X"
-                  ? "Gravíssima"
-                  : "Info"
-              }}
+            <span class="badge" [ngClass]="getBadgeClass(alerta.tipo)">
+              {{ getBadgeLetra(alerta.tipo) }} -
+              {{ getBadgeTexto(alerta.tipo) }}
             </span>
           </div>
           <div class="alerta-meta">

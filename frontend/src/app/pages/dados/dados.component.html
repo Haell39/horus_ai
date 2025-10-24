@@ -77,48 +77,6 @@
         </div>
       </div>
     </div>
-
-    <div class="card-grafico grande" style="margin-top: 20px">
-      <h3 class="titulo-grafico">
-        Tabela de Ocorrências (Dados Brutos da API)
-      </h3>
-
-      <table
-        *ngIf="dadosCarregados.length > 0; else noData"
-        class="table table-dark table-striped"
-      >
-        <thead>
-          <tr>
-            <th scope="col">ID</th>
-            <th scope="col">Tipo</th>
-            <th scope="col">Severidade</th>
-            <th scope="col">Início</th>
-            <th scope="col">Categoria</th>
-            <th scope="col">Confiança</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let oc of dadosCarregados">
-            <th scope="row">{{ oc.id }}</th>
-            <td>{{ oc.type || "N/A" }}</td>
-            <td>{{ oc.severity || "N/A" }}</td>
-            <td>{{ oc.start_ts | date : "dd/MM/yy HH:mm:ss" }}</td>
-            <td>{{ oc.category || "N/A" }}</td>
-            <td>
-              {{
-                oc.confidence ? (oc.confidence * 100).toFixed(0) + "%" : "N/A"
-              }}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <ng-template #noData>
-        <div class="alert alert-info" role="alert" style="margin: 15px">
-          Nenhuma ocorrência encontrada no banco de dados.
-        </div>
-      </ng-template>
-    </div>
   </div>
   <ng-template #loadingOrError>
     <div

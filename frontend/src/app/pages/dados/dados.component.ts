@@ -1,7 +1,8 @@
 // frontend/src/app/pages/dados/dados.component.ts
+// (Versão 5 - Correção dos erros de Tipo)
 
 import { Component, ViewChild, AfterViewInit, OnInit } from '@angular/core';
-import { CommonModule, DatePipe } from '@angular/common'; // Importar CommonModule e DatePipe
+import { CommonModule, DatePipe } from '@angular/common';
 import { SidebarComponent } from '../../shared/sidebar/sidebar.component';
 import { FormsModule } from '@angular/forms';
 import {
@@ -21,29 +22,49 @@ import {
   ApexResponsive,
 } from 'ng-apexcharts';
 
-// Imports NOVOS para a API
 import { Observable, of } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
-import { OcorrenciaService } from '../../services/ocorrencia.service'; // Verifique o caminho
-import { Ocorrencia } from '../../models/ocorrencia'; // Verifique o caminho
+import { OcorrenciaService } from '../../services/ocorrencia.service';
+import { Ocorrencia } from '../../models/ocorrencia';
 
-// Tipos de Gráfico (mantidos)
+// (Definição dos Tipos de Gráfico mantida)
 export type BarChartOptions = {
-  /* ... (seu tipo BarChartOptions) ... */
+  series: ApexAxisChartSeries;
+  chart: ApexChart;
+  dataLabels: ApexDataLabels;
+  plotOptions: ApexPlotOptions;
+  yaxis: ApexYAxis;
+  xaxis: ApexXAxis;
+  fill: ApexFill;
+  tooltip: ApexTooltip;
+  stroke: ApexStroke;
+  legend: ApexLegend;
 };
 export type DonutChartOptions = {
-  /* ... (seu tipo DonutChartOptions) ... */
+  series: ApexNonAxisChartSeries;
+  chart: ApexChart;
+  labels: any;
+  responsive: ApexResponsive[];
+  dataLabels?: ApexDataLabels;
+  legend?: ApexLegend;
+  colors?: string[];
 };
 export type HorizontalBarOptions = {
-  /* ... (seu tipo HorizontalBarOptions) ... */
+  series: ApexAxisChartSeries;
+  chart: ApexChart;
+  dataLabels: ApexDataLabels;
+  plotOptions: ApexPlotOptions;
+  xaxis: ApexXAxis;
+  yaxis: ApexYAxis;
+  fill?: ApexFill;
+  legend?: ApexLegend;
 };
 
 @Component({
   selector: 'app-dados',
   standalone: true,
-  // Adicionado CommonModule
   imports: [SidebarComponent, NgApexchartsModule, FormsModule, CommonModule],
-  providers: [DatePipe], // Adicionado DatePipe aqui
+  providers: [DatePipe],
   templateUrl: './dados.component.html',
   styleUrls: ['./dados.component.css'],
 })
@@ -52,11 +73,12 @@ export class DadosComponent implements AfterViewInit, OnInit {
   @ViewChild('donutChart') donutChart!: ChartComponent;
   @ViewChild('horizontalChart') horizontalChart!: ChartComponent;
 
-  public barChartOptions!: Partial<BarChartOptions>;
-  public donutChartOptions!: Partial<DonutChartOptions>;
-  public horizontalChartOptions!: Partial<HorizontalBarOptions>;
+  // === CORREÇÃO DE TIPO (1/3) ===
+  // Removemos o 'Partial' e usamos '!' para dizer ao TS que vamos inicializar
+  public barChartOptions!: BarChartOptions;
+  public donutChartOptions!: DonutChartOptions;
+  public horizontalChartOptions!: HorizontalBarOptions;
 
-  // Filtros (mantidos)
   periodoSelecionado = '7d';
   tipoErroSelecionado = 'todos';
 
@@ -70,27 +92,22 @@ export class DadosComponent implements AfterViewInit, OnInit {
     '#FFFFFF',
   ];
 
-  // === VARIÁVEIS NOVAS PARA API ===
   public ocorrencias$: Observable<Ocorrencia[]> = of([]);
   public errorMsg: string | null = null;
-  public dadosCarregados: Ocorrencia[] = []; // Array para guardar os dados recebidos
+  public dadosCarregados: Ocorrencia[] = [];
 
-  // === CONSTRUTOR ATUALIZADO ===
   constructor(
-    private ocorrenciaService: OcorrenciaService // Injetar o serviço da API
+    private ocorrenciaService: OcorrenciaService,
+    private datePipe: DatePipe
   ) {}
 
-  // === ngOnInit (NOVO) ===
   ngOnInit(): void {
-    console.log('DadosComponent: ngOnInit - Carregando dados da API...');
-    this.carregarDadosApi(); // Chama a função para buscar dados
+    console.log('DadosComponent: ngOnInit - Carregando...');
+    this.carregarEstruturaGraficos(); // Primeiro inicializa a estrutura
+    this.carregarDadosApi(); // Depois busca os dados
   }
 
-  // === AfterViewInit (Mantido, mas ajustado) ===
   ngAfterViewInit() {
-    this.carregarEstruturaGraficos(); // Carrega gráficos com dados estáticos
-
-    // Atualiza cores quando o tema muda (mantido)
     const observer = new MutationObserver(() => this.atualizarCoresTema());
     observer.observe(document.body, {
       attributes: true,
@@ -98,15 +115,13 @@ export class DadosComponent implements AfterViewInit, OnInit {
     });
   }
 
-  // === FUNÇÃO NOVA PARA BUSCAR DADOS ===
   carregarDadosApi(): void {
     this.errorMsg = null;
     this.ocorrencias$ = this.ocorrenciaService.getOcorrencias().pipe(
       tap((data) => {
         console.log(`Dados recebidos da API: ${data.length} ocorrências.`);
         this.dadosCarregados = data;
-        // Futuramente, chamaremos a função para atualizar os gráficos com 'data'
-        // Ex: this.atualizarGraficosComDados(data);
+        this.aplicarFiltros(); // Chama a função de filtro (que atualiza os gráficos)
       }),
       catchError((err) => {
         console.error('Erro ao buscar ocorrências:', err);
@@ -116,6 +131,191 @@ export class DadosComponent implements AfterViewInit, OnInit {
         return of([]);
       })
     );
+  }
+
+  // ===================================
+  // === ATUALIZAÇÃO DOS GRÁFICOS ===
+  // ===================================
+
+  /** Processa e atualiza os gráficos Donut e Horizontal */
+  atualizarGraficosAgrupados(dados: Ocorrencia[]): void {
+    const contagemPorTipo = new Map<string, number>();
+    for (const oc of dados) {
+      const tipo = oc.type || 'Indefinido';
+      contagemPorTipo.set(tipo, (contagemPorTipo.get(tipo) || 0) + 1);
+    }
+
+    const contagemOrdenada = Array.from(contagemPorTipo.entries()).sort(
+      (a, b) => b[1] - a[1]
+    );
+
+    // --- 1. Atualização do Gráfico Donut ---
+    const donutLabels = contagemOrdenada.map((item) => item[0]);
+    const donutSeries = contagemOrdenada.map((item) => item[1]);
+
+    // Atualizamos as OPÇÕES primeiro
+    this.donutChartOptions.series = donutSeries;
+    this.donutChartOptions.labels = donutLabels;
+    this.donutChartOptions.colors = this.getCoresDonut(donutLabels.length);
+    this.donutChartOptions.legend = {
+      ...this.donutChartOptions.legend,
+      markers: { fillColors: this.getCoresDonut(donutLabels.length) },
+    };
+
+    // E DEPOIS atualizamos o gráfico se ele já existir
+    if (this.donutChart) {
+      this.donutChart.updateOptions({
+        series: donutSeries,
+        labels: donutLabels,
+        colors: this.getCoresDonut(donutLabels.length),
+        legend: {
+          markers: { fillColors: this.getCoresDonut(donutLabels.length) },
+        },
+      });
+    }
+
+    // --- 2. Atualização do Gráfico Horizontal (Top 5) ---
+    const top5Labels = contagemOrdenada.slice(0, 5).map((item) => item[0]);
+    const top5Series = contagemOrdenada.slice(0, 5).map((item) => item[1]);
+
+    this.horizontalChartOptions.series = [
+      { name: 'Ocorrências', data: top5Series },
+    ];
+    this.horizontalChartOptions.xaxis.categories = top5Labels;
+
+    if (this.horizontalChart) {
+      this.horizontalChart.updateOptions({
+        series: [{ name: 'Ocorrências', data: top5Series }],
+        xaxis: { categories: top5Labels },
+      });
+    }
+  }
+
+  /** Processa e atualiza o gráfico de Barras (Volume) */
+  atualizarGraficoVolumePorPeriodo(dados: Ocorrencia[], periodo: string): void {
+    let categories: string[] = [];
+    let seriesGrave: number[] = [];
+    let seriesSimples: number[] = [];
+    const agora = new Date();
+    agora.setHours(23, 59, 59, 999);
+
+    if (periodo === '7d') {
+      categories = this.getLabelsDiasAnteriores(7);
+      [seriesGrave, seriesSimples] = this.agruparDadosPorDia(dados, agora, 7);
+    } else if (periodo === '30d') {
+      categories = this.getLabelsSemanasAnteriores(5);
+      [seriesGrave, seriesSimples] = this.agruparDadosPorSemana(
+        dados,
+        agora,
+        5
+      );
+    } else if (periodo === '2m') {
+      categories = this.getLabelsSemanasAnteriores(9);
+      [seriesGrave, seriesSimples] = this.agruparDadosPorSemana(
+        dados,
+        agora,
+        9
+      );
+    }
+
+    this.barChartOptions.series = [
+      { name: 'Erro Grave/Gravíssimo', data: seriesGrave },
+      { name: 'Erro Simples/Médio', data: seriesSimples },
+    ];
+    this.barChartOptions.xaxis.categories = categories;
+
+    if (this.barChart) {
+      this.barChart.updateOptions({
+        series: this.barChartOptions.series,
+        xaxis: this.barChartOptions.xaxis,
+      });
+    }
+  }
+
+  // ===================================
+  // === HELPERS DE AGRUPAMENTO ===
+  // ===================================
+  private getLabelsDiasAnteriores(numDias: number): string[] {
+    /* (código mantido) */
+    const labels = ['Hoje'];
+    for (let i = 1; i < numDias; i++) {
+      labels.unshift(i === 1 ? 'Ontem' : `Dia -${i}`);
+    }
+    return labels;
+  }
+  private getLabelsSemanasAnteriores(numSemanas: number): string[] {
+    /* (código mantido) */
+    const labels = ['Esta Semana'];
+    for (let i = 1; i < numSemanas; i++) {
+      labels.unshift(i === 1 ? 'Semana Passada' : `Semana -${i}`);
+    }
+    return labels;
+  }
+
+  // === CORREÇÃO DE TIPO (2/3) ===
+  // Garantimos que a função SEMPRE retorne um boolean
+  private isGrave(oc: Ocorrencia): boolean {
+    return (
+      (oc.severity?.includes('Grave (A)') ?? false) ||
+      (oc.severity?.includes('Gravíssima (X)') ?? false)
+    );
+  }
+
+  private agruparDadosPorDia(
+    dados: Ocorrencia[],
+    dataFim: Date,
+    numDias: number
+  ): [number[], number[]] {
+    /* (código mantido) */
+    const seriesGrave = new Array(numDias).fill(0);
+    const seriesSimples = new Array(numDias).fill(0);
+    const limitesDias = [];
+    for (let i = 0; i < numDias; i++) {
+      const data = new Date(dataFim);
+      data.setDate(data.getDate() - i);
+      data.setHours(0, 0, 0, 0);
+      limitesDias.unshift(data);
+    }
+    for (const oc of dados) {
+      const dataOc = new Date(oc.start_ts);
+      for (let i = limitesDias.length - 1; i >= 0; i--) {
+        if (dataOc >= limitesDias[i]) {
+          if (this.isGrave(oc)) seriesGrave[i]++;
+          else seriesSimples[i]++;
+          break;
+        }
+      }
+    }
+    return [seriesGrave, seriesSimples];
+  }
+  private agruparDadosPorSemana(
+    dados: Ocorrencia[],
+    dataFim: Date,
+    numSemanas: number
+  ): [number[], number[]] {
+    /* (código mantido) */
+    const seriesGrave = new Array(numSemanas).fill(0);
+    const seriesSimples = new Array(numSemanas).fill(0);
+    const inicioSemanaAtual = new Date(dataFim);
+    inicioSemanaAtual.setDate(dataFim.getDate() - dataFim.getDay());
+    inicioSemanaAtual.setHours(0, 0, 0, 0);
+    const limitesSemanas = [];
+    for (let i = 0; i < numSemanas; i++) {
+      const data = new Date(inicioSemanaAtual);
+      data.setDate(data.getDate() - i * 7);
+      limitesSemanas.unshift(data);
+    }
+    for (const oc of dados) {
+      const dataOc = new Date(oc.start_ts);
+      for (let i = limitesSemanas.length - 1; i >= 0; i--) {
+        if (dataOc >= limitesSemanas[i]) {
+          if (this.isGrave(oc)) seriesGrave[i]++;
+          else seriesSimples[i]++;
+          break;
+        }
+      }
+    }
+    return [seriesGrave, seriesSimples];
   }
 
   // ===========================
@@ -129,38 +329,44 @@ export class DadosComponent implements AfterViewInit, OnInit {
     return this.getTemaAtual() === 'light' ? '#222222' : '#ffffff';
   }
 
-  private getCoresDonut(): string[] {
-    return this.getTemaAtual() === 'light'
-      ? [
-          '#FF4B4B',
-          '#4B79FF',
-          '#FFD700',
-          '#00FF00',
-          '#FF00FF',
-          'gray',
-          '#333333',
-        ]
-      : this.coresPadrao;
+  private getCoresDonut(numCores: number = 7): string[] {
+    /* (código mantido) */
+    const coresBase =
+      this.getTemaAtual() === 'light'
+        ? [
+            '#FF4B4B',
+            '#4B79FF',
+            '#FFD700',
+            '#00FF00',
+            '#FF00FF',
+            'gray',
+            '#333333',
+          ]
+        : this.coresPadrao;
+    const cores = [];
+    for (let i = 0; i < numCores; i++) {
+      cores.push(coresBase[i % coresBase.length]);
+    }
+    return cores;
   }
 
   // ===========================
-  // Carrega gráficos (Lógica original mantida)
+  // Carrega ESTRUTURA dos gráficos (CORRIGIDO)
   // ===========================
   carregarEstruturaGraficos() {
     const corTexto = this.getCorTexto();
-    const coresDonut = this.getCoresDonut();
 
-    // 🔵 Gráfico Vertical
+    // 🔵 Gráfico Vertical (Estrutura VAZIA)
     this.barChartOptions = {
       series: [
-        { name: 'Erro Grave', data: [5, 8, 4, 7, 6, 9, 5, 6, 8] },
-        { name: 'Total de Falhas', data: [12, 15, 10, 18, 14, 20, 16, 18, 19] },
+        { name: 'Erro Grave/Gravíssimo', data: [] },
+        { name: 'Erro Simples/Médio', data: [] },
       ],
       chart: {
         type: 'bar',
         height: 500,
         width: 830,
-        animations: { enabled: false },
+        animations: { enabled: true },
       },
       plotOptions: {
         bar: { horizontal: false, columnWidth: '55%', borderRadius: 2 },
@@ -168,54 +374,31 @@ export class DadosComponent implements AfterViewInit, OnInit {
       dataLabels: { enabled: false },
       stroke: { show: true, width: 2, colors: ['transparent'] },
       xaxis: {
-        categories: [
-          'Jan',
-          'Feb',
-          'Mar',
-          'Apr',
-          'May',
-          'Jun',
-          'Jul',
-          'Aug',
-          'Sep',
-        ],
-        labels: {
-          style: { colors: Array(9).fill(corTexto), fontSize: '14px' },
-        },
+        categories: [],
+        labels: { style: { colors: [corTexto], fontSize: '14px' } },
       },
-      yaxis: {
-        labels: {
-          style: { colors: Array(5).fill(corTexto), fontSize: '14px' },
-        },
-      },
+      yaxis: { labels: { style: { colors: [corTexto], fontSize: '14px' } } },
       fill: { opacity: 1, colors: ['#FF4B4B', '#4B79FF'] },
       tooltip: { y: { formatter: (val: number) => val + ' erros' } },
       legend: { position: 'bottom', labels: { colors: corTexto } },
     };
 
-    // 🟣 Gráfico Donut
+    // 🟣 Gráfico Donut (Estrutura VAZIA)
     this.donutChartOptions = {
-      series: [44, 55, 13, 43, 22, 10, 9],
+      series: [],
       chart: {
         type: 'donut',
         height: 350,
         width: 350,
-        animations: { enabled: false },
+        animations: { enabled: true },
       },
-      labels: [
-        'Fade',
-        'Freeze',
-        'LipSync',
-        'Imagem errada',
-        'Reporte parado',
-        'Áudio',
-        'Variação',
-      ],
-      colors: coresDonut,
-      dataLabels: { style: { colors: Array(7).fill(corTexto) } },
+      labels: [],
+      colors: [],
+      dataLabels: { enabled: false, style: { colors: [corTexto] } },
       legend: {
+        position: 'bottom',
         labels: { colors: corTexto },
-        markers: { fillColors: coresDonut },
+        markers: { fillColors: [] },
       },
       responsive: [
         {
@@ -225,34 +408,22 @@ export class DadosComponent implements AfterViewInit, OnInit {
       ],
     };
 
-    // 🟢 Gráfico Horizontal
+    // 🟢 Gráfico Horizontal (Estrutura VAZIA)
     this.horizontalChartOptions = {
-      series: [{ name: 'Ocorrências', data: [10, 20, 30, 35, 40] }],
+      series: [{ name: 'Ocorrências', data: [] }],
       chart: {
         type: 'bar',
         height: 200,
         width: 600,
-        animations: { enabled: false },
+        animations: { enabled: true },
       },
       plotOptions: { bar: { horizontal: true } },
       dataLabels: { enabled: false },
       xaxis: {
-        categories: [
-          'Fade',
-          'Freeze',
-          'LipSync',
-          'Imagem errada',
-          'Reporte parado',
-        ],
-        labels: {
-          style: { colors: Array(5).fill(corTexto), fontSize: '13px' },
-        },
+        categories: [],
+        labels: { style: { colors: [corTexto], fontSize: '13px' } },
       },
-      yaxis: {
-        labels: {
-          style: { colors: Array(5).fill(corTexto), fontSize: '13px' },
-        },
-      },
+      yaxis: { labels: { style: { colors: [corTexto], fontSize: '13px' } } },
       fill: { opacity: 1, colors: ['#4B79FF'] },
       legend: {
         position: 'right',
@@ -263,16 +434,19 @@ export class DadosComponent implements AfterViewInit, OnInit {
   }
 
   // ===========================
-  // Atualiza cores quando o tema muda (Lógica original mantida)
+  // Atualiza cores quando o tema muda (CORRIGIDO)
   // ===========================
   atualizarCoresTema() {
     const corTexto = this.getCorTexto();
-    const coresDonut = this.getCoresDonut();
+    // === CORREÇÃO DE TIPO (3/3) ===
+    // Acessa 'labels' de forma segura, pois 'donutChartOptions' já foi inicializado
+    const donutLabels = (this.donutChartOptions.labels as string[]) || [];
+    const coresDonut = this.getCoresDonut(donutLabels.length);
 
     if (this.barChart) {
       this.barChart.updateOptions({
-        xaxis: { labels: { style: { colors: Array(9).fill(corTexto) } } },
-        yaxis: { labels: { style: { colors: Array(5).fill(corTexto) } } },
+        xaxis: { labels: { style: { colors: [corTexto] } } },
+        yaxis: { labels: { style: { colors: [corTexto] } } },
         legend: { labels: { colors: corTexto } },
       });
     }
@@ -280,7 +454,9 @@ export class DadosComponent implements AfterViewInit, OnInit {
     if (this.donutChart) {
       this.donutChart.updateOptions({
         colors: coresDonut,
-        dataLabels: { style: { colors: Array(7).fill(corTexto) } },
+        dataLabels: {
+          style: { colors: Array(coresDonut.length).fill(corTexto) },
+        },
         legend: {
           labels: { colors: corTexto },
           markers: { fillColors: coresDonut },
@@ -290,64 +466,62 @@ export class DadosComponent implements AfterViewInit, OnInit {
 
     if (this.horizontalChart) {
       this.horizontalChart.updateOptions({
-        xaxis: { labels: { style: { colors: Array(5).fill(corTexto) } } },
-        yaxis: { labels: { style: { colors: Array(5).fill(corTexto) } } },
+        xaxis: { labels: { style: { colors: [corTexto] } } },
+        yaxis: { labels: { style: { colors: [corTexto] } } },
         legend: { labels: { colors: corTexto } },
       });
     }
   }
 
-  // ===========================
-  // Aplica filtros (Lógica original mantida)
+  // =V=========================
+  // Aplica filtros (ORQUESTRADOR PRINCIPAL)
   // ===========================
   aplicarFiltros() {
-    // ... (toda a sua lógica de filtros com dados estáticos) ...
-    // ... (a lógica original de 'aplicarFiltros' vai aqui) ...
-    let donutData: number[] = [];
-    let horizontalData: number[] = [];
+    // --- 1. Filtra por PERÍODO ---
+    const agora = new Date();
+    let dataLimite = new Date(agora);
 
     switch (this.periodoSelecionado) {
-      case '1d':
-        donutData = [10, 15, 5, 8, 4, 3, 2];
-        horizontalData = [5, 10, 15, 18, 20];
-        break;
       case '7d':
-        donutData = [20, 25, 10, 15, 8, 5, 3];
-        horizontalData = [10, 20, 30, 35, 40];
+        dataLimite.setDate(agora.getDate() - 7);
         break;
       case '30d':
-        donutData = [40, 50, 20, 30, 25, 15, 10];
-        horizontalData = [15, 25, 35, 40, 45];
+        dataLimite.setDate(agora.getDate() - 30);
         break;
       case '2m':
-        donutData = [50, 60, 25, 35, 30, 20, 10];
-        horizontalData = [18, 28, 45, 50, 55];
+        dataLimite.setMonth(agora.getMonth() - 2);
         break;
-      default:
-        donutData = [20, 25, 10, 15, 8, 5, 3];
-        horizontalData = [10, 20, 30, 35, 40];
     }
 
-    if (this.tipoErroSelecionado === 'grave') {
-      donutData = [donutData[0], 0, 0, 0, 0, 0, 0];
-    } else if (this.tipoErroSelecionado === 'simples') {
-      donutData = [
-        0,
-        donutData[1],
-        donutData[2],
-        donutData[3],
-        donutData[4],
-        donutData[5],
-        donutData[6],
-      ];
-    }
-
-    this.donutChart.updateOptions({
-      series: donutData,
-      colors: this.getCoresDonut(),
+    const dadosFiltradosPorPeriodo = this.dadosCarregados.filter((oc) => {
+      return new Date(oc.start_ts) >= dataLimite;
     });
-    this.horizontalChart.updateSeries([
-      { name: 'Ocorrências', data: horizontalData },
-    ]);
+
+    // --- 2. Atualiza o Gráfico de Barras (Volume) ---
+    this.atualizarGraficoVolumePorPeriodo(
+      dadosFiltradosPorPeriodo,
+      this.periodoSelecionado
+    );
+
+    // --- 3. Filtra por TIPO (Grave/Simples) ---
+    let dadosFiltradosPorTipo = dadosFiltradosPorPeriodo;
+    switch (this.tipoErroSelecionado) {
+      case 'grave':
+        dadosFiltradosPorTipo = dadosFiltradosPorPeriodo.filter((oc) =>
+          this.isGrave(oc)
+        );
+        break;
+      case 'simples':
+        dadosFiltradosPorTipo = dadosFiltradosPorPeriodo.filter(
+          (oc) => !this.isGrave(oc)
+        );
+        break;
+      case 'todos':
+      default:
+        break;
+    }
+
+    // --- 4. Atualiza os Gráficos Agrupados (Donut e Horizontal) ---
+    this.atualizarGraficosAgrupados(dadosFiltradosPorTipo);
   }
 }
