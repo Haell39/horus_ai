@@ -3,80 +3,146 @@
 <div class="conteudo-dados">
   <h2 class="titulo-pagina">Dados de Falhas</h2>
 
-  <!-- 🔍 FILTROS INTERATIVOS -->
-  <div class="filtros-container">
-    <div class="filtro">
-      <label>Período:</label>
-      <select [(ngModel)]="periodoSelecionado" (change)="aplicarFiltros()">
-        <option value="7d">Últimos 7 dias</option>
-        <option value="30d">Últimos 30 dias</option>
-        <option value="2m">Últimos 2 meses</option>
-      </select>
-    </div>
+  <div *ngIf="ocorrencias$ | async as ocorrencias; else loadingOrError">
+    <div class="filtros-container">
+      <div class="filtro">
+        <label>Período:</label>
+        <select [(ngModel)]="periodoSelecionado" (change)="aplicarFiltros()">
+          <option value="7d">Últimos 7 dias</option>
+          <option value="30d">Últimos 30 dias</option>
+          <option value="2m">Últimos 2 meses</option>
+        </select>
+      </div>
 
-    <div class="filtro">
-      <label>Tipo de Erro:</label>
-      <select [(ngModel)]="tipoErroSelecionado" (change)="aplicarFiltros()">
-        <option value="todos">Todos</option>
-        <option value="grave">Erro Grave</option>
-        <option value="simples">Erro Simples</option>
-      </select>
-    </div>
-  </div>
-
-  <div class="dashboard-container">
-    <!-- COLUNA ESQUERDA -->
-    <div class="coluna-esquerda">
-      <div class="card-grafico grande">
-        <h3 class="titulo-grafico">Volume de Erros ao Longo do Tempo</h3>
-        <apx-chart
-          #barChart
-          [series]="barChartOptions.series!"
-          [chart]="barChartOptions.chart!"
-          [plotOptions]="barChartOptions.plotOptions!"
-          [dataLabels]="barChartOptions.dataLabels!"
-          [stroke]="barChartOptions.stroke!"
-          [xaxis]="barChartOptions.xaxis!"
-          [yaxis]="barChartOptions.yaxis!"
-          [fill]="barChartOptions.fill!"
-          [tooltip]="barChartOptions.tooltip!"
-          [legend]="barChartOptions.legend!"
-        ></apx-chart>
+      <div class="filtro">
+        <label>Tipo de Erro:</label>
+        <select [(ngModel)]="tipoErroSelecionado" (change)="aplicarFiltros()">
+          <option value="todos">Todos</option>
+          <option value="grave">Erro Grave</option>
+          <option value="simples">Erro Simples</option>
+        </select>
       </div>
     </div>
 
-    <!-- COLUNA DIREITA -->
-    <div class="coluna-direita">
-      <div class="card-grafico combinado">
-        <div class="parte-superior">
-          <h3 class="titulo-grafico">Distribuição de Tipos de Erro</h3>
+    <div class="dashboard-container">
+      <div class="coluna-esquerda">
+        <div class="card-grafico grande">
+          <h3 class="titulo-grafico">Volume de Erros ao Longo do Tempo</h3>
           <apx-chart
-            #donutChart
-            [series]="donutChartOptions.series!"
-            [chart]="donutChartOptions.chart!"
-            [labels]="donutChartOptions.labels!"
-            [responsive]="donutChartOptions.responsive!"
-            [dataLabels]="donutChartOptions.dataLabels!"
-            [legend]="donutChartOptions.legend!"
-            [colors]="donutChartOptions.colors!"
-          ></apx-chart>
-        </div>
-
-        <div class="parte-inferior">
-          <h3 class="titulo-grafico">Maiores Erros</h3>
-          <apx-chart
-            #horizontalChart
-            [series]="horizontalChartOptions.series!"
-            [chart]="horizontalChartOptions.chart!"
-            [dataLabels]="horizontalChartOptions.dataLabels!"
-            [plotOptions]="horizontalChartOptions.plotOptions!"
-            [xaxis]="horizontalChartOptions.xaxis!"
-            [legend]="horizontalChartOptions.legend!"
-            [yaxis]="horizontalChartOptions.yaxis!"
-            [fill]="horizontalChartOptions.fill!"
+            #barChart
+            [series]="$any(barChartOptions).series"
+            [chart]="$any(barChartOptions).chart"
+            [plotOptions]="$any(barChartOptions).plotOptions"
+            [dataLabels]="$any(barChartOptions).dataLabels"
+            [stroke]="$any(barChartOptions).stroke"
+            [xaxis]="$any(barChartOptions).xaxis"
+            [yaxis]="$any(barChartOptions).yaxis"
+            [fill]="$any(barChartOptions).fill"
+            [tooltip]="$any(barChartOptions).tooltip"
+            [legend]="$any(barChartOptions).legend"
           ></apx-chart>
         </div>
       </div>
+
+      <div class="coluna-direita">
+        <div class="card-grafico combinado">
+          <div class="parte-superior">
+            <h3 class="titulo-grafico">Distribuição de Tipos de Erro</h3>
+            <apx-chart
+              #donutChart
+              [series]="$any(donutChartOptions).series"
+              [chart]="$any(donutChartOptions).chart"
+              [labels]="$any(donutChartOptions).labels"
+              [responsive]="$any(donutChartOptions).responsive"
+              [dataLabels]="$any(donutChartOptions).dataLabels"
+              [legend]="$any(donutChartOptions).legend"
+              [colors]="$any(donutChartOptions).colors"
+            ></apx-chart>
+          </div>
+
+          <div class="parte-inferior">
+            <h3 class="titulo-grafico">Maiores Erros</h3>
+            <apx-chart
+              #horizontalChart
+              [series]="$any(horizontalChartOptions).series"
+              [chart]="$any(horizontalChartOptions).chart"
+              [dataLabels]="$any(horizontalChartOptions).dataLabels"
+              [plotOptions]="$any(horizontalChartOptions).plotOptions"
+              [xaxis]="$any(horizontalChartOptions).xaxis"
+              [legend]="$any(horizontalChartOptions).legend"
+              [yaxis]="$any(horizontalChartOptions).yaxis"
+              [fill]="$any(horizontalChartOptions).fill"
+            ></apx-chart>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-grafico grande" style="margin-top: 20px">
+      <h3 class="titulo-grafico">
+        Tabela de Ocorrências (Dados Brutos da API)
+      </h3>
+
+      <table
+        *ngIf="dadosCarregados.length > 0; else noData"
+        class="table table-dark table-striped"
+      >
+        <thead>
+          <tr>
+            <th scope="col">ID</th>
+            <th scope="col">Tipo</th>
+            <th scope="col">Severidade</th>
+            <th scope="col">Início</th>
+            <th scope="col">Categoria</th>
+            <th scope="col">Confiança</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let oc of dadosCarregados">
+            <th scope="row">{{ oc.id }}</th>
+            <td>{{ oc.type || "N/A" }}</td>
+            <td>{{ oc.severity || "N/A" }}</td>
+            <td>{{ oc.start_ts | date : "dd/MM/yy HH:mm:ss" }}</td>
+            <td>{{ oc.category || "N/A" }}</td>
+            <td>
+              {{
+                oc.confidence ? (oc.confidence * 100).toFixed(0) + "%" : "N/A"
+              }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <ng-template #noData>
+        <div class="alert alert-info" role="alert" style="margin: 15px">
+          Nenhuma ocorrência encontrada no banco de dados.
+        </div>
+      </ng-template>
     </div>
   </div>
+  <ng-template #loadingOrError>
+    <div
+      *ngIf="errorMsg"
+      class="alert alert-danger"
+      role="alert"
+      style="margin: 15px"
+    >
+      <strong>ERRO:</strong> {{ errorMsg }}
+    </div>
+
+    <div
+      *ngIf="!errorMsg"
+      class="d-flex justify-content-center align-items-center mt-5"
+      style="color: white; min-height: 300px"
+    >
+      <div
+        class="spinner-border text-light"
+        role="status"
+        style="width: 3rem; height: 3rem"
+      >
+        <span class="visually-hidden">Carregando dados...</span>
+      </div>
+      <span class="ms-3 fs-4">Carregando dados da API...</span>
+    </div>
+  </ng-template>
 </div>

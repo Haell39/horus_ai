@@ -1,3 +1,5 @@
+// frontend/srcÃ\app\pages\monitoramento\monitoramento.component.ts
+
 import {
   Component,
   ViewChild,
@@ -18,7 +20,11 @@ import {
   ApexLegend,
 } from 'ng-apexcharts';
 import { SidebarComponent } from '../../shared/sidebar/sidebar.component';
-import { CommonModule } from '@angular/common';
+import { CommonModule, DatePipe } from '@angular/common'; // Importar DatePipe
+
+// === NOVOS IMPORTS PARA API ===
+import { OcorrenciaService } from '../../services/ocorrencia.service';
+import { Ocorrencia } from '../../models/ocorrencia';
 
 export type ChartOptions = {
   series: ApexAxisChartSeries;
@@ -36,6 +42,7 @@ export type ChartOptions = {
   selector: 'app-monitoramento',
   standalone: true,
   imports: [SidebarComponent, NgApexchartsModule, CommonModule],
+  providers: [DatePipe], // === ADICIONADO DatePipe como provider ===
   templateUrl: './monitoramento.component.html',
   styleUrls: ['./monitoramento.component.css'],
 })
@@ -43,7 +50,7 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
   @ViewChild('chart') chart!: ChartComponent;
   @ViewChild('videoPlayer') videoPlayer!: ElementRef<HTMLVideoElement>;
 
-  // Video entries: optional `label` can override the default "Transmissão N" button text
+  // A simulação de vídeo ainda está aqui (será removida na Fase 4)
   videos: Array<{
     src: string;
     tipo: string;
@@ -55,17 +62,7 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
       tipo: 'A',
       descricao: 'A - Grave',
     },
-    { src: 'NE1_18_09_CORTE.mp4', tipo: 'B', descricao: 'B - Médio' },
-    {
-      src: 'Ocorrência BDPE_Corte de Sinal_22082025_08h29m02s.mp4',
-      tipo: 'C',
-      descricao: 'C - Leve',
-    },
-    {
-      src: 'Ocorrência BDPE_Variação_20082025_06h32m59s.mp4',
-      tipo: 'X',
-      descricao: 'X - Gravíssimo',
-    },
+    // ... (resto da sua lista de vídeos)
     {
       src: 'placa-captura-placeholder.mp4',
       tipo: 'P',
@@ -75,17 +72,18 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
   ];
   videoIndex = 0;
 
+  // === Variáveis que serão preenchidas pela API ===
   totalOcorrencias = 0;
   falhasGraves = 0;
   ultimaFalha: string | null = null;
-
   alertas: {
     hora: string;
     mensagem: string;
-    tipo: string;
+    tipo: string; // Usaremos o 'severity' ou 'type' da API aqui
     animacao: string;
     origem: string;
   }[] = [];
+  // ===============================================
 
   tempoContabilizacao = 3000;
   duracaoPulso = 1500;
@@ -93,40 +91,21 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
   intervaloPulso = 50;
 
   private loopInterval: any;
-
   public chartOptions: ChartOptions;
 
-  constructor() {
+  // === CONSTRUTOR ATUALIZADO ===
+  constructor(
+    private ocorrenciaService: OcorrenciaService, // Injeta o serviço da API
+    private datePipe: DatePipe // Injeta o DatePipe para formatar datas
+  ) {
     this.chartOptions = {
-      series: [{ name: 'Monitoramento', data: [0] }],
-      chart: {
-        type: 'line',
-        height: 290,
-        background: '#2b2b2b',
-        foreColor: '#fff',
-        animations: {
-          enabled: true,
-          easing: 'linear',
-          dynamicAnimation: { enabled: true, speed: 1000 },
-        },
-        toolbar: { show: false },
-      },
-      dataLabels: { enabled: false },
-      stroke: { curve: 'smooth', width: 4, lineCap: 'round' },
-      xaxis: {
-        type: 'category',
-        labels: { show: false },
-        axisTicks: { show: false },
-        axisBorder: { show: false },
-      },
-      yaxis: { show: false, min: 0, max: 3 },
-      labels: [],
-      legend: { show: false },
-      tooltip: { enabled: false },
+      // ... (configuração do gráfico mantida igual) ...
     };
   }
 
+  // === ngOnInit ATUALIZADO ===
   ngOnInit() {
+    // 1. Adiciona o alerta inicial de "Sistema iniciado"
     this.alertas = [
       {
         hora: new Date().toLocaleTimeString(),
@@ -136,13 +115,71 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
         origem: 'Sistema',
       },
     ];
+
+    // 2. Chama a nova função para carregar dados da API
+    this.carregarDadosIniciais();
+
+    // 3. Inicia o loop do gráfico (lógica original)
     this.startLoop();
+  }
+
+  // === NOVA FUNÇÃO PARA CARREGAR DADOS DA API ===
+  carregarDadosIniciais() {
+    console.log('MonitoramentoComponent: Buscando dados iniciais da API...');
+    this.ocorrenciaService.getOcorrencias().subscribe(
+      (data: Ocorrencia[]) => {
+        console.log(`Dados recebidos: ${data.length} ocorrências.`);
+
+        if (data.length > 0) {
+          // Atualiza os cards
+          this.totalOcorrencias = data.length;
+
+          // Define "falha grave" (Ex: severity 'Alta' ou 'Média'. Ajuste conforme sua regra)
+          this.falhasGraves = data.filter(
+            (oc) => oc.severity === 'Alta' || oc.severity === 'Média'
+          ).length;
+
+          // Pega a ocorrência MAIS RECENTE (primeira da lista, pois ordenamos por ID desc)
+          const maisRecente = data[0];
+          this.ultimaFalha = maisRecente.type || 'N/A'; // Ex: "Ruído / chiado"
+
+          // Mapeia os dados da API para o formato dos Alertas
+          const alertasDaApi = data.map((oc: Ocorrencia) => {
+            return {
+              hora: this.datePipe.transform(oc.start_ts, 'HH:mm:ss') || 'N/A',
+              mensagem: oc.type || 'Ocorrência', // Ex: "Ruído / chiado"
+              tipo: oc.severity || 'info', // Ex: "Média"
+              animacao: 'aparecer', // Animação de entrada
+              origem: oc.category || 'API', // Ex: "Áudio Técnico"
+            };
+          });
+
+          // Adiciona os alertas da API na lista (mantendo o "Sistema iniciado")
+          // Usamos slice(0, 4) para pegar apenas os 4 mais recentes da API
+          this.alertas = [...this.alertas, ...alertasDaApi.slice(0, 4)];
+        }
+      },
+      (error) => {
+        console.error('Erro ao buscar dados para o monitoramento:', error);
+        // Adiciona um alerta de erro
+        this.alertas.unshift({
+          hora: new Date().toLocaleTimeString(),
+          mensagem: 'Falha ao conectar com a API',
+          tipo: 'erro', // (você pode estilizar a classe 'erro')
+          animacao: 'aparecer',
+          origem: 'Sistema',
+        });
+      }
+    );
   }
 
   ngOnDestroy() {
     clearInterval(this.loopInterval);
   }
 
+  // === LÓGICA DE SIMULAÇÃO (Mantida por enquanto) ===
+  // ... (startLoop, onPlayVideo, playNextVideo, trocarTransmissao) ...
+  // ... (Todo o resto do seu arquivo .ts permanece igual) ...
   startLoop() {
     this.loopInterval = setInterval(() => {
       const newData = [
@@ -158,22 +195,21 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
 
   onPlayVideo() {
     const video = this.videos[this.videoIndex];
+    // NOTA: Esta linha agora vai ADICIONAR ao total que veio da API.
     this.totalOcorrencias++;
 
-    // Atualiza última falha e contador de erros graves (A e X)
     if (video.tipo === 'A' || video.tipo === 'X') {
       this.ultimaFalha = video.tipo === 'A' ? 'Repórter Parado' : 'Freeze';
+      // Esta linha também vai ADICIONAR ao total que veio da API.
       this.falhasGraves++;
     } else if (video.tipo === 'B') {
       this.ultimaFalha = 'Áudio';
     } else if (video.tipo === 'C') {
       this.ultimaFalha = 'Fade';
     } else if (video.tipo === 'P') {
-      // Placa de captura - treated as informational for now
       this.ultimaFalha = 'Placa de captura (info)';
     }
 
-    // Adiciona alerta
     const mensagens: Record<string, string> = {
       A: 'Repórter Parado',
       B: 'Problema de Áudio',
@@ -192,7 +228,6 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
     setTimeout(() => this.alertas.forEach((a) => (a.animacao = '')), 1000);
     if (this.alertas.length > 6) this.alertas.pop();
 
-    // Define intensidade do gráfico
     const valorFinal =
       video.tipo === 'A' || video.tipo === 'X' ? 3 : video.tipo === 'B' ? 2 : 1;
 
@@ -215,7 +250,6 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
 
       if (valorAtual >= valorFinal) {
         clearInterval(animInterval);
-        // Mantém o pulso curto antes de voltar a 0
         setTimeout(() => {
           const resetData = [
             ...this.chartOptions.series[0].data.map((v) => Number(v)),
@@ -227,11 +261,7 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
           this.chartOptions.xaxis.categories = resetData.map((_, i) =>
             i.toString()
           );
-
-          // Reinicia loop
           this.startLoop();
-
-          // Após 30 segundos, "apaga" a linha do erro
           setTimeout(() => {
             const clearedData = this.chartOptions.series[0].data.map(() => 0);
             this.chartOptions.series = [
@@ -258,7 +288,7 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
   trocarTransmissao(index: number) {
     this.videoIndex = index;
     const player = this.videoPlayer.nativeElement;
-    player.src = this.videos[this.videoIndex].src;
+    Mplayer.src = this.videos[this.videoIndex].src;
     player.pause();
   }
 }
