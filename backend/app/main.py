@@ -1,26 +1,29 @@
 # backend/app/main.py
+# (Versão Completa com Rota de Análise Incluída)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# Importa nossos routers e a base do banco
+# Importa NOSSOS routers
 from app.api.endpoints import ocorrencias
+from app.api.endpoints import analysis # <<< ESSA LINHA É CRUCIAL
+
+# Importa a base do banco para criação de tabelas
 from app.db.base import Base, engine
 
 # --- Criação das Tabelas ---
-# (Em dev, podemos criar as tabelas aqui se não existirem)
-# (Em prod, usaríamos Alembic para migrações)
 print("INFO: Verificando e criando tabelas no banco de dados (se necessário)...")
 try:
     Base.metadata.create_all(bind=engine)
     print("INFO: Tabelas OK.")
 except Exception as e:
     print(f"ERRO: Não foi possível conectar ou criar tabelas: {e}")
-    # Em um app real, talvez quiséssemos parar aqui.
+    # Considerar parar a aplicação aqui em caso de erro crítico de DB
 
 # --- Instância Principal do FastAPI ---
 app = FastAPI(
     title="Horus AI - Backend",
-    description="API para monitoramento e registro de ocorrências da Globo.",
+    description="API para monitoramento, análise e registro de ocorrências da Globo.",
     version="0.1.0"
 )
 
@@ -28,19 +31,29 @@ app = FastAPI(
 # Permite que seu frontend (ex: localhost:4200) acesse esta API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Em prod, mude para ["http://localhost:4200"]
+    allow_origins=["*"], # Em prod, restrinja para o domínio do seu frontend
     allow_credentials=True,
-    allow_methods=["*"], # Permite GET, POST, etc.
-    allow_headers=["*"],
+    allow_methods=["*"], # Permite GET, POST, PUT, DELETE, etc.
+    allow_headers=["*"], # Permite todos os cabeçalhos comuns
 )
 
 # --- Inclusão dos Routers ---
-# Adiciona os endpoints de /ocorrencias com o prefixo /api/v1
+
+# Router para Ocorrências (CRUD)
 app.include_router(
     ocorrencias.router,
-    prefix="/api/v1",
-    tags=["Ocorrências"]
+    prefix="/api/v1",       # Prefixo comum para a API
+    tags=["Ocorrências"]    # Agrupa na documentação /docs
 )
+
+# <<< BLOCO ADICIONADO PARA O ROUTER DE ANÁLISE ML >>>
+app.include_router(
+    analysis.router,
+    prefix="/api/v1",       # Mesmo prefixo da API
+    tags=["Análise ML"]     # Tag separada na documentação
+)
+# <<< FIM DO BLOCO ADICIONADO >>>
+
 
 # --- Endpoint Raiz (Saúde) ---
 @app.get("/", tags=["Root"])
@@ -49,3 +62,20 @@ def read_root():
     return {"message": "Horus AI API - Online"}
 
 print("INFO: Aplicação FastAPI iniciada e rotas configuradas.")
+
+# === Opcional: Evento Startup para Carregar Modelos ===
+# (Carrega modelos na inicialização do servidor)
+@app.on_event("startup")
+async def startup_event():
+    print("INFO: Evento startup - Carregando modelos de ML...")
+    # Importa DENTRO da função para garantir que tudo esteja pronto
+    from app.ml import inference
+    # Chama a função load_all_models apenas se não foram carregados ainda
+    if not inference.models_loaded:
+         inference.load_all_models() # Tenta carregar
+
+    if not inference.models_loaded:
+        print("ALERTA CRÍTICO: Modelos de ML não puderam ser carregados no startup! Endpoint /analyze pode falhar.")
+    else:
+        print("INFO: Modelos de ML verificados/carregados no startup.")
+# === Fim do Bloco Opcional ===

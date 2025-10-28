@@ -5,3 +5,18 @@ psycopg2-binary
 python-dotenv
 pydantic
 pydantic-settings
+joblib
+numpy
+pandas
+scikit-learn
+tqdm
+requests
+pydub
+
+# === DEPENDÊNCIAS PARA ML (TensorFlow Completo) ===
+# tflite-runtime     # REMOVIDA ou COMENTADA
+Pillow
+librosa
+opencv-python-headless
+moviepy
+tensorflow        # GARANTA QUE ESTA LINHA EXISTE E NÃO ESTÁ COMENTADA
