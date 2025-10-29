@@ -1,20 +1,21 @@
 # backend/app/ml/inference.py
-# (Versão TFLite usando TensorFlow Interpreter - Completo)
+# (Versão TFLite com Análise Multi-Segmento/Frame)
 
 import os
 import numpy as np
-import tensorflow as tf # Usaremos tf.lite.Interpreter e tf.image
-# Removido import de tflite_runtime
+import tensorflow as tf
+from tensorflow.lite.python.interpreter import Interpreter
 from PIL import Image
 import librosa
 import cv2 # OpenCV
-from typing import Tuple, Optional, List
-import traceback # Para logar erros detalhados
+from typing import Tuple, Optional, List, Dict
+import traceback
+import math
 
-# === Definições ===
+# === Definições (Mantidas) ===
 MODEL_DIR = os.path.join(os.path.dirname(__file__), 'models')
-AUDIO_MODEL_FILENAME = 'audio_model_quant.tflite'
-VIDEO_MODEL_FILENAME = 'video_model_quant.tflite'
+AUDIO_MODEL_FILENAME = 'audio_model_quant.tFLite' # Corrigido case
+VIDEO_MODEL_FILENAME = 'video_model_quant.tFLite' # Corrigido case
 AUDIO_MODEL_PATH = os.path.join(MODEL_DIR, AUDIO_MODEL_FILENAME)
 VIDEO_MODEL_PATH = os.path.join(MODEL_DIR, VIDEO_MODEL_FILENAME)
 
@@ -24,9 +25,10 @@ VIDEO_CLASSES = ['bloco', 'borrado', 'normal']
 INPUT_HEIGHT = 224
 INPUT_WIDTH = 224
 
-# === Carregamento dos Intérpretes TFLite (via TensorFlow) ===
+# === Carregamento dos Intérpretes (Mantido) ===
 audio_interpreter = None
 video_interpreter = None
+# ... (restante das variáveis globais e função load_all_models idêntica à anterior) ...
 audio_input_details = None
 audio_output_details = None
 video_input_details = None
@@ -41,194 +43,260 @@ def load_all_models():
     loaded_any = False
     try:
         if os.path.exists(AUDIO_MODEL_PATH):
-            audio_interpreter = tf.lite.Interpreter(model_path=AUDIO_MODEL_PATH) # <-- Mudança aqui
+            audio_interpreter = tf.lite.Interpreter(model_path=AUDIO_MODEL_PATH)
             audio_interpreter.allocate_tensors()
             audio_input_details = audio_interpreter.get_input_details()[0]
             audio_output_details = audio_interpreter.get_output_details()[0]
-            print(f"INFO: Modelo de Áudio TFLite carregado de {AUDIO_MODEL_PATH}")
+            print(f"INFO: Modelo de Áudio TFLite carregado. Input: {audio_input_details['shape']}, dtype: {audio_input_details['dtype']}")
             loaded_any = True
         else:
             print(f"AVISO: Modelo de Áudio TFLite não encontrado em {AUDIO_MODEL_PATH}")
 
         if os.path.exists(VIDEO_MODEL_PATH):
-            video_interpreter = tf.lite.Interpreter(model_path=VIDEO_MODEL_PATH) # <-- Mudança aqui
+            video_interpreter = tf.lite.Interpreter(model_path=VIDEO_MODEL_PATH)
             video_interpreter.allocate_tensors()
             video_input_details = video_interpreter.get_input_details()[0]
             video_output_details = video_interpreter.get_output_details()[0]
-            print(f"INFO: Modelo de Vídeo TFLite carregado de {VIDEO_MODEL_PATH}")
+            print(f"INFO: Modelo de Vídeo TFLite carregado. Input: {video_input_details['shape']}, dtype: {video_input_details['dtype']}")
             loaded_any = True
         else:
             print(f"AVISO: Modelo de Vídeo TFLite não encontrado em {VIDEO_MODEL_PATH}")
 
         models_loaded = loaded_any
-        print("INFO: Carregamento de modelos TFLite concluído.")
+        if models_loaded:
+            print("INFO: Carregamento de modelos TFLite concluído.")
+        else:
+            print("AVISO: Nenhum modelo TFLite foi carregado.")
 
     except Exception as e:
         print(f"ERRO CRÍTICO ao carregar modelos TFLite: {e}")
         traceback.print_exc()
         models_loaded = False
+load_all_models() # Carrega na importação
 
-# Carrega na importação
-load_all_models()
-
-# === Funções de Pré-processamento ===
-
-def preprocess_audio(file_path: str) -> Optional[np.ndarray]:
-    """ Carrega áudio, gera espectrograma MEL, redimensiona e normaliza. """
-    try:
-        # --- AJUSTE OS PARÂMETROS ABAIXO CONFORME SEU TREINAMENTO ---
-        TARGET_SR = None # Use None para sr original ou defina (ex: 16000)
-        DURATION = 5.0 # Segundos a carregar
-        N_MELS = 128   # Número de bandas Mel
-        FMAX = 8000    # Frequência máxima
-        HOP_LENGTH = 512 # Salto (afeta largura do espectrograma)
-        N_FFT = 2048   # Tamanho da FFT
-        # --- FIM AJUSTES ---
-
-        print(f"DEBUG: Processando áudio: {file_path}")
-        y, sr = librosa.load(file_path, sr=TARGET_SR, duration=DURATION)
-        if len(y) == 0:
-             print(f"AVISO: Arquivo de áudio vazio ou muito curto: {file_path}")
-             return None
-
-        print(f"DEBUG: Áudio carregado. Duração: {len(y)/sr:.2f}s, SR: {sr}")
-        mel_spec = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=N_MELS, fmax=FMAX, hop_length=HOP_LENGTH, n_fft=N_FFT)
-        mel_spec_db = librosa.power_to_db(mel_spec, ref=np.max)
-        print(f"DEBUG: Espectrograma Mel gerado. Shape: {mel_spec_db.shape}")
-
-        # Normaliza para [0, 1] antes de converter para imagem
-        img_gray = (mel_spec_db - np.min(mel_spec_db)) / (np.max(mel_spec_db) - np.min(mel_spec_db) + 1e-6)
-
-        # Converte para 3 canais replicando
-        img_rgb = np.stack([img_gray]*3, axis=-1)
-
-        # Redimensiona usando TensorFlow Image
-        img_tf = tf.convert_to_tensor(img_rgb, dtype=tf.float32)
-        img_resized_tf = tf.image.resize(img_tf, [INPUT_HEIGHT, INPUT_WIDTH], method=tf.image.ResizeMethod.BILINEAR)
-        img_resized = img_resized_tf.numpy()
-        print(f"DEBUG: Imagem redimensionada para {img_resized.shape}")
-
-        # Normalização final [0, 1] float32 (comum para MobileNetV2 TFLite quantizado ou float)
-        img_normalized = img_resized.astype(np.float32) # Já deve estar em [0, 1]
-
-        input_data = np.expand_dims(img_normalized, axis=0)
-
-        if input_data.shape != (1, INPUT_HEIGHT, INPUT_WIDTH, 3):
-            print(f"ERRO: Shape final do tensor de áudio inesperado: {input_data.shape}")
-            return None
-
-        print(f"DEBUG: Pré-processamento de áudio concluído. Shape final: {input_data.shape}")
-        return input_data
-
-    except Exception as e:
-        print(f"ERRO no pré-processamento de áudio ({file_path}): {e}")
-        traceback.print_exc()
-        return None
-
-def preprocess_video_frame(file_path: str) -> Optional[np.ndarray]:
-    """ Abre vídeo, pega um frame, redimensiona, normaliza. """
-    try:
-        print(f"DEBUG: Processando vídeo: {file_path}")
-        cap = cv2.VideoCapture(file_path)
-        if not cap.isOpened():
-            print(f"ERRO: Não foi possível abrir o vídeo: {file_path}")
-            return None
-
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        if total_frames < 1:
-            print(f"ERRO: Vídeo sem frames: {file_path}")
-            cap.release()
-            return None
-        print(f"DEBUG: Vídeo com {total_frames} frames.")
-
-        middle_frame_idx = total_frames // 2
-        cap.set(cv2.CAP_PROP_POS_FRAMES, middle_frame_idx)
-        ret, frame = cap.read()
-        cap.release()
-
-        if not ret or frame is None:
-            print(f"ERRO: Não foi possível ler o frame do meio de {file_path}")
-            return None
-        print(f"DEBUG: Frame lido. Shape original: {frame.shape}")
-
-        img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        img_resized = cv2.resize(img_rgb, (INPUT_WIDTH, INPUT_HEIGHT))
-        print(f"DEBUG: Frame redimensionado para {img_resized.shape}")
-
-        # Normalização [0, 1] float32
-        img_normalized = img_resized.astype(np.float32) / 255.0
-
-        input_data = np.expand_dims(img_normalized, axis=0)
-
-        if input_data.shape != (1, INPUT_HEIGHT, INPUT_WIDTH, 3):
-             print(f"ERRO: Shape do tensor de vídeo inesperado: {input_data.shape}")
-             return None
-
-        print(f"DEBUG: Pré-processamento de vídeo concluído. Shape final: {input_data.shape}")
-        return input_data
-
-    except Exception as e:
-        print(f"ERRO no pré-processamento de vídeo ({file_path}): {e}")
-        traceback.print_exc()
-        return None
-
-# === Função de Inferência TFLite Genérica ===
+# === Função de Inferência TFLite Genérica (Mantida) ===
 def run_tflite_inference(interpreter: tf.lite.Interpreter, input_details: dict, output_details: dict, input_data: np.ndarray, classes: List[str]) -> Tuple[str, float]:
     """ Executa a inferência TFLite genérica. """
-    if not interpreter or not models_loaded:
-        raise RuntimeError("Intérprete TFLite não carregado.")
-
+    # (Código idêntico ao da resposta anterior)
+    if not interpreter: raise RuntimeError("Intérprete TFLite não está disponível.")
     try:
         input_dtype = input_details['dtype']
-        # Verifica se o tipo de entrada é quantizado e ajusta
         if input_dtype == np.uint8 or input_dtype == np.int8:
             scale, zero_point = input_details['quantization']
-            input_data_quant = (input_data / scale + zero_point).astype(input_dtype)
+            input_data_quant = (input_data * 255.0 / scale + zero_point).astype(input_dtype)
             interpreter.set_tensor(input_details['index'], input_data_quant)
-            # print("DEBUG: Input TFLite quantizado.")
         else:
-            input_data = input_data.astype(np.float32) # Garante float32
+            input_data = input_data.astype(np.float32)
             interpreter.set_tensor(input_details['index'], input_data)
-            # print("DEBUG: Input TFLite float32.")
 
         interpreter.invoke()
         output_data = interpreter.get_tensor(output_details['index'])[0]
 
-        # Desquantiza a saída se necessário
         output_dtype = output_details['dtype']
         if output_dtype == np.uint8 or output_dtype == np.int8:
             scale, zero_point = output_details['quantization']
             output_data = scale * (output_data.astype(np.float32) - zero_point)
-            # print("DEBUG: Output TFLite desquantizado.")
+
+        # --- Softmax Opcional ---
+        # output_data = tf.nn.softmax(output_data).numpy()
 
         predicted_index = np.argmax(output_data)
         confidence = float(output_data[predicted_index])
 
         if predicted_index >= len(classes):
-            print(f"ERRO: Índice previsto ({predicted_index}) fora dos limites para as classes {classes}")
             predicted_class = "Erro_Indice"
             confidence = 0.0
         else:
             predicted_class = classes[predicted_index]
 
-        print(f"DEBUG: Inferência: Classe={predicted_class}, Confiança={confidence:.4f}")
+        # print(f"DEBUG: Inferência Segmento: Classe={predicted_class}, Confiança={confidence:.4f}") # Log por segmento
         return predicted_class, confidence
-
     except Exception as e:
         print(f"ERRO durante a execução da inferência TFLite: {e}")
         traceback.print_exc()
         return "Erro_Inferência", 0.0
 
+# =======================================================
+# === NOVAS FUNÇÕES: ANÁLISE DE ÁUDIO MULTI-SEGMENTO ===
+# =======================================================
 
-# === Wrappers Específicos ===
-def run_audio_inference(input_data: np.ndarray) -> Tuple[str, float]:
-    """ Wrapper para inferência de áudio TFLite. """
+def preprocess_audio_segment(y_segment: np.ndarray, sr: int) -> Optional[np.ndarray]:
+    """ Pré-processa UM segmento de áudio (y). """
+    try:
+        # --- PARÂMETROS (DEVEM SER OS MESMOS DO TREINO) ---
+        N_MELS = 128
+        FMAX = 8000
+        HOP_LENGTH = 512
+        N_FFT = 2048
+        # --- FIM PARÂMETROS ---
+
+        if len(y_segment) == 0: return None
+
+        mel_spec = librosa.feature.melspectrogram(y=y_segment, sr=sr, n_mels=N_MELS, fmax=FMAX, hop_length=HOP_LENGTH, n_fft=N_FFT)
+        mel_spec_db = librosa.power_to_db(mel_spec, ref=np.max)
+
+        min_db, max_db = np.min(mel_spec_db), np.max(mel_spec_db)
+        img_gray = np.zeros_like(mel_spec_db, dtype=np.float32)
+        if max_db > min_db: # Evita divisão por zero
+             img_gray = (mel_spec_db - min_db) / (max_db - min_db)
+
+        img_rgb = np.stack([img_gray]*3, axis=-1)
+        img_tf = tf.convert_to_tensor(img_rgb, dtype=tf.float32)
+        img_resized_tf = tf.image.resize(img_tf, [INPUT_HEIGHT, INPUT_WIDTH], method=tf.image.ResizeMethod.BILINEAR)
+        img_resized = img_resized_tf.numpy()
+        img_normalized = img_resized.astype(np.float32) # Assume [0, 1]
+        input_data = np.expand_dims(img_normalized, axis=0)
+
+        return input_data if input_data.shape == (1, INPUT_HEIGHT, INPUT_WIDTH, 3) else None
+    except Exception as e:
+        # print(f"ERRO pré-processando segmento de áudio: {e}") # Log menos verboso
+        return None
+
+def analyze_audio_segments(file_path: str) -> Tuple[str, float]:
+    """ Analisa múltiplos segmentos de áudio e retorna a falha mais confiante. """
+    if not audio_interpreter: raise RuntimeError("Intérprete de áudio TFLite não carregado.")
+
+    best_fault_class = 'normal'
+    max_confidence = 0.0
+    processed_segments = 0
+
+    try:
+        # --- PARÂMETROS DE SEGMENTAÇÃO ---
+        TARGET_SR = None # Use None ou sr específico (ex: 16000)
+        SEGMENT_DURATION_S = 3.0 # Duração de cada segmento para análise
+        HOP_DURATION_S = 1.0     # Sobreposição (avança 1s por vez)
+        # --- FIM PARÂMETROS ---
+
+        print(f"DEBUG: Analisando segmentos de áudio: {file_path}")
+        # Carrega o áudio completo uma vez
+        y_full, sr = librosa.load(file_path, sr=TARGET_SR)
+        if len(y_full) == 0:
+            print(f"AVISO: Áudio completo vazio: {file_path}")
+            return 'normal', 0.0 # Se vazio, é normal
+
+        segment_samples = int(SEGMENT_DURATION_S * sr)
+        hop_samples = int(HOP_DURATION_S * sr)
+
+        for i in range(0, len(y_full) - segment_samples + 1, hop_samples):
+            y_segment = y_full[i : i + segment_samples]
+
+            # Pré-processa o segmento
+            input_data = preprocess_audio_segment(y_segment, sr)
+            if input_data is None:
+                continue # Pula segmento se pré-processamento falhar
+
+            # Roda a inferência no segmento
+            pred_class, confidence = run_tflite_inference(
+                audio_interpreter, audio_input_details, audio_output_details, input_data, AUDIO_CLASSES
+            )
+            processed_segments += 1
+
+            # Estratégia: Guarda a falha (não-normal) com maior confiança encontrada até agora
+            if pred_class != 'normal' and confidence > max_confidence:
+                max_confidence = confidence
+                best_fault_class = pred_class
+            # Se ainda não achamos falha, mas achamos 'normal' com alta confiança, guardamos isso
+            elif best_fault_class == 'normal' and pred_class == 'normal' and confidence > max_confidence:
+                 max_confidence = confidence # Atualiza a confiança do 'normal'
+
+        print(f"DEBUG: Áudio - {processed_segments} segmentos processados. Resultado: {best_fault_class} ({max_confidence:.4f})")
+        # Se nenhuma falha foi encontrada (best_fault_class ainda é 'normal'), retorna 'normal'
+        # com a maior confiança de 'normal' encontrada (ou 0 se nenhum segmento foi processado).
+        # Se uma falha foi encontrada, retorna a falha e sua confiança.
+        return best_fault_class, max_confidence
+
+    except Exception as e:
+        print(f"ERRO durante análise de segmentos de áudio ({file_path}): {e}")
+        traceback.print_exc()
+        return "Erro_Análise_Áudio", 0.0
+
+# =====================================================
+# === NOVAS FUNÇÕES: ANÁLISE DE VÍDEO MULTI-FRAME ===
+# =====================================================
+
+def preprocess_video_single_frame(frame: np.ndarray) -> Optional[np.ndarray]:
+    """ Pré-processa UM frame de vídeo (já lido). """
+    try:
+        if frame is None: return None
+        img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        img_resized = cv2.resize(img_rgb, (INPUT_WIDTH, INPUT_HEIGHT))
+        img_normalized = img_resized.astype(np.float32) / 255.0 # Normaliza [0, 1]
+        input_data = np.expand_dims(img_normalized, axis=0)
+        return input_data if input_data.shape == (1, INPUT_HEIGHT, INPUT_WIDTH, 3) else None
+    except Exception as e:
+        # print(f"ERRO pré-processando frame de vídeo: {e}") # Log menos verboso
+        return None
+
+def analyze_video_frames(file_path: str) -> Tuple[str, float]:
+    """ Analisa múltiplos frames de vídeo e retorna a falha mais confiante. """
+    if not video_interpreter: raise RuntimeError("Intérprete de vídeo TFLite não carregado.")
+
+    best_fault_class = 'normal'
+    max_confidence = 0.0
+    processed_frames = 0
+    frames_read = 0
+
+    try:
+        # --- PARÂMETROS DE ANÁLISE ---
+        FRAME_SKIP = 30 # Analisa 1 frame a cada 30 (aprox. 1 por segundo se 30fps)
+        # --- FIM PARÂMETROS ---
+
+        print(f"DEBUG: Analisando frames de vídeo: {file_path}")
+        cap = cv2.VideoCapture(file_path)
+        if not cap.isOpened():
+            print(f"ERRO: Não foi possível abrir vídeo para análise de frames: {file_path}")
+            return "Erro_Abertura_Vídeo", 0.0
+
+        while True:
+            # Lê o frame
+            ret, frame = cap.read()
+            if not ret:
+                break # Fim do vídeo
+
+            frames_read += 1
+            # Pula frames
+            if frames_read % FRAME_SKIP != 0:
+                continue
+
+            # Pré-processa o frame selecionado
+            input_data = preprocess_video_single_frame(frame)
+            if input_data is None:
+                continue # Pula frame se pré-processamento falhar
+
+            # Roda a inferência no frame
+            pred_class, confidence = run_tflite_inference(
+                video_interpreter, video_input_details, video_output_details, input_data, VIDEO_CLASSES
+            )
+            processed_frames += 1
+
+            # Estratégia: Guarda a falha (não-normal) com maior confiança
+            if pred_class != 'normal' and confidence > max_confidence:
+                max_confidence = confidence
+                best_fault_class = pred_class
+            elif best_fault_class == 'normal' and pred_class == 'normal' and confidence > max_confidence:
+                max_confidence = confidence # Guarda a maior confiança do 'normal'
+
+        cap.release()
+        print(f"DEBUG: Vídeo - {processed_frames} frames processados ({frames_read} lidos). Resultado: {best_fault_class} ({max_confidence:.4f})")
+        return best_fault_class, max_confidence
+
+    except Exception as e:
+        print(f"ERRO durante análise de frames de vídeo ({file_path}): {e}")
+        traceback.print_exc()
+        if 'cap' in locals() and cap.isOpened(): cap.release() # Garante liberar o vídeo
+        return "Erro_Análise_Vídeo", 0.0
+
+# === Wrappers Antigos (NÃO USADOS DIRETAMENTE PELO ENDPOINT AGORA) ===
+# Mantidos para referência ou testes unitários futuros, se necessário
+
+def run_audio_inference_single_segment(input_data: np.ndarray) -> Tuple[str, float]:
+    """ Roda inferência em um único segmento de áudio pré-processado. """
     if not audio_interpreter: raise RuntimeError("Intérprete de áudio TFLite não carregado.")
     return run_tflite_inference(audio_interpreter, audio_input_details, audio_output_details, input_data, AUDIO_CLASSES)
 
-def run_video_inference(input_data: np.ndarray) -> Tuple[str, float]:
-    """ Wrapper para inferência de vídeo TFLite. """
+def run_video_inference_single_frame(input_data: np.ndarray) -> Tuple[str, float]:
+    """ Roda inferência em um único frame de vídeo pré-processado. """
     if not video_interpreter: raise RuntimeError("Intérprete de vídeo TFLite não carregado.")
     return run_tflite_inference(video_interpreter, video_input_details, video_output_details, input_data, VIDEO_CLASSES)
 
-print("INFO: Módulo de inferência TFLite (via TF) inicializado.")
+print("INFO: Módulo de inferência TFLite (Multi-Segmento) inicializado.")

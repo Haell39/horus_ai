@@ -1,17 +1,16 @@
 # backend/app/api/endpoints/analysis.py
-# (Versão TFLite com Upload - Passo 5)
-
+# (Versão TFLite com Upload e Análise Multi-Segmento - CORRIGIDO)
 from fastapi import APIRouter, HTTPException, Depends, status, BackgroundTasks, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import os
 import tempfile
 import time
-# moviepy 2.2+ doesn't provide `moviepy.editor`; import VideoFileClip directly
-from moviepy.video.io.VideoFileClip import VideoFileClip  # Para pegar a duração
-import traceback # Para log de erro
-from typing import Tuple, List, Optional
-import numpy as np
+# === CORREÇÃO IMPORT MOVIEPY ===
+from moviepy.video.io.VideoFileClip import VideoFileClip # Import específico
+# === CORREÇÃO IMPORT TYPING ===
+from typing import Tuple, Optional, List # Adicionado Tuple
+import traceback
 
 # Importa nossa lógica de ML e schemas
 from app.ml import inference, schemas as ml_schemas
@@ -19,79 +18,82 @@ from app.ml import inference, schemas as ml_schemas
 from app.db import schemas as db_schemas
 from app.db import models
 from app.db.base import get_db
+from app.websocket_manager import manager
+import shutil
 
 router = APIRouter()
 
 # Função para obter duração e calcular severidade
+# A assinatura agora usa o 'Tuple' importado
 def calcular_severidade_e_duracao(clip_path: str) -> Tuple[float, str]:
     """ Calcula a duração do clipe e determina a severidade baseada na Cartilha Globo. """
     duration_s = 0.0
     severity = "Leve (C)" # Padrão
     try:
-        # Tenta obter a duração usando MoviePy
         print(f"DEBUG: Calculando duração para: {clip_path}")
-        # Verifica se o arquivo existe antes de tentar abrir
-        if not os.path.exists(clip_path):
-             print(f"AVISO: Arquivo não encontrado para cálculo de duração: {clip_path}. Usando fallback (5s).")
-             duration_s = 5.0
+        if not os.path.exists(clip_path) or os.path.getsize(clip_path) == 0:
+             print(f"AVISO: Arquivo não encontrado ou vazio: {clip_path}. Duração = 0s.")
+             duration_s = 0.0
         else:
-             with VideoFileClip(clip_path) as clip:
-                 duration_s = clip.duration if clip.duration else 0.0
-             print(f"DEBUG: Duração obtida com MoviePy: {duration_s:.2f}s")
+             try:
+                 # Usa o VideoFileClip importado diretamente
+                 with VideoFileClip(clip_path) as clip:
+                     duration_s = clip.duration if clip.duration is not None else 0.0
+                 print(f"DEBUG: Duração MoviePy: {duration_s:.2f}s")
+             except Exception as moviepy_err:
+                  print(f"AVISO: Erro MoviePy ({clip_path}): {moviepy_err}. Duração = 0s.")
+                  duration_s = 0.0
 
     except Exception as e:
-        print(f"AVISO: Falha ao obter duração com MoviePy ({clip_path}): {e}. Usando fallback (5s).")
-        # Fallback em caso de erro do MoviePy
-        duration_s = 5.0
+        print(f"AVISO: Falha geral duração ({clip_path}): {e}. Duração = 0s.")
+        duration_s = 0.0
 
-    # Garante que duration_s seja um float válido
+    # Garante float não negativo
     try:
       duration_s = float(duration_s)
-      if duration_s < 0: # Duração não pode ser negativa
-          print(f"AVISO: Duração negativa '{duration_s}', usando fallback 5.0s")
-          duration_s = 5.0
+      if duration_s < 0: duration_s = 0.0
     except (ValueError, TypeError):
-       print(f"AVISO: Duração inválida '{duration_s}', usando fallback 5.0s")
-       duration_s = 5.0
-
+       duration_s = 0.0
 
     # <<< LÓGICA DA CARTILHA GLOBO >>>
-    if duration_s >= 60:
-        severity = "Gravíssima (X)"
-    elif duration_s >= 10: # 10s a 59.99...s
-        severity = "Grave (A)"
-    elif duration_s >= 5: # 5s a 9.99...s
-        severity = "Média (B)"
-    else: # 0s a 4.99...s
-        severity = "Leve (C)"
+    if duration_s >= 60: severity = "Gravíssima (X)"
+    elif duration_s >= 10: severity = "Grave (A)"
+    elif duration_s >= 5: severity = "Média (B)"
+    else: severity = "Leve (C)"
 
     print(f"DEBUG: Duração final: {duration_s:.2f}s -> Severidade: {severity}")
     return duration_s, severity
 
-# Função de background para salvar ocorrência
+# Função de background para salvar ocorrência (Mantida)
+# Função de background para salvar ocorrência (MODIFICADA)
 async def salvar_ocorrencia_task(db: Session, ocorrencia_data: db_schemas.OcorrenciaCreate):
-    """ Salva a ocorrência no banco de dados. """
+    """ Salva a ocorrência no banco E envia via WebSocket. """
+    db_ocorrencia = None # Inicializa para saber se salvou
     try:
-        print(f"Background Task: Iniciando salvamento da ocorrência: {ocorrencia_data.type}")
-        # Cria a instância do modelo SQLAlchemy
-        db_ocorrencia = models.Ocorrencia(
-            start_ts=ocorrencia_data.start_ts,
-            end_ts=ocorrencia_data.end_ts,
-            duration_s=ocorrencia_data.duration_s,
-            category=ocorrencia_data.category,
-            type=ocorrencia_data.type,
-            severity=ocorrencia_data.severity,
-            confidence=ocorrencia_data.confidence,
-            evidence=ocorrencia_data.evidence
-            # created_at é DEFAULT now() no banco
-        )
+        print(f"Background Task: Iniciando salvamento: {ocorrencia_data.type}")
+        # Cria instância SQLAlchemy
+        db_ocorrencia = models.Ocorrencia(**ocorrencia_data.dict())
         db.add(db_ocorrencia)
-        db.commit() # Salva as mudanças
-        db.refresh(db_ocorrencia) # Pega o ID gerado pelo banco
-        print(f"Background Task: Ocorrência ID {db_ocorrencia.id} ({db_ocorrencia.type}) salva com sucesso.")
+        db.commit()
+        db.refresh(db_ocorrencia) # Pega ID e created_at
+        print(f"Background Task: Ocorrência ID {db_ocorrencia.id} ({db_ocorrencia.type}) salva.")
+
+        # <<< NOVA PARTE: ENVIA VIA WEBSOCKET >>>
+        if db_ocorrencia:
+            # Converte o objeto SQLAlchemy para um schema Pydantic Read (que é serializável)
+            ocorrencia_read = db_schemas.OcorrenciaRead.from_orm(db_ocorrencia)
+            # Cria um objeto JSON para enviar (podemos simplificar se necessário)
+            payload = {
+                "type": "nova_ocorrencia", # Tipo da mensagem
+                "data": ocorrencia_read.dict() # Converte o Pydantic para dict
+            }
+            print(f"DEBUG: Enviando broadcast WebSocket: {payload['type']} ID {ocorrencia_read.id}")
+            await manager.broadcast_json(payload) # Envia para todos conectados
+        # <<< FIM DA NOVA PARTE >>>
+
     except Exception as e:
-        db.rollback() # Desfaz em caso de erro
-        print(f"Background Task ERRO: Falha ao salvar ocorrência tipo '{ocorrencia_data.type}': {e}")
+        db.rollback()
+        print(f"Background Task ERRO: Falha ao salvar/transmitir '{ocorrencia_data.type}': {e}")
         traceback.print_exc()
 
 @router.post(
@@ -100,140 +102,129 @@ async def salvar_ocorrencia_task(db: Session, ocorrencia_data: db_schemas.Ocorre
     summary="Analisa um clipe de mídia (áudio ou vídeo)"
 )
 async def analyze_media(
-    # Recebe os dados como 'form-data'
+    # (Parâmetros mantidos: media_type, file, background_tasks, db)
     media_type: str = Form(..., pattern="^(audio|video)$"),
     file: UploadFile = File(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
-    db: Session = Depends(get_db) # Injeta a sessão do DB
+    db: Session = Depends(get_db)
 ):
     """
-    Recebe um upload de arquivo, salva temporariamente, executa o modelo TFLite,
-    e se detectar uma falha, agenda o salvamento da ocorrência no banco.
+    Recebe upload, salva temporariamente, executa ANÁLISE MULTI-SEGMENTO/FRAME,
+    e agenda salvamento se detectar falha.
     """
-    # Verifica se os modelos foram carregados corretamente no início
-    if not inference.models_loaded or (media_type == 'audio' and not inference.audio_interpreter) or (media_type == 'video' and not inference.video_interpreter):
-        message = f"Erro: Modelo TFLite para '{media_type}' não está carregado."
-        print(f"ERRO: {message}")
-        # Retorna um erro 503 Service Unavailable, mas no formato AnalysisOutput
-        return ml_schemas.AnalysisOutput(
-            filename=file.filename,
-            media_type=media_type,
-            predictions=[],
-            message=message,
-            ocorrencia_salva=False
-        )
+    # (Verificação inicial de modelos carregados mantida)
+    model_is_available = False
+    if media_type == 'audio' and inference.audio_interpreter: model_is_available = True
+    elif media_type == 'video' and inference.video_interpreter: model_is_available = True
+    if not inference.models_loaded or not model_is_available:
+         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"Modelo TFLite para '{media_type}' não carregado.")
 
-    print(f"INFO: Recebido upload '{file.filename}' para análise ({media_type}). Tamanho: {file.size} bytes.")
-    temp_file_path = None # Inicializa variável
+    print(f"INFO: Recebido '{file.filename}' ({media_type}). Tamanho: {file.size} bytes.")
+    temp_file_path = None
     results: List[ml_schemas.PredictionResult] = []
     error_msg: Optional[str] = None
     ocorrencia_salva = False
     message = "Análise iniciada."
 
     try:
-        # Salva o arquivo temporariamente de forma segura
+        # --- Salva Arquivo Temporário (Mantido) ---
         suffix = os.path.splitext(file.filename)[1] if file.filename else ".tmp"
-        # Usamos 'wb' para escrita binária
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, mode='wb') as temp_file:
-            content = await file.read()
-            if not content:
-                 raise ValueError("Arquivo recebido está vazio.")
-            temp_file.write(content)
-            temp_file_path = temp_file.name
-        print(f"DEBUG: Arquivo salvo temporariamente em: {temp_file_path}")
+        temp_dir = tempfile.gettempdir(); os.makedirs(temp_dir, exist_ok=True)
+        fd, temp_file_path = tempfile.mkstemp(suffix=suffix, dir=temp_dir)
+        with os.fdopen(fd, 'wb') as temp_file:
+             content = await file.read();
+             if not content: raise ValueError("Arquivo vazio.")
+             temp_file.write(content)
+        print(f"DEBUG: Arquivo salvo em: {temp_file_path}")
 
+        # --- Pré-processamento e Inferência Multi-Segmento ---
         start_time = time.time()
-        input_data: Optional[np.ndarray] = None
         pred_class: str = "error"
         confidence: float = 0.0
         model_name: str = "unknown"
 
-        # --- Pré-processamento e Inferência ---
         if media_type == 'audio':
-            input_data = inference.preprocess_audio(temp_file_path)
-            if input_data is None: raise ValueError("Falha no pré-processamento do áudio.")
-            pred_class, confidence = inference.run_audio_inference(input_data)
+            pred_class, confidence = inference.analyze_audio_segments(temp_file_path)
             model_name = inference.AUDIO_MODEL_FILENAME
-
         elif media_type == 'video':
-            input_data = inference.preprocess_video_frame(temp_file_path)
-            if input_data is None: raise ValueError("Falha no pré-processamento do vídeo.")
-            pred_class, confidence = inference.run_video_inference(input_data)
+            pred_class, confidence = inference.analyze_video_frames(temp_file_path)
             model_name = inference.VIDEO_MODEL_FILENAME
 
         results.append(ml_schemas.PredictionResult(
-            predicted_class=pred_class,
-            confidence=confidence,
-            model_name=model_name
+            predicted_class=pred_class, confidence=confidence, model_name=model_name
         ))
-
         end_time = time.time()
-        message = f"Inferência {media_type} concluída em {(end_time - start_time):.2f}s. Resultado: {pred_class} ({confidence*100:.1f}%)"
+        message = f"Análise {media_type} concluída em {(end_time - start_time):.2f}s. Resultado: {pred_class} ({confidence*100:.1f}%)"
         print(f"INFO: {message}")
 
-        # --- Lógica de Decisão e Salvamento ---
-        CONFIDENCE_THRESHOLD = 0.60 # Limiar de confiança (AJUSTE SE NECESSÁRIO)
+        # --- Lógica de Decisão e Salvamento (Mantida) ---
+        CONFIDENCE_THRESHOLD = 0.60 # Limiar (AJUSTE)
 
-        # Só salva se NÃO for normal E confiança for alta
-        if pred_class != 'normal' and confidence >= CONFIDENCE_THRESHOLD:
-            print(f"ALERTA: Falha '{pred_class}' detectada com confiança suficiente ({confidence:.2f})!")
-
-            # Calcula duração e severidade usando o arquivo temporário
+        if pred_class not in ['normal', "Erro_Indice", "Erro_Inferência", "Erro_Análise_Áudio", "Erro_Análise_Vídeo", "Erro_Abertura_Vídeo"] and confidence >= CONFIDENCE_THRESHOLD:
+            print(f"ALERTA: Falha '{pred_class}' detectada ({confidence:.2f})!")
             duration_s, severity = calcular_severidade_e_duracao(temp_file_path)
 
-            # Prepara os dados para salvar
-            # Simula start_ts baseado na duração calculada
-            end_ts_now = datetime.now()
-            start_ts_calc = end_ts_now - timedelta(seconds=duration_s)
-
-            ocorrencia_data = db_schemas.OcorrenciaCreate(
-                start_ts=start_ts_calc,
-                end_ts=end_ts_now,
-                duration_s=duration_s,
-                category=f"{media_type.capitalize()} Técnico", # Ex: "Áudio Técnico"
-                type=pred_class,                              # Ex: "ruido"
-                severity=severity,                            # Ex: "Média (B)"
-                confidence=confidence,
-                # IMPORTANTE: No futuro, salve o PATH REAL do clipe permanente aqui
-                evidence={"clip_path_temp": temp_file_path, "model": model_name, "original_filename": file.filename}
-            )
-
-            # Agenda a tarefa de salvar no banco (passa cópia dos dados)
-            background_tasks.add_task(salvar_ocorrencia_task, db, ocorrencia_data.copy(deep=True))
-            message += f". Falha '{pred_class}' ({severity}) detectada. Agendando salvamento."
-            ocorrencia_salva = True
-            print(f"INFO: Tarefa de salvar ocorrência '{pred_class}' agendada.")
+            if duration_s <= 0:
+                 print(f"AVISO: Duração inválida ({duration_s:.2f}s). Ocorrência '{pred_class}' NÃO salva.")
+                 message += f". Duração inválida, ocorrência não salva."
+            else:
+                # (Código para criar ocorrencia_data e agendar background_tasks mantido)
+                end_ts_now = datetime.now()
+                start_ts_calc = end_ts_now - timedelta(seconds=duration_s)
+                # Move o arquivo temporário para a pasta pública de clipes
+                try:
+                    clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'clips'))
+                    os.makedirs(clips_dir, exist_ok=True)
+                    dest_name = f"clip_{int(time.time())}_{os.path.basename(temp_file_path)}"
+                    dest_path = os.path.join(clips_dir, dest_name)
+                    shutil.move(temp_file_path, dest_path)
+                    # Marca que o temp já foi movido para não ser removido no finally
+                    temp_file_path = None
+                    evidence_dict = {
+                        "path": f"/clips/{dest_name}",
+                        "model": model_name,
+                        "original_filename": file.filename,
+                        "confidence_raw": float(confidence),
+                    }
+                except Exception as mv_err:
+                    print(f"AVISO: Falha mover arquivo temp para clips: {mv_err}")
+                    # Fallback: mantém o caminho temporário (pode não existir após finally)
+                    evidence_dict = {
+                        "clip_path_temp": temp_file_path,
+                        "model": model_name,
+                        "original_filename": file.filename,
+                        "confidence_raw": float(confidence),
+                    }
+                ocorrencia_data = db_schemas.OcorrenciaCreate(
+                    start_ts=start_ts_calc, end_ts=end_ts_now, duration_s=duration_s,
+                    category=f"{media_type.capitalize()} Técnico", type=pred_class,
+                    severity=severity, confidence=confidence, evidence=evidence_dict
+                )
+                background_tasks.add_task(salvar_ocorrencia_task, db, ocorrencia_data.copy(deep=True))
+                message += f". Falha '{pred_class}' ({severity}). Agendando salvamento."
+                ocorrencia_salva = True
+                print(f"INFO: Task salvar '{pred_class}' agendada.")
         else:
-             message += ". Nenhuma falha detectada acima do limiar ou classe 'normal'."
+             message += f". Classe '{pred_class}' não acionou salvamento (Conf: {confidence:.2f}, Limiar: {CONFIDENCE_THRESHOLD})."
              print(f"INFO: {message}")
 
-
     except Exception as e:
-        error_msg = f"Erro fatal durante a análise: {e}"
-        message = error_msg # Atualiza a mensagem de retorno
+        error_msg = f"Erro fatal análise '{file.filename}': {e}"
+        message = error_msg
         print(f"ERRO: {error_msg}")
         traceback.print_exc()
-        # Neste caso, podemos levantar uma exceção para retornar um erro 500 mais claro
-        # Mas vamos manter o retorno no formato AnalysisOutput por consistência
-        # raise HTTPException(status_code=500, detail=error_msg)
-
+        results = []
 
     finally:
-        # Garante a exclusão do arquivo temporário, mesmo se der erro
-        if temp_file_path and os.path.exists(temp_file_path):
-            try:
-                os.unlink(temp_file_path)
-                print(f"DEBUG: Arquivo temporário removido: {temp_file_path}")
-            except Exception as unlink_err:
-                print(f"AVISO: Falha ao remover arquivo temporário {temp_file_path}: {unlink_err}")
+        # (Limpeza do arquivo temporário mantida)
+         if temp_file_path and os.path.exists(temp_file_path):
+             try: os.unlink(temp_file_path); print(f"DEBUG: Temp removido: {temp_file_path}")
+             except Exception as unlink_err: print(f"AVISO: Falha remover temp {temp_file_path}: {unlink_err}")
 
-    # Retorna o resultado da análise (sucesso ou falha)
+    # Retorna o resultado
     return ml_schemas.AnalysisOutput(
-        filename=file.filename,
-        media_type=media_type,
-        predictions=results,
-        ocorrencia_salva=ocorrencia_salva,
-        message=message
+        filename=file.filename, media_type=media_type, predictions=results,
+        ocorrencia_salva=ocorrencia_salva, message=message
     )
 
-print("INFO: Endpoint de Análise (/analyze) TFLite configurado.")
+print("INFO: Endpoint de Análise (/analyze) TFLite (Multi-Segmento) configurado.")

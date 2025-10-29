@@ -7,6 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 # Importa NOSSOS routers
 from app.api.endpoints import ocorrencias
 from app.api.endpoints import analysis # <<< ESSA LINHA É CRUCIAL
+from app.api.endpoints import ws
+from app.api.endpoints import streams
+from fastapi.staticfiles import StaticFiles
+import os
 
 # Importa a base do banco para criação de tabelas
 from app.db.base import Base, engine
@@ -54,6 +58,19 @@ app.include_router(
 )
 # <<< FIM DO BLOCO ADICIONADO >>>
 
+app.include_router(
+    ws.router,
+    # Nota: WebSockets não costumam ter prefixo /api/v1
+    # O endpoint será /ws/ocorrencias
+    tags=["WebSockets"]
+)
+# Streams control endpoints (start/stop)
+app.include_router(
+    streams.router,
+    prefix="/api/v1",
+    tags=["Streams"]
+)
+# <<< FIM DO BLOCO ADICIONADO >>>
 
 # --- Endpoint Raiz (Saúde) ---
 @app.get("/", tags=["Root"])
@@ -62,6 +79,12 @@ def read_root():
     return {"message": "Horus AI API - Online"}
 
 print("INFO: Aplicação FastAPI iniciada e rotas configuradas.")
+
+# --- Monta rota para servir clipes estáticos (ex: /clips/clip_123.mp4) ---
+clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'static', 'clips'))
+os.makedirs(clips_dir, exist_ok=True)
+app.mount("/clips", StaticFiles(directory=clips_dir), name="clips")
+print(f"INFO: Static clips mount configured at /clips -> {clips_dir}")
 
 # === Opcional: Evento Startup para Carregar Modelos ===
 # (Carrega modelos na inicialização do servidor)

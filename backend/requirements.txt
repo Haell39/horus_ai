@@ -10,6 +10,7 @@ numpy
 pandas
 scikit-learn
 tqdm
+websockets
 requests
 pydub
 
