@@ -14,6 +14,8 @@ import os
 
 # Importa a base do banco para criação de tabelas
 from app.db.base import Base, engine
+# Garante carregamento do .env e configurações logo no startup
+from app.core.config import settings  # noqa: F401
 
 # --- Criação das Tabelas ---
 print("INFO: Verificando e criando tabelas no banco de dados (se necessário)...")

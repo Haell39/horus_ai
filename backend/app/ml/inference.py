@@ -14,8 +14,8 @@ import math
 
 # === Definições (Mantidas) ===
 MODEL_DIR = os.path.join(os.path.dirname(__file__), 'models')
-AUDIO_MODEL_FILENAME = 'audio_model_quant.tFLite' # Corrigido case
-VIDEO_MODEL_FILENAME = 'video_model_quant.tFLite' # Corrigido case
+AUDIO_MODEL_FILENAME = 'audio_model_quant.tflite'
+VIDEO_MODEL_FILENAME = 'video_model_quant.tflite'
 AUDIO_MODEL_PATH = os.path.join(MODEL_DIR, AUDIO_MODEL_FILENAME)
 VIDEO_MODEL_PATH = os.path.join(MODEL_DIR, VIDEO_MODEL_FILENAME)
 
@@ -300,3 +300,10 @@ def run_video_inference_single_frame(input_data: np.ndarray) -> Tuple[str, float
     return run_tflite_inference(video_interpreter, video_input_details, video_output_details, input_data, VIDEO_CLASSES)
 
 print("INFO: Módulo de inferência TFLite (Multi-Segmento) inicializado.")
+
+# --- Compat wrappers (legacy names expected elsewhere/tests) ---
+def run_audio_inference(input_data: np.ndarray) -> Tuple[str, float]:
+    return run_audio_inference_single_segment(input_data)
+
+def run_video_inference(input_data: np.ndarray) -> Tuple[str, float]:
+    return run_video_inference_single_frame(input_data)

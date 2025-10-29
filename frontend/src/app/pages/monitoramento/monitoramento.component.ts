@@ -130,7 +130,7 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
     const live = environment.liveStreamUrl || '';
     if (live.startsWith('srt://')) {
       // solicita backend para iniciar o ingest e converte para HLS
-      this.ocorrenciaService.startStream(live, 1.0).subscribe({
+      this.ocorrenciaService.startStream({ url: live, fps: 1.0 }).subscribe({
         next: () => {
           console.log('Solicitado backend para iniciar SRT->HLS');
           // Define o src do player para o HLS gerado pelo backend
@@ -345,10 +345,8 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
   // UI handlers for Start / Stop
   public startStreamClicked() {
     const live = environment.liveStreamUrl || '';
-    const url = live.startsWith('srt://')
-      ? live
-      : `${environment.backendBase}/hls/stream.m3u8`;
-    this.ocorrenciaService.startStream(url, 1.0).subscribe({
+    // Solicita ao backend iniciar o stream configurado via streamId (seguro, sem expor SRT no frontend)
+    this.ocorrenciaService.startStream({ streamId: environment.streamId, fps: 1.0 }).subscribe({
       next: () => {
         console.log('Start requested');
         // mark streaming and wait for playlist to be ready before attaching

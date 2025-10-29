@@ -9,16 +9,11 @@ def make_dummy_file_bytes(size=1024):
 
 
 def test_analyze_audio_monkeypatched(monkeypatch, tmp_path):
-    # monkeypatch heavy ML preprocess and inference to make test deterministic
-    def fake_preprocess_audio(path):
-        import numpy as np
-        return np.zeros((1, 224, 224, 3), dtype=np.float32)
-
-    def fake_run_audio(input_data):
+    # monkeypatch high-level analyzer to make test deterministic
+    def fake_analyze_audio_segments(path: str):
         return ("normal", 0.95)
 
-    monkeypatch.setattr(ml.inference, "preprocess_audio", fake_preprocess_audio)
-    monkeypatch.setattr(ml.inference, "run_audio_inference", fake_run_audio)
+    monkeypatch.setattr(ml.inference, "analyze_audio_segments", fake_analyze_audio_segments)
 
     client = TestClient(app)
     sample = tmp_path / "sample.wav"
@@ -36,16 +31,11 @@ def test_analyze_audio_monkeypatched(monkeypatch, tmp_path):
 
 
 def test_analyze_video_monkeypatched(monkeypatch, tmp_path):
-    # monkeypatch heavy ML preprocess and inference to make test deterministic
-    def fake_preprocess_video(path):
-        import numpy as np
-        return np.zeros((1, 224, 224, 3), dtype=np.float32)
-
-    def fake_run_video(input_data):
+    # monkeypatch high-level analyzer to make test deterministic
+    def fake_analyze_video_frames(path: str):
         return ("normal", 0.88)
 
-    monkeypatch.setattr(ml.inference, "preprocess_video_frame", fake_preprocess_video)
-    monkeypatch.setattr(ml.inference, "run_video_inference", fake_run_video)
+    monkeypatch.setattr(ml.inference, "analyze_video_frames", fake_analyze_video_frames)
 
     client = TestClient(app)
     sample = tmp_path / "sample.mp4"

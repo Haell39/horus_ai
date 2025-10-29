@@ -18,8 +18,13 @@ export class OcorrenciaService {
   constructor(private http: HttpClient) {}
 
   // Start SRT->HLS stream via backend
-  startStream(url: string, fps: number = 1.0) {
-    return this.http.post(`${this.apiUrl}/streams/start`, { url, fps });
+  startStream(options: { url?: string; streamId?: string; fps?: number }) {
+    const payload: any = {
+      fps: options.fps ?? 1.0,
+    };
+    if (options.url) payload.url = options.url;
+    if (options.streamId) payload.streamId = options.streamId;
+    return this.http.post(`${this.apiUrl}/streams/start`, payload);
   }
 
   stopStream() {
