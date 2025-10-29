@@ -99,6 +99,24 @@ class SRTIngestor:
         finally:
             self._proc = None
             self._proc_hls = None
+        # Remove any transient HLS files from the public hls folder so we don't
+        # accumulate segments on disk after stopping. We only remove files in
+        # the hls folder; clips remain in static/clips.
+        try:
+            repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+            hls_dir = os.path.join(repo_root, 'static', 'hls')
+            if os.path.exists(hls_dir):
+                for fname in glob.glob(os.path.join(hls_dir, '*')):
+                    try:
+                        if os.path.isdir(fname):
+                            shutil.rmtree(fname)
+                        else:
+                            os.remove(fname)
+                    except Exception:
+                        # ignore individual file delete errors
+                        pass
+        except Exception:
+            pass
         # join thread
         if self._thread:
             self._thread.join(timeout=1)
