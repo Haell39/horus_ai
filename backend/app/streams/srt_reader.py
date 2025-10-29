@@ -20,6 +20,7 @@ class SRTIngestor:
         self.confidence_threshold = confidence_threshold
         self._proc: Optional[subprocess.Popen] = None
         self._proc_hls: Optional[subprocess.Popen] = None
+        self._hls_log_file: Optional[object] = None
         self._thread: Optional[threading.Thread] = None
         self._running = False
         self._tmpdir: Optional[str] = None
@@ -66,8 +67,10 @@ class SRTIngestor:
             ]
             # Redirect stderr to a logfile so we can inspect ffmpeg connection errors
             log_path = os.path.join(hls_dir, 'hls_ffmpeg.log')
-            log_file = open(log_path, 'ab')
-            self._proc_hls = subprocess.Popen(cmd_hls, stdout=log_file, stderr=log_file)
+            # keep the logfile handle so we can close it on stop to avoid
+            # keeping the file locked and to ensure no further writes after stop
+            self._hls_log_file = open(log_path, 'ab')
+            self._proc_hls = subprocess.Popen(cmd_hls, stdout=self._hls_log_file, stderr=self._hls_log_file)
             # wait a moment and verify process is alive; if exited, log warning
             time.sleep(1.0)
             if self._proc_hls.poll() is not None:
@@ -99,6 +102,15 @@ class SRTIngestor:
         finally:
             self._proc = None
             self._proc_hls = None
+            # Close HLS log file handle if open
+            try:
+                if self._hls_log_file:
+                    try:
+                        self._hls_log_file.close()
+                    except Exception:
+                        pass
+            finally:
+                self._hls_log_file = None
         # Remove any transient HLS files from the public hls folder so we don't
         # accumulate segments on disk after stopping. We only remove files in
         # the hls folder; clips remain in static/clips.
@@ -106,8 +118,10 @@ class SRTIngestor:
             repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
             hls_dir = os.path.join(repo_root, 'static', 'hls')
             if os.path.exists(hls_dir):
+                # remove individual files safely
                 for fname in glob.glob(os.path.join(hls_dir, '*')):
                     try:
+                        # never remove the directory itself here; remove contents
                         if os.path.isdir(fname):
                             shutil.rmtree(fname)
                         else:
@@ -115,6 +129,13 @@ class SRTIngestor:
                     except Exception:
                         # ignore individual file delete errors
                         pass
+                # after cleaning segments, write a minimal playlist with ENDLIST
+                try:
+                    playlist_path = os.path.join(hls_dir, 'stream.m3u8')
+                    with open(playlist_path, 'w', encoding='utf-8') as plf:
+                        plf.write('#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXT-X-ENDLIST\n')
+                except Exception:
+                    pass
         except Exception:
             pass
         # join thread

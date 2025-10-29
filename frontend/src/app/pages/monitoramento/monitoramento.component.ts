@@ -71,6 +71,7 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 6;
   private reconnectBaseDelayMs = 1500;
+  private reconnectTimer: any = null;
   public isStreaming: boolean = false; // whether backend ingest is running
   public isLive: boolean = false; // whether player has a live source attached
 
@@ -272,6 +273,15 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
   }
 
   private scheduleReconnect(videoEl: HTMLVideoElement, src: string) {
+    // If user already stopped the stream or the component is not live,
+    // skip scheduling reconnects.
+    if (!this.isStreaming && !this.isLive) {
+      console.log(
+        'scheduleReconnect: stream not live or stopped — skipping reconnect'
+      );
+      return;
+    }
+
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.warn('Max reconnect attempts reached. Não reconectando.');
       this.isLive = false;
@@ -285,7 +295,15 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
         delay
       )}ms`
     );
-    setTimeout(() => {
+    // clear any previous scheduled attempt
+    try {
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
+    } catch (e) {}
+
+    this.reconnectTimer = setTimeout(() => {
       try {
         // destroy hls instance if present
         if (this.hlsInstance && this.hlsInstance.destroy) {
@@ -371,6 +389,14 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
         console.log('Stop requested');
         this.isStreaming = false;
         this.isLive = false;
+        // cancel any scheduled reconnect
+        try {
+          if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+          }
+        } catch (e) {}
+        this.reconnectAttempts = 0;
         const videoEl = this.videoPlayer?.nativeElement;
         if (videoEl) {
           try {
