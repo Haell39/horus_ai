@@ -29,6 +29,7 @@ import { OcorrenciaService } from '../../services/ocorrencia.service';
 import { Ocorrencia } from '../../models/ocorrencia';
 import { WebsocketService } from '../../services/websocket.service'; // <<< IMPORT WebSocketService
 import { Subscription } from 'rxjs'; // <<< IMPORT Subscription
+import { environment } from '../../../environments/environment';
 
 export type ChartOptions = {
   series: ApexAxisChartSeries;
@@ -65,6 +66,14 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
   @ViewChild('chart') chart!: ChartComponent;
   @ViewChild('videoPlayer') videoPlayer!: ElementRef<HTMLVideoElement>;
 
+  // HLS / reconnection state
+  private hlsInstance: any = null;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 6;
+  private reconnectBaseDelayMs = 1500;
+  public isStreaming: boolean = false; // whether backend ingest is running
+  public isLive: boolean = false; // whether player has a live source attached
+
   // Lista de vídeos de simulação (mantida)
   videos: Array<{
     src: string;
@@ -72,28 +81,8 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
     descricao?: string;
     label?: string;
   }> = [
-    {
-      src: 'Ocorrência BDPE_Repórter Parado_27082025_08h14m03s.mp4',
-      tipo: 'A',
-      descricao: 'A - Grave',
-    },
-    { src: 'NE1_18_09_CORTE.mp4', tipo: 'B', descricao: 'B - Médio' },
-    {
-      src: 'Ocorrência BDPE_Corte de Sinal_22082025_08h29m02s.mp4',
-      tipo: 'C',
-      descricao: 'C - Leve',
-    },
-    {
-      src: 'Ocorrência BDPE_Variação_20082025_06h32m59s.mp4',
-      tipo: 'X',
-      descricao: 'X - Gravíssimo',
-    },
-    {
-      src: 'placa-captura-placeholder.mp4',
-      tipo: 'P',
-      descricao: 'Placa de captura',
-      label: 'Placa de captura',
-    },
+    // Não colocamos srt:// direto no src para evitar que o browser tente abrir o protocolo
+    { src: '', tipo: 'L', descricao: 'Ao Vivo (Globo)', label: 'Ao Vivo' },
   ];
   videoIndex = 0;
 
@@ -136,6 +125,182 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
     this.carregarDadosIniciais(); // Carga HTTP
     this.startLoop(); // Loop do gráfico (simulação)
     this.conectarWebSocket(); // Conecta e escuta o WebSocket
+    // Se environment.liveStreamUrl for um SRT, pede ao backend para iniciar SRT->HLS
+    const live = environment.liveStreamUrl || '';
+    if (live.startsWith('srt://')) {
+      // solicita backend para iniciar o ingest e converte para HLS
+      this.ocorrenciaService.startStream(live, 1.0).subscribe({
+        next: () => {
+          console.log('Solicitado backend para iniciar SRT->HLS');
+          // Define o src do player para o HLS gerado pelo backend
+          const hlsUrl = `${environment.backendBase}/hls/stream.m3u8`;
+          const videoEl = this.videoPlayer?.nativeElement;
+          if (videoEl) {
+            videoEl.src = hlsUrl;
+          }
+          setTimeout(() => this.tryAttachHls(), 500);
+        },
+        error: (err) => {
+          console.error('Falha ao solicitar backend iniciar stream:', err);
+          try {
+            const detail = err?.error?.detail || '';
+            if (
+              err.status === 400 &&
+              detail.toString().toLowerCase().includes('already running')
+            ) {
+              const hlsUrl = `${environment.backendBase}/hls/stream.m3u8`;
+              const videoEl = this.videoPlayer?.nativeElement;
+              if (videoEl) videoEl.src = hlsUrl;
+              setTimeout(() => this.tryAttachHls(), 500);
+            }
+          } catch (e) {
+            // ignore
+          }
+        },
+      });
+    } else if (live) {
+      // Se live não é SRT (por exemplo HLS), usa diretamente
+      const videoEl = this.videoPlayer?.nativeElement;
+      if (videoEl) {
+        videoEl.src = live;
+        this.isLive = true;
+      }
+      setTimeout(() => this.tryAttachHls(), 500);
+    } else {
+      // default: apenas tenta anexar HLS com fonte atual (player local)
+      setTimeout(() => this.tryAttachHls(), 500);
+    }
+  }
+
+  // Tenta carregar hls.js dinamicamente e anexar ao player (se necessário)
+  private tryAttachHls(): void {
+    try {
+      const videoEl = this.videoPlayer?.nativeElement;
+      if (!videoEl) return;
+      // Preferir o src do elemento (pode ter sido setado diretamente para o HLS backend)
+      const src = videoEl.src || this.videos[this.videoIndex]?.src;
+      if (!src) return;
+      // Se o browser suporta HLS nativo (Safari), usa e adiciona recovery
+      const isNativeHls = videoEl.canPlayType('application/vnd.apple.mpegurl');
+      if (isNativeHls) {
+        videoEl.src = src;
+        this.attachNativeRecovery(videoEl, src);
+        return;
+      }
+
+      // Caso não suporte nativo, tenta carregar hls.js via CDN dinamicamente
+      if (!(window as any).Hls) {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/hls.js@latest';
+        script.onload = () => this.attachHlsToVideo(videoEl, src);
+        script.onerror = () => {
+          console.warn(
+            'Falha ao carregar hls.js via CDN. Tentando fallback nativo.'
+          );
+          videoEl.src = src;
+          this.attachNativeRecovery(videoEl, src);
+        };
+        document.head.appendChild(script);
+      } else {
+        this.attachHlsToVideo(videoEl, src);
+      }
+    } catch (err) {
+      console.warn('tryAttachHls erro:', err);
+    }
+  }
+
+  private attachHlsToVideo(videoEl: HTMLVideoElement, src: string) {
+    try {
+      const Hls = (window as any).Hls;
+      if (!Hls) return;
+      // destroy previous instance if exists
+      if (this.hlsInstance && this.hlsInstance.destroy) {
+        try {
+          this.hlsInstance.destroy();
+        } catch {}
+        this.hlsInstance = null;
+      }
+
+      const hls = new Hls();
+      this.hlsInstance = hls;
+      hls.loadSource(src);
+      hls.attachMedia(videoEl);
+
+      // Reset reconnect attempts on successful manifest
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        this.reconnectAttempts = 0;
+        this.isLive = true;
+        try {
+          videoEl.play().catch(() => {});
+        } catch {}
+      });
+
+      // Handle errors from hls.js
+      hls.on(Hls.Events.ERROR, (event: any, data: any) => {
+        console.warn('hls.js error', data);
+        try {
+          if (data && data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+            console.warn('hls.js network error, tentando recuperar...');
+            hls.startLoad();
+            return;
+          }
+          if (data && data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+            console.warn('hls.js media error, tentando recuperar...');
+            hls.recoverMediaError();
+            return;
+          }
+        } catch (e) {
+          // ignore
+        }
+        // fallback: schedule a full reconnect
+        this.scheduleReconnect(videoEl, src);
+      });
+    } catch (err) {
+      console.warn('attachHlsToVideo erro:', err);
+    }
+  }
+
+  // Attach handlers for native HLS playback errors (Safari fallback or browser-level support)
+  private attachNativeRecovery(videoEl: HTMLVideoElement, src: string) {
+    const onError = () => {
+      console.warn('Native HLS error detected, tentando reconectar...');
+      this.scheduleReconnect(videoEl, src);
+    };
+    videoEl.removeEventListener('error', onError);
+    videoEl.addEventListener('error', onError);
+    this.isLive = true;
+  }
+
+  private scheduleReconnect(videoEl: HTMLVideoElement, src: string) {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.warn('Max reconnect attempts reached. Não reconectando.');
+      this.isLive = false;
+      return;
+    }
+    this.reconnectAttempts++;
+    const delay =
+      this.reconnectBaseDelayMs * Math.pow(1.8, this.reconnectAttempts - 1);
+    console.log(
+      `Tentativa de reconexão #${this.reconnectAttempts} em ${Math.round(
+        delay
+      )}ms`
+    );
+    setTimeout(() => {
+      try {
+        // destroy hls instance if present
+        if (this.hlsInstance && this.hlsInstance.destroy) {
+          try {
+            this.hlsInstance.destroy();
+          } catch {}
+          this.hlsInstance = null;
+        }
+        // reload src and reattach
+        videoEl.src = src;
+        setTimeout(() => this.tryAttachHls(), 300);
+      } catch (e) {
+        console.warn('Erro ao tentar reconectar:', e);
+      }
+    }, delay);
   }
 
   ngOnDestroy() {
@@ -150,6 +315,83 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
     }
     // Opcional: Fechar WS se não for mais usado
     // this.websocketService.closeConnection(true);
+    // destroy hls instance
+    if (this.hlsInstance && this.hlsInstance.destroy) {
+      try {
+        this.hlsInstance.destroy();
+      } catch {}
+      this.hlsInstance = null;
+    }
+  }
+
+  // UI handlers for Start / Stop
+  public startStreamClicked() {
+    const live = environment.liveStreamUrl || '';
+    const url = live.startsWith('srt://')
+      ? live
+      : `${environment.backendBase}/hls/stream.m3u8`;
+    this.ocorrenciaService.startStream(url, 1.0).subscribe({
+      next: () => {
+        console.log('Start requested');
+        this.isStreaming = true;
+        const videoEl = this.videoPlayer?.nativeElement;
+        if (videoEl) {
+          videoEl.src = `${environment.backendBase}/hls/stream.m3u8`;
+          setTimeout(() => this.tryAttachHls(), 500);
+        }
+      },
+      error: (err) => {
+        // If backend reports "Stream already running" (400), treat as success
+        try {
+          const detail = err?.error?.detail || '';
+          if (
+            err.status === 400 &&
+            detail.toString().toLowerCase().includes('already running')
+          ) {
+            console.warn('Stream already running - attaching to existing HLS');
+            this.isStreaming = true;
+            const videoEl = this.videoPlayer?.nativeElement;
+            if (videoEl) {
+              videoEl.src = `${environment.backendBase}/hls/stream.m3u8`;
+              setTimeout(() => this.tryAttachHls(), 500);
+            }
+            return;
+          }
+        } catch (e) {
+          // fallthrough to generic error
+        }
+        console.error('Erro ao iniciar stream:', err);
+      },
+    });
+  }
+
+  public stopStreamClicked() {
+    this.ocorrenciaService.stopStream().subscribe({
+      next: () => {
+        console.log('Stop requested');
+        this.isStreaming = false;
+        this.isLive = false;
+        const videoEl = this.videoPlayer?.nativeElement;
+        if (videoEl) {
+          try {
+            videoEl.pause();
+          } catch {}
+          try {
+            videoEl.removeAttribute('src');
+            videoEl.load();
+          } catch {}
+        }
+        if (this.hlsInstance && this.hlsInstance.destroy) {
+          try {
+            this.hlsInstance.destroy();
+          } catch {}
+          this.hlsInstance = null;
+        }
+      },
+      error: (err) => {
+        console.error('Erro ao parar stream:', err);
+      },
+    });
   }
 
   // Inicializa a estrutura do gráfico (essencial antes de usar this.chartOptions)

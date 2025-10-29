@@ -41,6 +41,29 @@ app.add_middleware(
     allow_headers=["*"], # Permite todos os cabeçalhos comuns
 )
 
+
+# Some browsers (and certain fetch usages) may still hit StaticFiles without
+# receiving the CORS headers in some environments; add a small middleware that
+# ensures static HLS/CLIPS responses contain an Access-Control-Allow-Origin
+# header so the frontend can load .m3u8/.ts segments from another origin.
+@app.middleware("http")
+async def ensure_static_cors(request, call_next):
+    response = await call_next(request)
+    try:
+        path = request.url.path or ''
+        if path.startswith('/hls') or path.startswith('/clips'):
+            # be permissive for local dev; in prod scope this to your frontend origin
+            response.headers['Access-Control-Allow-Origin'] = '*' 
+            response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+            response.headers['Access-Control-Allow-Headers'] = '*'
+            # Ensure HLS playlists/segments are not cached by the browser so the
+            # player always requests the latest playlist/segments.
+            if path.startswith('/hls'):
+                response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    except Exception:
+        pass
+    return response
+
 # --- Inclusão dos Routers ---
 
 # Router para Ocorrências (CRUD)
@@ -85,6 +108,12 @@ clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'stati
 os.makedirs(clips_dir, exist_ok=True)
 app.mount("/clips", StaticFiles(directory=clips_dir), name="clips")
 print(f"INFO: Static clips mount configured at /clips -> {clips_dir}")
+
+# HLS mount (stream output)
+hls_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'static', 'hls'))
+os.makedirs(hls_dir, exist_ok=True)
+app.mount("/hls", StaticFiles(directory=hls_dir), name="hls")
+print(f"INFO: HLS mount configured at /hls -> {hls_dir}")
 
 # === Opcional: Evento Startup para Carregar Modelos ===
 # (Carrega modelos na inicialização do servidor)

@@ -15,6 +15,24 @@
         </button>
       </div>
 
+      <div class="video-controls">
+        <span class="live-badge" [class.on]="isLive">● LIVE</span>
+        <button
+          class="btn-start"
+          (click)="startStreamClicked()"
+          [disabled]="isStreaming"
+        >
+          Start
+        </button>
+        <button
+          class="btn-stop"
+          (click)="stopStreamClicked()"
+          [disabled]="!isStreaming"
+        >
+          Stop
+        </button>
+      </div>
+
       <video
         #videoPlayer
         controls

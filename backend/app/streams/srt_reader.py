@@ -19,6 +19,7 @@ class SRTIngestor:
         self.fps = fps
         self.confidence_threshold = confidence_threshold
         self._proc: Optional[subprocess.Popen] = None
+        self._proc_hls: Optional[subprocess.Popen] = None
         self._thread: Optional[threading.Thread] = None
         self._running = False
         self._tmpdir: Optional[str] = None
@@ -46,6 +47,35 @@ class SRTIngestor:
         ]
         # Start ffmpeg
         self._proc = subprocess.Popen(cmd)
+        # Also start an ffmpeg process to generate HLS served by backend/static/hls
+        try:
+            # Use the repository-level static folder (backend/static/hls) so it matches
+            # the StaticFiles mount configured in app.main (which points to backend/static/hls).
+            repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+            hls_dir = os.path.join(repo_root, 'static', 'hls')
+            os.makedirs(hls_dir, exist_ok=True)
+            out_hls = os.path.join(hls_dir, 'stream.m3u8')
+            # Try to avoid re-encoding video (which may require libx264 in the ffmpeg build).
+            # Use copy for video stream and transcode audio to AAC (widely available) so
+            # HLS segments can be produced without heavy CPU and encoder dependencies.
+            cmd_hls = [
+                'ffmpeg', '-hide_banner', '-i', url,
+                '-c:v', 'copy', '-c:a', 'aac', '-ar', '44100', '-ac', '2',
+                '-f', 'hls', '-hls_time', '2', '-hls_list_size', '5', '-hls_flags', 'delete_segments',
+                out_hls
+            ]
+            # Redirect stderr to a logfile so we can inspect ffmpeg connection errors
+            log_path = os.path.join(hls_dir, 'hls_ffmpeg.log')
+            log_file = open(log_path, 'ab')
+            self._proc_hls = subprocess.Popen(cmd_hls, stdout=log_file, stderr=log_file)
+            # wait a moment and verify process is alive; if exited, log warning
+            time.sleep(1.0)
+            if self._proc_hls.poll() is not None:
+                print(f"ERRO: ffmpeg HLS process terminated immediately. See {log_path} for details.")
+            else:
+                print(f"INFO: Started ffmpeg HLS process for {url} -> {out_hls} (log: {log_path})")
+        except Exception as e:
+            print(f"AVISO: Falha iniciar ffmpeg HLS: {e}")
         # Start watcher thread
         self._thread = threading.Thread(target=self._watch_loop, daemon=True)
         self._thread.start()
@@ -60,8 +90,15 @@ class SRTIngestor:
                     self._proc.wait(timeout=3)
                 except Exception:
                     self._proc.kill()
+            if self._proc_hls and self._proc_hls.poll() is None:
+                self._proc_hls.terminate()
+                try:
+                    self._proc_hls.wait(timeout=3)
+                except Exception:
+                    self._proc_hls.kill()
         finally:
             self._proc = None
+            self._proc_hls = None
         # join thread
         if self._thread:
             self._thread.join(timeout=1)
@@ -106,6 +143,41 @@ class SRTIngestor:
                             try:
                                 end_ts_now = datetime.now()
                                 start_ts_calc = end_ts_now - timedelta(seconds=1)
+                                # Tenta gerar um pequeno clipe a partir dos frames próximos ao índice
+                                evidence_obj = {'frame': f}
+                                try:
+                                    # calcula janela de frames (ex: 2 frames antes e depois)
+                                    idx_base = idx
+                                    start_idx = max(1, idx_base - 2)
+                                    end_idx = idx_base + 2
+                                    num_frames = end_idx - start_idx + 1
+                                    # cria arquivo temporário de saída no tmpdir
+                                    out_name = f"clip_{int(time.time())}_{idx_base}.mp4"
+                                    out_tmp = os.path.join(self._tmpdir, out_name)
+                                    # ffmpeg: usa sequência de imagens com start_number
+                                    ffmpeg_cmd = [
+                                        'ffmpeg', '-y', '-hide_banner', '-loglevel', 'error',
+                                        '-framerate', str(self.fps),
+                                        '-start_number', str(start_idx),
+                                        '-i', os.path.join(self._tmpdir, 'frame_%06d.jpg'),
+                                        '-frames:v', str(num_frames),
+                                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', out_tmp
+                                    ]
+                                    try:
+                                        subprocess.run(ffmpeg_cmd, check=False)
+                                        # move para pasta pública de clipes
+                                        clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'clips'))
+                                        os.makedirs(clips_dir, exist_ok=True)
+                                        dest_path = os.path.join(clips_dir, out_name)
+                                        shutil.move(out_tmp, dest_path)
+                                        evidence_obj['clip_path'] = f"/clips/{out_name}"
+                                    except Exception as clip_err:
+                                        # fallback: apenas registra o frame path
+                                        print(f"AVISO: Falha gerar clipe de frames: {clip_err}")
+                                except Exception:
+                                    # Se algo falhar, deixamos apenas o frame
+                                    evidence_obj = {'frame': f}
+
                                 db_oc = models.Ocorrencia(
                                     start_ts=start_ts_calc,
                                     end_ts=end_ts_now,
@@ -114,7 +186,7 @@ class SRTIngestor:
                                     type=pred_class,
                                     severity='Auto',
                                     confidence=float(confidence),
-                                    evidence={'frame': f}
+                                    evidence=evidence_obj
                                 )
                                 db.add(db_oc)
                                 db.commit()

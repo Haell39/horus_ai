@@ -14,8 +14,17 @@ export class OcorrenciaService {
   // 2. Usar a URL do environment
   private apiUrl = environment.apiUrl;
 
-  // 3. Injetar o HttpClient (já estava correto)
+  // Injetar o HttpClient (único construtor)
   constructor(private http: HttpClient) {}
+
+  // Start SRT->HLS stream via backend
+  startStream(url: string, fps: number = 1.0) {
+    return this.http.post(`${this.apiUrl}/streams/start`, { url, fps });
+  }
+
+  stopStream() {
+    return this.http.post(`${this.apiUrl}/streams/stop`, {});
+  }
 
   /**
    * Busca a lista de todas as ocorrências
