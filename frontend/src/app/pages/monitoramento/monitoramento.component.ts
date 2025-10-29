@@ -351,11 +351,16 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
     this.ocorrenciaService.startStream(url, 1.0).subscribe({
       next: () => {
         console.log('Start requested');
+        // mark streaming and wait for playlist to be ready before attaching
         this.isStreaming = true;
         const videoEl = this.videoPlayer?.nativeElement;
         if (videoEl) {
           videoEl.src = `${environment.backendBase}/hls/stream.m3u8`;
-          setTimeout(() => this.tryAttachHls(), 500);
+          // poll playlist until it contains segments then attach
+          this.waitForPlaylistThenAttach(
+            `${environment.backendBase}/hls/stream.m3u8`,
+            videoEl
+          );
         }
       },
       error: (err) => {
@@ -371,7 +376,10 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
             const videoEl = this.videoPlayer?.nativeElement;
             if (videoEl) {
               videoEl.src = `${environment.backendBase}/hls/stream.m3u8`;
-              setTimeout(() => this.tryAttachHls(), 500);
+              this.waitForPlaylistThenAttach(
+                `${environment.backendBase}/hls/stream.m3u8`,
+                videoEl
+              );
             }
             return;
           }
@@ -381,6 +389,36 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
         console.error('Erro ao iniciar stream:', err);
       },
     });
+  }
+
+  // Poll the HLS playlist until it contains EXTINF segments, then attach HLS to the video element
+  private async waitForPlaylistThenAttach(
+    playlistUrl: string,
+    videoEl: HTMLVideoElement
+  ) {
+    try {
+      const maxAttempts = 20;
+      for (let i = 0; i < maxAttempts; i++) {
+        try {
+          const res = await fetch(playlistUrl, { cache: 'no-store' });
+          if (res.ok) {
+            const txt = await res.text();
+            if (txt && txt.includes('#EXTINF')) {
+              // playlist contains segments, attach HLS now
+              setTimeout(() => this.tryAttachHls(), 50);
+              return;
+            }
+          }
+        } catch (e) {
+          // ignore and retry
+        }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      // fallback: try attach anyway
+      setTimeout(() => this.tryAttachHls(), 300);
+    } catch (e) {
+      setTimeout(() => this.tryAttachHls(), 300);
+    }
   }
 
   public stopStreamClicked() {
@@ -660,19 +698,32 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
     }, 1500);
   }
   onPlayVideo() {
-    console.warn(
-      'Simulação onPlayVideo executada. Considerar remover lógica de atualização de dados daqui.'
-    );
+    // Remove simulação para transmissões ao vivo (tipo 'L') — evita mensagens "SIMULAÇÃO: undefined"
+    console.warn('onPlayVideo: verificar se é simulação');
     const video = this.videos[this.videoIndex];
-    // SIMULAÇÃO VISUAL: Adiciona alerta e pulsa gráfico, mas NÃO atualiza mais os contadores reais
+    if (!video) return;
+    // Se for transmissão ao vivo, não mostramos alertas de simulação nem pulamos o gráfico
+    if (video.tipo === 'L') {
+      // marca como live se necessário
+      this.isLive = true;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    // Para demais tipos (vídeos de simulação), mostramos um alerta amigável com texto padrão
     let severidadeSimulada = 'Info (S)';
     if (video.tipo === 'A') severidadeSimulada = 'Grave (A)';
-    // ... (resto da lógica para severidadeSimulada) ...
-    const mensagens: Record<string, string> = { A: 'Repórter Parado' /*...*/ };
+
+    const mensagens: Record<string, string> = {
+      A: 'Repórter Parado',
+      B: 'Evento Médio',
+      C: 'Evento Leve',
+    };
+    const textoMensagem = mensagens[video.tipo] || 'Simulação de reprodução';
 
     const alertaSimulado = {
       hora: this.datePipe.transform(new Date(), 'HH:mm:ss') || '',
-      mensagem: `SIMULAÇÃO: ${mensagens[video.tipo]}`,
+      mensagem: `SIMULAÇÃO: ${textoMensagem}`,
       tipo: severidadeSimulada,
       animacao: 'aparecer',
       origem: 'Player Local',

@@ -28,26 +28,117 @@ class SRTIngestor:
     def start(self, url: str):
         if self._running:
             return False
-        self._running = True
         # create tmpdir to hold frames
         self._tmpdir = tempfile.mkdtemp(prefix='srt_frames_')
-        # ffmpeg command: write images to tmpdir/frame_%06d.jpg at self.fps
+        # Prepare HLS output folder
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        hls_dir = os.path.join(repo_root, 'static', 'hls')
+        os.makedirs(hls_dir, exist_ok=True)
+        out_hls = os.path.join(hls_dir, 'stream.m3u8')
+
+        # HLS ffmpeg command: start HLS producer first, with tolerant flags for SRT/H264
+        cmd_hls = [
+            'ffmpeg', '-hide_banner', '-i', url,
+            '-fflags', '+genpts+igndts', '-avoid_negative_ts', 'make_zero',
+            '-use_wallclock_as_timestamps', '1',
+            '-c:v', 'copy', '-c:a', 'aac', '-ar', '44100', '-ac', '2',
+            '-f', 'hls', '-hls_time', '2', '-hls_list_size', '5', '-hls_flags', 'delete_segments',
+            out_hls
+        ]
+        # start HLS process first
+        log_path = os.path.join(hls_dir, 'hls_ffmpeg.log')
+        try:
+            self._hls_log_file = open(log_path, 'ab')
+            self._proc_hls = subprocess.Popen(cmd_hls, stdout=self._hls_log_file, stderr=self._hls_log_file)
+        except Exception as e:
+            print(f"ERRO: falha iniciar ffmpeg HLS: {e}")
+            try:
+                if self._tmpdir and os.path.exists(self._tmpdir):
+                    shutil.rmtree(self._tmpdir)
+            except Exception:
+                pass
+            try:
+                if self._hls_log_file:
+                    self._hls_log_file.close()
+                self._hls_log_file = None
+            except Exception:
+                pass
+            return False
+        # give HLS process a bit longer to produce an initial playlist/segments
+        time.sleep(2.0)
+        # check if hls process is alive
+        if self._proc_hls.poll() is not None:
+            print(f"ERRO: ffmpeg HLS process terminated immediately. See {log_path} for details.")
+            try:
+                if self._hls_log_file:
+                    self._hls_log_file.flush()
+            except Exception:
+                pass
+            try:
+                if self._tmpdir and os.path.exists(self._tmpdir):
+                    shutil.rmtree(self._tmpdir)
+            except Exception:
+                pass
+            try:
+                if self._hls_log_file:
+                    self._hls_log_file.close()
+            except Exception:
+                pass
+            self._proc_hls = None
+            self._hls_log_file = None
+            return False
+        else:
+            print(f"INFO: Started ffmpeg HLS process for {url} -> {out_hls} (log: {log_path})")
+            # wait until playlist file appears (or timeout)
+            playlist_ready = False
+            try:
+                for _ in range(10):
+                    if os.path.exists(out_hls) and os.path.getsize(out_hls) > 0:
+                        playlist_ready = True
+                        break
+                    time.sleep(0.3)
+                if not playlist_ready:
+                    print(f"WARN: HLS playlist not ready after wait for {out_hls}")
+            except Exception:
+                pass
+
+        # ffmpeg frame extractor: write images to tmpdir/frame_%06d.jpg at self.fps
         out_pattern = os.path.join(self._tmpdir, 'frame_%06d.jpg')
         cmd = [
-            'ffmpeg',
-            '-hide_banner',
-            '-loglevel',
-            'error',
-            '-i',
-            url,
-            '-vf',
-            f'fps={self.fps}',
-            '-q:v',
-            '2',
-            out_pattern,
+            'ffmpeg', '-hide_banner', '-loglevel', 'error', '-i', url,
+            '-vf', f'fps={self.fps}', '-q:v', '2', out_pattern,
         ]
-        # Start ffmpeg
-        self._proc = subprocess.Popen(cmd)
+        # Start ffmpeg (frame extractor)
+        try:
+            self._proc = subprocess.Popen(cmd)
+        except Exception as e:
+            print(f"ERRO: falha iniciar ffmpeg frames extractor: {e}")
+            # cleanup tmpdir and hls
+            try:
+                if self._proc_hls and self._proc_hls.poll() is None:
+                    try:
+                        self._proc_hls.terminate()
+                        self._proc_hls.wait(timeout=2)
+                    except Exception:
+                        try:
+                            self._proc_hls.kill()
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+            try:
+                if self._tmpdir and os.path.exists(self._tmpdir):
+                    shutil.rmtree(self._tmpdir)
+            except Exception:
+                pass
+            try:
+                if self._hls_log_file:
+                    self._hls_log_file.close()
+            except Exception:
+                pass
+            self._proc_hls = None
+            self._hls_log_file = None
+            return False
         # Also start an ffmpeg process to generate HLS served by backend/static/hls
         try:
             # Use the repository-level static folder (backend/static/hls) so it matches
@@ -71,15 +162,61 @@ class SRTIngestor:
             # keeping the file locked and to ensure no further writes after stop
             self._hls_log_file = open(log_path, 'ab')
             self._proc_hls = subprocess.Popen(cmd_hls, stdout=self._hls_log_file, stderr=self._hls_log_file)
-            # wait a moment and verify process is alive; if exited, log warning
-            time.sleep(1.0)
+            # wait a moment and verify process is alive; if exited, log warning and cleanup
+            # Give ffmpeg a bit more time to initialize and write the first playlist
+            time.sleep(2.0)
             if self._proc_hls.poll() is not None:
                 print(f"ERRO: ffmpeg HLS process terminated immediately. See {log_path} for details.")
+                try:
+                    if self._hls_log_file:
+                        self._hls_log_file.flush()
+                except Exception:
+                    pass
+                # cleanup and return False so callers know start failed
+                try:
+                    if self._proc and self._proc.poll() is None:
+                        try:
+                            self._proc.terminate()
+                            self._proc.wait(timeout=2)
+                        except Exception:
+                            try:
+                                self._proc.kill()
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+                try:
+                    if self._tmpdir and os.path.exists(self._tmpdir):
+                        shutil.rmtree(self._tmpdir)
+                except Exception:
+                    pass
+                try:
+                    if self._hls_log_file:
+                        self._hls_log_file.close()
+                except Exception:
+                    pass
+                self._proc = None
+                self._proc_hls = None
+                self._hls_log_file = None
+                return False
             else:
                 print(f"INFO: Started ffmpeg HLS process for {url} -> {out_hls} (log: {log_path})")
+                # wait until playlist file appears (or timeout) so callers get a ready playlist
+                playlist_ready = False
+                try:
+                    for _ in range(10):
+                        if os.path.exists(out_hls) and os.path.getsize(out_hls) > 0:
+                            playlist_ready = True
+                            break
+                        time.sleep(0.3)
+                    if not playlist_ready:
+                        print(f"WARN: HLS playlist not ready after wait for {out_hls}")
+                except Exception:
+                    pass
         except Exception as e:
             print(f"AVISO: Falha iniciar ffmpeg HLS: {e}")
-        # Start watcher thread
+        # both processes started correctly -> mark running and start watcher
+        self._running = True
         self._thread = threading.Thread(target=self._watch_loop, daemon=True)
         self._thread.start()
         return True
