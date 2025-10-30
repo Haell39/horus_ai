@@ -9,6 +9,7 @@ import { SidebarComponent } from '../../shared/sidebar/sidebar.component';
 // === NOVOS IMPORTS PARA API ===
 import { OcorrenciaService } from '../../services/ocorrencia.service';
 import { Ocorrencia } from '../../models/ocorrencia'; // Nosso modelo da API
+import { environment } from '../../../environments/environment';
 
 // Interface Falha (Mantida, é o nosso "ViewModel")
 interface Falha {
@@ -102,10 +103,18 @@ export class CortesComponent implements OnInit {
   private transformarOcorrencia(oc: Ocorrencia): Falha {
     const dataISO = oc.start_ts ? new Date(oc.start_ts).toISOString() : '';
 
-    // O 'path' do clipe virá do 'evidence' no futuro.
-    // Por enquanto, usamos um placeholder.
-    const videoUrl =
-      (oc.evidence?.['path'] as string) || (oc.evidence?.['clip_path'] as string) || 'assets/videos/placeholder_clip.mp4';
+    // Constrói URL absoluto para o clipe real servido pelo backend (/clips/...)
+    const clipPath = (oc.evidence?.['path'] as string) || (oc.evidence?.['clip_path'] as string) || '';
+    let videoUrl = 'assets/videos/placeholder_clip.mp4';
+    if (clipPath) {
+      if (/^https?:\/\//i.test(clipPath)) {
+        videoUrl = clipPath;
+      } else if (clipPath.startsWith('/')) {
+        videoUrl = `${environment.backendBase}${clipPath}`;
+      } else {
+        videoUrl = `${environment.backendBase}/clips/${clipPath}`;
+      }
+    }
 
     return {
       titulo: oc.type || 'Falha Indefinida', // Ex: "Ruído / chiado"
