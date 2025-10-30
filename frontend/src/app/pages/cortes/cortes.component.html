@@ -3,6 +3,7 @@
 <h2 class="nome-pagina">Clipes de Falhas</h2>
 
 <div class="container-falhas">
+  <!-- FILTROS -->
   <div class="filtros">
     <div class="pesquisa">
       <i class="bi bi-search"></i>
@@ -16,9 +17,14 @@
     <div class="tipo">
       <select [(ngModel)]="filtroTipo">
         <option value="">Tipos de falha</option>
-        <option *ngFor="let tipo of tiposFalha" [value]="tipo">
-          {{ tipo }}
-        </option>
+        <option *ngFor="let tipo of tiposFalha" [value]="tipo">{{ tipo }}</option>
+      </select>
+    </div>
+
+    <div class="severidade">
+      <select [(ngModel)]="filtroSeveridade">
+        <option value="">Severidade</option>
+        <option *ngFor="let s of tiposSeveridade" [value]="s">{{ s }}</option>
       </select>
     </div>
 
@@ -27,118 +33,92 @@
     </div>
   </div>
 
-  <div *ngIf="isLoading" class="estado-container">
-    <div class="spinner-border text-light" role="status">
-      <span class="visually-hidden">Carregando...</span>
-    </div>
-    <span class="ms-3">Carregando clipes da API...</span>
-  </div>
-
-  <div *ngIf="!isLoading && errorMsg" class="estado-container">
-    <div class="alert alert-danger" role="alert">
-      <strong>ERRO:</strong> {{ errorMsg }}
-    </div>
-  </div>
-
-  <div *ngIf="!isLoading && !errorMsg">
-    <div class="conteudo" [class.expandido]="!falhaSelecionada">
-      <ul
-        class="lista-falhas"
-        *ngIf="falhasFiltradas.length > 0; else semDados"
-      >
-        <li
-          *ngFor="let falha of falhasFiltradas"
-          (click)="selecionarFalha(falha)"
-          [class.selecionada]="falha === falhaSelecionada"
-        >
-          <div class="selo" *ngIf="falha === falhaSelecionada"></div>
+  <!-- CONTEÚDO -->
+  <div class="conteudo" [class.expandido]="!falhaSelecionada">
+    <!-- Lista lateral -->
+    <ul class="lista-falhas">
+      <li *ngFor="let falha of falhasFiltradas" 
+          (click)="selecionarFalha(falha)" 
+          [class.selecionada]="falha === falhaSelecionada">
+        <div class="icone-tipo">
           <i [class]="falha.icone" [ngStyle]="{ color: getCor(falha) }"></i>
-          <div>
+        </div>
+
+        <div class="conteudo-card">
+          <div class="cabecalho-card">
             <strong>{{ falha.titulo }}</strong>
-            <div class="data">{{ falha.data }}</div>
-            <div class="descricao">
-              {{ getDescricaoCurta(falha.descricao, 30) }}
-            </div>
+            <span class="tag-severidade" [ngStyle]="{ background: getCorSeveridade(falha.severidade) }">
+              {{ falha.severidade }}
+            </span>
           </div>
-        </li>
-      </ul>
 
-      <ng-template #semDados>
-        <div class="estado-container">
-          <div class="alert alert-info" role="alert">
-            Nenhum clipe encontrado com os filtros atuais.
+          <div class="info-card">
+            <span class="data-hora">{{ falha.data }} | {{ falha.horario }}</span>
+            <p class="descricao-card">{{ getDescricaoCurta(falha.descricao, 50) }}</p>
+          </div>
+
+          <div class="status-card">
+            <span class="tag-status">Pendente</span>
+            <span class="duracao">{{ falha.duracao }}</span>
           </div>
         </div>
-      </ng-template>
+      </li>
+    </ul>
 
-      <div class="detalhes" *ngIf="falhaSelecionada">
-        <video controls [src]="falhaSelecionada.videoUrl">
-          <source [src]="falhaSelecionada.videoUrl" type="video/mp4" />
-          Seu navegador não suporta vídeo.
-        </video>
+    <!-- Painel de detalhes -->
+    <div class="detalhes" *ngIf="falhaSelecionada">
+      <video controls>
+        <source [src]="falhaSelecionada.videoUrl" type="video/mp4" />
+        Seu navegador não suporta vídeo.
+      </video>
 
-        <div class="info-bloco">
-          <h3>{{ falhaSelecionada.titulo }}</h3>
-          <p><b>Descrição:</b> {{ falhaSelecionada.descricao }}</p>
-          <p><b>Horário:</b> {{ falhaSelecionada.horario }}</p>
-          <p><b>Data:</b> {{ falhaSelecionada.dataCompleta }}</p>
-          <p><b>Programa:</b> {{ falhaSelecionada.programa }}</p>
-          <p><b>Duração:</b> {{ falhaSelecionada.duracao }}</p>
-        </div>
+      <div class="info-bloco">
+        <h3>{{ falhaSelecionada.titulo }}</h3>
+        <p><b>Descrição:</b> {{ falhaSelecionada.descricao }}</p>
+        <p><b>Horário:</b> {{ falhaSelecionada.horario }}</p>
+        <p><b>Data:</b> {{ falhaSelecionada.dataCompleta }}</p>
+        <p><b>Programa:</b> {{ falhaSelecionada.programa }}</p>
+        <p><b>Duração:</b> {{ falhaSelecionada.duracao }}</p>
+        <p><b>Severidade:</b> {{ falhaSelecionada.severidade }}</p>
+      </div>
 
-        <div class="acoes">
-          <button class="btn-azul" (click)="downloadClip(falhaSelecionada!)">
-            ⬇️ Download Clipe
-          </button>
-          <button class="btn-verde">✔️ Marcar como Resolvido</button>
-          <button class="btn-vermelho">📩 Abrir Ticket</button>
-        </div>
+      <div class="acoes">
+        <button class="btn-azul" (click)="downloadClip(falhaSelecionada!)">⬇️ Download Clipe</button>
+        <button class="btn-verde">✔️ Marcar como Resolvido</button>
+        <button class="btn-vermelho">📩 Abrir Ticket</button>
       </div>
     </div>
-    <div class="paginacao-container" *ngIf="falhasFiltradas.length > 0">
-      <button
-        class="btn-paginacao"
-        (click)="paginaAnterior()"
-        [disabled]="paginaAtual === 1"
-      >
-        Anterior
+  </div>
+
+  <!-- PAGINAÇÃO -->
+  <div class="paginacao-container">
+    <button class="btn-paginacao" (click)="paginaAnterior()" [disabled]="paginaAtual === 1">
+      Anterior
+    </button>
+
+    <span class="pagina-info">{{ paginaAtual }} de {{ totalPaginas }}</span>
+
+    <button class="btn-paginacao" (click)="proximaPagina()" [disabled]="paginaAtual === totalPaginas">
+      Próximo
+    </button>
+
+    <div class="paginacao-separador">•</div>
+    <div class="paginacao-separador">•</div>
+
+    <div class="menu-itens">
+      <button class="menu-btn" (click)="toggleDropdown()">
+        <i class="bi bi-list"></i>
       </button>
 
-      <span class="pagina-info">{{ paginaAtual }} de {{ totalPaginas }}</span>
-
-      <button
-        class="btn-paginacao"
-        (click)="proximaPagina()"
-        [disabled]="paginaAtual === totalPaginas"
-      >
-        Próximo
-      </button>
-
-      <div class="paginacao-separador">•</div>
-      <div class="paginacao-separador">•</div>
-
-      <div class="menu-itens">
-        <button class="menu-btn" (click)="toggleDropdown()">
-          <i class="bi bi-list"></i>
-        </button>
-
-        <div
-          class="dropdown-itens"
-          [style.display]="mostrarDropdown ? 'flex' : 'none'"
-        >
-          <label>Itens por página</label>
-          <select
-            [value]="itensPorPagina"
-            (change)="mudarItensPorPagina($event)"
-          >
-            <option [value]="10">10</option>
-            <option [value]="20">20</option>
-            <option [value]="50">50</option>
-            <option [value]="100">100</option>
-          </select>
-        </div>
+      <div class="dropdown-itens" [style.display]="mostrarDropdown ? 'flex' : 'none'">
+        <label>Itens por página</label>
+        <select [value]="itensPorPagina" (change)="mudarItensPorPagina($event)">
+          <option [value]="10">10</option>
+          <option [value]="20">20</option>
+          <option [value]="50">50</option>
+          <option [value]="100">100</option>
+        </select>
       </div>
     </div>
   </div>
 </div>
-

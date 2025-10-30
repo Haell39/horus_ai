@@ -80,7 +80,7 @@
   grid-template-columns: 1fr;
 }
 
-/* === Lista === */
+/* === Lista de Falhas === */
 .lista-falhas {
   list-style: none;
   display: flex;
@@ -98,8 +98,8 @@
   align-items: center;
   background: var(--input-bg, #2a2f3a);
   border-radius: 10px;
-  padding: 10px;
-  gap: 14px;
+  padding: 12px;
+  gap: 12px;
   transition: 0.2s ease;
   cursor: pointer;
   position: relative;
@@ -109,6 +109,7 @@
   background: var(--btn-hover-bg, #353b47);
 }
 
+/* Selo lateral da falha */
 .selo {
   position: absolute;
   left: 0;
@@ -118,6 +119,71 @@
   border-radius: 5px 0 0 5px;
   background: linear-gradient(180deg, #0080ff, #0056d6);
   height: 50px;
+}
+
+/* === Card de conteúdo === */
+.icone-tipo i {
+  font-size: 1.8rem;
+  flex-shrink: 0;
+}
+
+.conteudo-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.cabecalho-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tag-severidade {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.tag-severidade.Fade {
+  background-color: #3498db;
+}
+
+.tag-severidade.Freeze {
+  background-color: #e74c3c;
+}
+
+.info-card .data-hora {
+  font-size: 0.75rem;
+  color: #b6bac6;
+}
+
+.descricao-card {
+  font-size: 0.85rem;
+  color: #dce0e8;
+  margin: 4px 0 0 0;
+}
+
+.status-card {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+
+.tag-status {
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: #c49f24; /* amarelo para Pendente */
+  color: #fff;
+}
+
+.duracao {
+  font-size: 0.75rem;
+  color: #b6bac6;
 }
 
 /* === Painel de Detalhes === */
