@@ -10,158 +10,76 @@ This document summarizes the architecture, developer workflows, important files,
 
 ---
 
-## 1 — Big picture (what each piece does)
+## Orientação rápida (copilot / contribuidores)
 
-- Frontend (`frontend/`)
+Este repositório é uma aplicação composta por duas partes: ingestão de streams SRT, inferência leve com TFLite, persistência de ocorrências e uma UI Angular para monitoramento em tempo real.
 
-  - Angular single-page app. The Monitoramento page attaches to the HLS playlist served by the backend and listens to a WebSocket for new occurrences.
-  - Uses hls.js (CDN) when the browser doesn't support native HLS. UI includes Start/Stop controls that call backend stream endpoints (SRT → HLS).
+- Frontend: `frontend/` — aplicação Angular (player, início/parada de ingest, exibe ocorrências e clips).
+- Backend: `backend/app/` — FastAPI (API REST, controle de ffmpeg, inferência TFLite, persistência DB, WebSocket para ocorrências).
+- Saída estática: `backend/static/` — HLS (`hls/`) e clips gerados (`clips/`).
 
-- Backend (`backend/app/`)
-
-  - FastAPI service. Routers live under `backend/app/api/endpoints/` (examples: `ocorrencias`, `analysis`, `streams`, `ws`).
-  - Provides REST endpoints for analysis, occurrences CRUD and stream control. Serves static HLS/Clips via `StaticFiles` mounts.
-  - ML inference uses TFLite via `backend/app/ml/inference.py` and loads model files from `backend/app/ml/models/`.
-
-- Database
-
-  - SQLAlchemy models in `backend/app/db/models.py` and session factory in `backend/app/db/base.py`.
-  - Use dependency `get_db()` in endpoints for safe sessions.
-
-- Streaming pipeline (SRT → HLS)
-  - The backend controls `ffmpeg` processes to pull an SRT stream and remux into HLS segments written to `backend/static/hls/`.
-  - A separate ffmpeg process extracts frames (image sequence) for per-frame ML inference and optional clip creation.
-  - The backend exposes control endpoints to start/stop streams and implements safe cleanup of transient files.
+Mantenha este arquivo atualizado quando alterar rotas, flags do ffmpeg, formatos de evidência ou nomes de classes do modelo.
 
 ---
 
-## 2 — Key files and responsibilities (quick map)
+1. Visão geral rápida
 
-- `backend/app/main.py` — app creation, CORS, router inclusion, StaticFiles mounts (`/hls`, `/clips`), and optional startup ML loading.
-- `backend/app/api/endpoints/streams.py` — Start/Stop/Status endpoints for stream ingest.
-- `backend/app/streams/srt_reader.py` — SRTIngestor: manages ffmpeg processes (HLS + frame extractor), per-frame watch loop, persistence of occurrences, and cleanup logic.
-- `backend/app/api/endpoints/analysis.py` — file upload → preprocess → ML inference → background persistence; canonical example for uploads and BackgroundTasks.
-- `backend/app/api/endpoints/ws.py` — WebSocket ConnectionManager and broadcast helper used to send real-time occurrences to frontend.
-- `backend/app/ml/inference.py` — model loading and wrapper functions (audio/video preprocess + run inference). Checks `models_loaded` flag.
-- `backend/app/db/*` — SQLAlchemy models, schemas and DB session helper.
-- `frontend/src/app/pages/monitoramento/*` — Monitoramento component (player, start/stop, reconnection, alert list).
+- O frontend conecta ao HLS servido pelo backend em `/hls/stream.m3u8` e ao WebSocket `/ws/ocorrencias` para receber novas ocorrências em tempo real.
+- O backend expõe endpoints para controlar a ingestão SRT → HLS e para CRUD de ocorrências. A inferência por frame é feita por um watcher que extrai frames com ffmpeg e usa TFLite para decisão por frame.
 
----
+2. Arquivos-chave (mapa curto)
 
-## 3 — How to run (developer / local) — Windows PowerShell
+- `backend/app/main.py` — cria a app, configura CORS, monta `StaticFiles` para `/hls` e `/clips`, carrega modelos no startup e loga configs relevantes.
+- `backend/app/streams/srt_reader.py` — `SRTIngestor`: gerencia ffmpeg (HLS + extractor), roda loop de inferência por frame, cria clips e persiste ocorrências.
+- `backend/app/api/endpoints/streams.py` — endpoints `start/stop/status` para o ingest.
+- `backend/app/api/endpoints/ocorrencias.py` — listagem e criação de ocorrências (JSON).
+- `backend/app/api/endpoints/ws.py` — manager de WebSocket para broadcast de novas ocorrências.
+- `backend/app/ml/inference.py` — wrappers TFLite para áudio e vídeo (`run_video_topk`, `analyze_video_frames`, etc.).
+- `backend/app/core/config.py` — carrega variáveis de ambiente, agora com defaults tipados e helper para `VIDEO_THRESH_*`.
+- `backend/.env.example` — arquivo exemplo (safe) com as variáveis esperadas.
 
-Prereqs:
-
-- Python 3.10+ (matching `requirements.txt`), Node.js + npm, ffmpeg installed and in PATH.
-- `.env` file at repo root with `DATABASE_URL` (Postgres) if you want DB persistence.
-
-Backend (recommended for testing streaming reliably):
+3. Como rodar (dev local, PowerShell)
 
 ```powershell
 cd backend
-# create & activate venv (PowerShell)
-python -m venv .venv; .\.venv\Scripts\Activate.ps1
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-# run without reload while testing streams to avoid worker restarts
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-Frontend:
-
-```powershell
-cd frontend
+cd ../frontend
 npm install
-npm start    # runs ng serve (dev server) per package.json
+npm start
 ```
 
-Notes: avoid `--reload` on the backend while stress-testing streaming — automatic worker restarts will close WebSockets and ffmpeg processes.
+4. Endpoints importantes
+
+- POST `/api/v1/streams/start` { url, fps? }
+- POST `/api/v1/streams/stop`
+- GET `/api/v1/streams/status`
+- GET `/api/v1/ocorrencias` (JSON list)
+- WS `/ws/ocorrencias` (broadcast em tempo real)
+
+5. Configuração de tuning (env)
+
+- `backend/.env` deve conter (exemplos):
+  - `VIDEO_VOTE_K` (K frames consecutivos para voto)
+  - `VIDEO_MOVING_AVG_M` (janela M para média móvel)
+  - `VIDEO_THRESH_<CLASSE>` por classe (ex.: `VIDEO_THRESH_BORRADO=0.7`)
+  - `VIDEO_THRESH_DEFAULT` fallback
+
+6. Troubleshooting rápido
+
+- Logs do ffmpeg: `backend/static/hls/hls_ffmpeg.log`.
+- Playlist HLS: `backend/static/hls/stream.m3u8`.
+- Matando ffmpeg pendente (PowerShell): `Get-Process -Name ffmpeg | Stop-Process -Force`.
+
+7. Próximos passos sugeridos
+
+- Adicionar retry/backoff em `SRTIngestor.start()` (meio-ambiente instável SRT).
+- Endpoint administrativo `/api/v1/streams/cleanup` para kill+cleanup seguro.
+- Endpoint read-only `/api/v1/config` (apenas non-sensitive) para ops verificarem os valores ativos.
 
 ---
 
-## 4 — Stream control & endpoints (what to call)
+Se quiser, eu adapto este documento para um README conciso para DevOps ou para Product (resumido). Se fizerem atualizações no frontend ou mudarem os nomes das classes no modelo, atualize também as variáveis `VIDEO_THRESH_<CLASSE>` e este documento.
 
 - POST /api/v1/streams/start { url, fps? }
-
-  - Starts SRT → HLS ingest for the provided `srt://` URL.
-  - Returns success only when the HLS playlist is ready (client UX improved to attach after Start).
-
-- POST /api/v1/streams/stop
-
-  - Stops ingest processes and cleans `backend/static/hls/` (writes a minimal playlist with #EXT-X-ENDLIST).
-
-- GET /api/v1/streams/status
-
-  - Returns {'running': bool, 'fps': number}
-
-- WebSocket: /ws/ocorrencias
-
-  - Broadcasts new occurrences (id, timestamps, type, confidence, evidence) to connected frontend clients.
-
-- Static HLS: GET /hls/stream.m3u8 and segments under /hls/\*.ts
-- Clips: GET /clips/\*.mp4
-
----
-
-## 5 — Streaming reliability notes & troubleshooting
-
-- If ffmpeg prints errors like `Connection to srt://... failed: I/O error` or SRT logs `ERROR:BACKLOG`, the remote SRT endpoint rejected the handshake (listener backlog). This is an upstream issue — either retry/connect later or coordinate with the SRT server operator.
-- H.264 warnings in ffmpeg logs (sps_id out of range, non-existing PPS, Missing reference picture) indicate corrupted or out-of-order NALs. We added tolerant ffmpeg flags in the HLS command to reduce impact:
-  - `-fflags +genpts+igndts -avoid_negative_ts make_zero -use_wallclock_as_timestamps 1` helps create stable timestamps.
-- If browser shows 404 for segments after Stop or during start, check the playlist: `backend/static/hls/stream.m3u8` and the ffmpeg log `backend/static/hls/hls_ffmpeg.log`.
-- To inspect HLS runtime (PowerShell):
-
-```powershell
-Get-ChildItem backend\static\hls\
-Get-Content backend\static\hls\hls_ffmpeg.log -Tail 200
-Get-Content backend\static\hls\stream.m3u8 -Raw
-```
-
-- Kill stray ffmpeg processes (if necessary):
-
-```powershell
-Get-Process -Name ffmpeg -ErrorAction SilentlyContinue | Stop-Process -Force
-```
-
----
-
-## 6 — Logs, cleanup & git
-
-- HLS logs and segments are written to `backend/static/hls/`. This folder is included in `.gitignore` to avoid committing transient media.
-- `stop()` in the ingestor cleans the folder and writes a minimal playlist with `#EXT-X-ENDLIST` to signal clients that streaming ended.
-
----
-
-## 7 — ML models and inference
-
-- TFLite models expected under `backend/app/ml/models/` (e.g. `audio_model_quant.tflite`, `video_model_quant.tflite`).
-- `backend/app/ml/inference.py` exposes helpers: `load_all_models()`, `run_audio_inference`, `run_video_inference`, etc. On startup `main.py` calls `load_all_models()` and code checks `models_loaded`.
-
----
-
-## 8 — Developer testing & quick checks
-
-- Health: GET `/` returns app message.
-- Streams status: GET `/api/v1/streams/status`.
-- Try start (PowerShell):
-
-```powershell
-Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/v1/streams/start -Body (@{url='srt://...'; fps=1.0} | ConvertTo-Json) -ContentType 'application/json'
-```
-
-- Stop: POST `/api/v1/streams/stop` (no body).
-
----
-
-## 9 — Recommended next steps & improvements
-
-- Move SRT connection secrets (passphrases) out of the frontend and into a secure backend `.env` or vault; expose only identifiers/controls via API.
-- Add retry/backoff in `SRTIngestor.start()` to automatically try a few reconnects when the remote SRT rejects briefly (we already added better checks; more retries help flaky upstream servers).
-- Add a dedicated `/api/v1/streams/cleanup` admin endpoint to kill leftover ffmpeg processes and wipe HLS for easier recovery.
-- Add structured logging (e.g., `logging` module) and optional file rotation for `hls_ffmpeg.log` to reduce growth.
-- Add CI checks and a lightweight integration test that simulates a short SRT stream (or mock) and verifies that `/streams/start` → playlist appears.
-
----
-
-If you want, I can also add a compact `README.md` (top-level) with a developer Quick Start that re-uses these commands and highlights the streaming troubleshooting checklist.
-
-If you'd like sections tailored for non-dev stakeholders (DevOps/Infra, QA, Product), tell me which audience to prioritize and I will add short runbooks.
