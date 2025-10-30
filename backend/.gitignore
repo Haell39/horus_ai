@@ -2,3 +2,4 @@ venv/
 .env
 # Ignore HLS generated files (segments, playlist, logs)
 static/hls/
+static/clips/

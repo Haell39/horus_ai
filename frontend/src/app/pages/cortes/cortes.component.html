@@ -79,19 +79,52 @@
 
         <div class="info-bloco">
           <h3>{{ falhaSelecionada.titulo }}</h3>
-          <p><b>Descrição:</b> {{ falhaSelecionada.descricao }}</p>
-          <p><b>Horário:</b> {{ falhaSelecionada.horario }}</p>
-          <p><b>Data:</b> {{ falhaSelecionada.dataCompleta }}</p>
-          <p><b>Programa:</b> {{ falhaSelecionada.programa }}</p>
-          <p><b>Duração:</b> {{ falhaSelecionada.duracao }}</p>
+          <ng-container *ngIf="!editMode; else modoEdicao">
+            <ul class="descricao-detalhes">
+              <li *ngIf="falhaSelecionada.raw.evidence && falhaSelecionada.raw.evidence['human_description']">
+                <b>Descrição (humana):</b> {{ falhaSelecionada.raw.evidence['human_description'] }}
+              </li>
+              <li><b>Categoria:</b> {{ falhaSelecionada.raw.category || '—' }}</li>
+              <li><b>Tipo detectado:</b> {{ falhaSelecionada.raw.type || '—' }}</li>
+              <li><b>Severidade:</b> {{ falhaSelecionada.raw.severity || '—' }}</li>
+              <li><b>Confiança:</b> {{ (falhaSelecionada.raw.confidence || 0) * 100 | number:'1.0-1' }}%</li>
+              <li><b>Duração:</b> {{ falhaSelecionada.duracao }}</li>
+              <li><b>Início:</b> {{ falhaSelecionada.raw.start_ts | date:'dd/MM/yyyy HH:mm:ss' }}</li>
+              <li><b>Fim:</b> {{ falhaSelecionada.raw.end_ts | date:'dd/MM/yyyy HH:mm:ss' }}</li>
+              <li><b>Clip:</b> {{ falhaSelecionada.videoUrl }}</li>
+            </ul>
+          </ng-container>
+          <ng-template #modoEdicao>
+            <div class="edicao">
+              <label>Descrição (humana)</label>
+              <textarea [(ngModel)]="edicaoDescricao" rows="5" placeholder="Descreva o ocorrido por extenso..."></textarea>
+              <div class="grid-edicao">
+                <div>
+                  <label>Categoria</label>
+                  <input [(ngModel)]="edicaoCategoria" placeholder="Ex.: Vídeo Técnico" />
+                </div>
+                <div>
+                  <label>Tipo detectado</label>
+                  <input [(ngModel)]="edicaoTipo" placeholder="Ex.: Bloco, Ruído..." />
+                </div>
+                <div>
+                  <label>Duração (s)</label>
+                  <input [(ngModel)]="edicaoDuracao" placeholder="Ex.: 10.0" />
+                </div>
+              </div>
+              <div class="botoes-edicao">
+                <button class="btn-verde" (click)="salvarEdicao()">💾 Salvar</button>
+                <button class="btn-vermelho" (click)="editMode=false">✖️ Cancelar</button>
+              </div>
+            </div>
+          </ng-template>
         </div>
 
         <div class="acoes">
           <button class="btn-azul" (click)="downloadClip(falhaSelecionada!)">
             ⬇️ Download Clipe
           </button>
-          <button class="btn-verde">✔️ Marcar como Resolvido</button>
-          <button class="btn-vermelho">📩 Abrir Ticket</button>
+          <button class="btn-azul" (click)="editMode=true" *ngIf="!editMode">✏️ Editar manualmente</button>
         </div>
       </div>
     </div>
@@ -138,6 +171,7 @@
           </select>
         </div>
       </div>
+      
     </div>
   </div>
 </div>

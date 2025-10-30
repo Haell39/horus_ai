@@ -17,12 +17,13 @@ interface Falha {
   data: string;
   dataCompleta: string;
   horario: string;
-  programa: string;
   duracao: string;
   videoUrl: string;
   icone: string;
   tipo: string;
   dataISO: string;
+  id: number;
+  raw: Ocorrencia; // referência ao objeto original
 }
 
 @Component({
@@ -39,6 +40,15 @@ export class CortesComponent implements OnInit {
   filtroTipo = '';
   filtroData = '';
   falhaSelecionada: Falha | null = null;
+  // edição humana
+  edicaoDescricao: string = '';
+  edicaoTipo: string = '';
+  editMode = false;
+  edicaoCategoria: string = '';
+  edicaoDuracao: string = '';
+
+  // exportação
+  formatoExport: 'csv' | 'pdf' = 'csv';
 
   itensPorPagina = 10;
   paginaAtual = 1;
@@ -95,21 +105,34 @@ export class CortesComponent implements OnInit {
     // O 'path' do clipe virá do 'evidence' no futuro.
     // Por enquanto, usamos um placeholder.
     const videoUrl =
-      oc.evidence?.['path'] || 'assets/videos/placeholder_clip.mp4';
+      (oc.evidence?.['path'] as string) || (oc.evidence?.['clip_path'] as string) || 'assets/videos/placeholder_clip.mp4';
 
     return {
       titulo: oc.type || 'Falha Indefinida', // Ex: "Ruído / chiado"
-      descricao: oc.category || 'Sem categoria', // Ex: "Áudio Técnico"
+      descricao: this.humanizarDescricao(oc),
       data: this.datePipe.transform(oc.start_ts, 'dd/MM/yy, HH:mm') || 'N/A',
       dataCompleta: this.datePipe.transform(oc.start_ts, 'dd/MM/yyyy') || 'N/A',
       horario: this.datePipe.transform(oc.start_ts, 'HH:mm:ss') || 'N/A',
-      programa: 'Programa N/A', // (Virá do 'evidence' no futuro)
       duracao: `${(oc.duration_s || 0).toFixed(1)} segundos`,
       videoUrl: videoUrl,
       icone: this.getIcone(oc.category),
       tipo: oc.type || 'Indefinido', // Para o filtro 'tipo'
       dataISO: this.datePipe.transform(oc.start_ts, 'yyyy-MM-dd') || '', // Para o filtro 'data'
+      id: oc.id,
+      raw: oc,
     };
+  }
+
+  private humanizarDescricao(oc: Ocorrencia): string {
+    const ev = (oc.evidence as any) || {};
+    const partes: string[] = [];
+    if (ev.human_description) return ev.human_description as string;
+    if (oc.category) partes.push(`Categoria: ${oc.category}`);
+    if (oc.type) partes.push(`Tipo: ${oc.type}`);
+    if (oc.severity) partes.push(`Severidade: ${oc.severity}`);
+    if (typeof oc.confidence === 'number') partes.push(`Confiança: ${(oc.confidence * 100).toFixed(1)}%`);
+    if (oc.duration_s) partes.push(`Duração: ${oc.duration_s.toFixed(1)}s`);
+    return partes.join(' • ');
   }
 
   // === FUNÇÃO HELPER DE ÍCONE (NOVA) ===
@@ -171,6 +194,13 @@ export class CortesComponent implements OnInit {
 
   selecionarFalha(falha: Falha) {
     this.falhaSelecionada = this.falhaSelecionada === falha ? null : falha;
+    if (this.falhaSelecionada) {
+      this.edicaoDescricao = this.falhaSelecionada.raw?.evidence?.['human_description'] || this.falhaSelecionada.descricao || '';
+      this.edicaoTipo = this.falhaSelecionada.titulo || '';
+      this.edicaoCategoria = this.falhaSelecionada.raw?.category || '';
+      this.edicaoDuracao = (this.falhaSelecionada.raw?.duration_s ?? '').toString();
+      this.editMode = false;
+    }
   }
 
   getCor(falha: Falha): string {
@@ -186,6 +216,59 @@ export class CortesComponent implements OnInit {
     link.href = falha.videoUrl;
     link.download = `${falha.titulo.replace(/ /g, '_')}.mp4`;
     link.click();
+  }
+
+  salvarEdicao(): void {
+    if (!this.falhaSelecionada) return;
+    const id = this.falhaSelecionada.id;
+    const payload: any = {};
+    if (this.edicaoTipo && this.edicaoTipo !== this.falhaSelecionada.titulo) payload.type = this.edicaoTipo;
+    if (this.edicaoCategoria) payload.category = this.edicaoCategoria;
+    const durNum = Number(this.edicaoDuracao);
+    if (!Number.isNaN(durNum)) payload.duration_s = durNum;
+    payload.human_description = this.edicaoDescricao || '';
+    this.ocorrenciaService.updateOcorrencia(id, payload).subscribe({
+      next: (ocAtualizada) => {
+        // atualiza no master
+        const idx = this.falhasMaster.findIndex(f => f.id === id);
+        if (idx >= 0) {
+          const atualizada = this.transformarOcorrencia(ocAtualizada as any);
+          this.falhasMaster[idx] = atualizada;
+          this.falhaSelecionada = atualizada;
+          this.editMode = false;
+        }
+      },
+      error: (e) => console.error('Erro ao salvar edição:', e),
+    });
+  }
+
+  exportar(): void {
+    if (this.formatoExport === 'csv') {
+      this.ocorrenciaService.exportCsv().subscribe({
+        next: (blob) => {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'ocorrencias.csv';
+          a.click();
+          window.URL.revokeObjectURL(url);
+        },
+        error: (e) => console.error('Falha ao exportar CSV:', e),
+      });
+    } else {
+      // Gera PDF simples via print de uma tabela montada em tempo real
+      const linhas = this.falhasMaster.map(f => `${f.titulo} — ${f.descricao} — ${f.data}`);
+      const w = window.open('', '_blank');
+      if (!w) return;
+      w.document.write('<html><head><title>Relatório de Ocorrências</title></head><body>');
+      w.document.write('<h3>Relatório de Ocorrências</h3><ul>');
+      for (const l of linhas) w.document.write(`<li>${l}</li>`);
+      w.document.write('</ul></body></html>');
+      w.document.close();
+      w.focus();
+      w.print();
+      // o usuário pode "Imprimir para PDF" no diálogo do navegador
+    }
   }
 
   mudarItensPorPagina(event: Event): void {

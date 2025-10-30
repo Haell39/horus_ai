@@ -279,13 +279,27 @@ class SRTIngestor:
                                     # Se algo falhar, deixamos apenas o frame
                                     evidence_obj = {'frame': f}
 
+                                # Deriva severidade pela duração (cartilha Globo)
+                                def _sev(d: float) -> str:
+                                    try:
+                                        d = float(d)
+                                        if d >= 60:
+                                            return 'Gravíssima (X)'
+                                        if d >= 10:
+                                            return 'Grave (A)'
+                                        if d >= 5:
+                                            return 'Média (B)'
+                                        return 'Leve (C)'
+                                    except Exception:
+                                        return 'Leve (C)'
+
                                 db_oc = models.Ocorrencia(
                                     start_ts=start_ts_calc,
                                     end_ts=end_ts_now,
                                     duration_s=1.0,
                                     category='Vídeo Técnico',
                                     type=pred_class,
-                                    severity='Auto',
+                                    severity=_sev(1.0),
                                     confidence=float(confidence),
                                     evidence=evidence_obj
                                 )
