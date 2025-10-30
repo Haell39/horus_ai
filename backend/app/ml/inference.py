@@ -116,6 +116,43 @@ def run_tflite_inference(interpreter: tf.lite.Interpreter, input_details: dict, 
         traceback.print_exc()
         return "Erro_Inferência", 0.0
 
+def run_tflite_inference_topk(
+    interpreter: tf.lite.Interpreter,
+    input_details: dict,
+    output_details: dict,
+    input_data: np.ndarray,
+    classes: List[str],
+    k: int = 3
+) -> List[Tuple[str, float]]:
+    """ Executa a inferência e retorna top-k (classe, score). """
+    if not interpreter:
+        return []
+    try:
+        input_dtype = input_details['dtype']
+        if input_dtype == np.uint8 or input_dtype == np.int8:
+            scale, zero_point = input_details['quantization']
+            input_data_quant = (input_data * 255.0 / scale + zero_point).astype(input_dtype)
+            interpreter.set_tensor(input_details['index'], input_data_quant)
+        else:
+            input_data = input_data.astype(np.float32)
+            interpreter.set_tensor(input_details['index'], input_data)
+
+        interpreter.invoke()
+        scores = interpreter.get_tensor(output_details['index'])[0]
+        out_dtype = output_details['dtype']
+        if out_dtype == np.uint8 or out_dtype == np.int8:
+            scale, zero_point = output_details['quantization']
+            scores = scale * (scores.astype(np.float32) - zero_point)
+
+        indices = np.argsort(scores)[::-1]
+        top = []
+        for i in indices[:max(1, k)]:
+            name = classes[i] if i < len(classes) else f"idx_{i}"
+            top.append((name, float(scores[i])))
+        return top
+    except Exception:
+        return []
+
 # =======================================================
 # === NOVAS FUNÇÕES: ANÁLISE DE ÁUDIO MULTI-SEGMENTO ===
 # =======================================================
@@ -307,3 +344,8 @@ def run_audio_inference(input_data: np.ndarray) -> Tuple[str, float]:
 
 def run_video_inference(input_data: np.ndarray) -> Tuple[str, float]:
     return run_video_inference_single_frame(input_data)
+
+def run_video_topk(input_data: np.ndarray, k: int = 3) -> List[Tuple[str, float]]:
+    if not video_interpreter:
+        return []
+    return run_tflite_inference_topk(video_interpreter, video_input_details, video_output_details, input_data, VIDEO_CLASSES, k)

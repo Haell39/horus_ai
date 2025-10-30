@@ -24,6 +24,25 @@ class SRTIngestor:
         self._thread: Optional[threading.Thread] = None
         self._running = False
         self._tmpdir: Optional[str] = None
+        # Voting and thresholds
+        self.vote_k = int(os.getenv('VIDEO_VOTE_K', '3'))
+        self.mavg_window = int(os.getenv('VIDEO_MOVING_AVG_M', '5'))
+        # class thresholds via env: VIDEO_THRESH_<UPPERCLASS>=float
+        self.class_thresholds = {}
+        try:
+            for cls in getattr(inference, 'VIDEO_CLASSES', []):
+                env_key = f"VIDEO_THRESH_{cls.upper()}".replace(' ', '_')
+                val = os.getenv(env_key)
+                if val is not None:
+                    self.class_thresholds[cls] = float(val)
+        except Exception:
+            pass
+        # recent predictions
+        from collections import deque
+        self._recent_classes = deque(maxlen=max(3, self.mavg_window))
+        self._recent_conf = deque(maxlen=max(3, self.mavg_window))
+        self._streak_class: Optional[str] = None
+        self._streak_count: int = 0
 
     def start(self, url: str):
         if self._running:
@@ -236,14 +255,46 @@ class SRTIngestor:
                         img_resized = cv2.resize(img_rgb, (inference.INPUT_WIDTH, inference.INPUT_HEIGHT))
                         img_normalized = img_resized.astype('float32') / 255.0
                         input_data = np.expand_dims(img_normalized, axis=0)
-                        pred_class, confidence = inference.run_video_inference(input_data)
-                        # broadcast and save if needed
-                        if pred_class != 'normal' and confidence >= self.confidence_threshold:
+                        # get top-3 for logging, and primary pred
+                        top3 = inference.run_video_topk(input_data, k=3) or []
+                        if top3:
+                            pred_class, confidence = top3[0]
+                        else:
+                            pred_class, confidence = inference.run_video_inference(input_data)
+
+                        # log top-3 for calibration
+                        if top3:
+                            try:
+                                print(f"DEBUG TOP3 frame#{idx}: " + ", ".join([f"{c}:{s:.3f}" for c,s in top3]))
+                            except Exception:
+                                pass
+
+                        # update moving window and streak
+                        self._recent_classes.append(pred_class)
+                        self._recent_conf.append(float(confidence))
+                        if self._streak_class == pred_class:
+                            self._streak_count += 1
+                        else:
+                            self._streak_class = pred_class
+                            self._streak_count = 1
+
+                        # determine threshold for class
+                        eff_thresh = self.class_thresholds.get(pred_class, self.confidence_threshold)
+                        # moving average of confidence
+                        try:
+                            mavg_conf = sum(self._recent_conf) / max(1, len(self._recent_conf))
+                        except Exception:
+                            mavg_conf = float(confidence)
+
+                        # decide save condition: non-normal, streak >= K, and mavg above threshold
+                        if pred_class != 'normal' and self._streak_count >= max(1, self.vote_k) and mavg_conf >= eff_thresh:
                             # Save occurrence to DB
                             db = SessionLocal()
                             try:
                                 end_ts_now = datetime.now()
-                                start_ts_calc = end_ts_now - timedelta(seconds=1)
+                                # event duration ~ streak/fps min 1 frame
+                                event_duration = max(1.0 / max(1.0, float(self.fps)), float(self._streak_count) / max(1.0, float(self.fps)))
+                                start_ts_calc = end_ts_now - timedelta(seconds=event_duration)
                                 # Tenta gerar um pequeno clipe a partir dos frames próximos ao índice
                                 evidence_obj = {'frame': f}
                                 try:
@@ -305,10 +356,10 @@ class SRTIngestor:
                                 db_oc = models.Ocorrencia(
                                     start_ts=start_ts_calc,
                                     end_ts=end_ts_now,
-                                    duration_s=1.0,
+                                    duration_s=event_duration,
                                     category='Vídeo Técnico',
                                     type=pred_class,
-                                    severity=_sev(1.0),
+                                    severity=_sev(event_duration),
                                     confidence=float(confidence),
                                     evidence=evidence_obj
                                 )

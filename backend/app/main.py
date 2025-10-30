@@ -132,4 +132,19 @@ async def startup_event():
         print("ALERTA CRÍTICO: Modelos de ML não puderam ser carregados no startup! Endpoint /analyze pode falhar.")
     else:
         print("INFO: Modelos de ML verificados/carregados no startup.")
+    # --- Log não-sensível das configurações relevantes para vídeo ---
+    try:
+        # settings está importado no topo do arquivo
+        v_vote = settings.VIDEO_VOTE_K
+        v_mov = settings.VIDEO_MOVING_AVG_M
+        v_thresh_default = settings.VIDEO_THRESH_DEFAULT
+        v_thresh_map = settings.video_thresholds()
+        print(f"INFO: VIDEO_VOTE_K={v_vote}, VIDEO_MOVING_AVG_M={v_mov}, VIDEO_THRESH_DEFAULT={v_thresh_default}")
+        # list a few per-class thresholds (limit output to 20 entries)
+        sample = list(v_thresh_map.items())[:20]
+        if sample:
+            print("INFO: VIDEO_THRESH (sample): " + ", ".join(f"{k}:{v}" for k, v in sample))
+    except Exception as _:
+        # do not crash startup on logging
+        pass
 # === Fim do Bloco Opcional ===
