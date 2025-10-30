@@ -3,6 +3,7 @@
 <h2 class="nome-pagina">Clipes de Falhas</h2>
 
 <div class="container-falhas">
+  <!-- FILTROS -->
   <div class="filtros">
     <div class="pesquisa">
       <i class="bi bi-search"></i>
@@ -16,9 +17,14 @@
     <div class="tipo">
       <select [(ngModel)]="filtroTipo">
         <option value="">Tipos de falha</option>
-        <option *ngFor="let tipo of tiposFalha" [value]="tipo">
-          {{ tipo }}
-        </option>
+        <option *ngFor="let tipo of tiposFalha" [value]="tipo">{{ tipo }}</option>
+      </select>
+    </div>
+
+    <div class="severidade">
+      <select [(ngModel)]="filtroSeveridade">
+        <option value="">Severidade</option>
+        <option *ngFor="let s of tiposSeveridade" [value]="s">{{ s }}</option>
       </select>
     </div>
 
@@ -27,6 +33,7 @@
     </div>
   </div>
 
+  <!-- ESTADOS DE CARREGAMENTO/ERRO -->
   <div *ngIf="isLoading" class="estado-container">
     <div class="spinner-border text-light" role="status">
       <span class="visually-hidden">Carregando...</span>
@@ -40,12 +47,10 @@
     </div>
   </div>
 
+  <!-- LISTA DE CLIPES -->
   <div *ngIf="!isLoading && !errorMsg">
     <div class="conteudo" [class.expandido]="!falhaSelecionada">
-      <ul
-        class="lista-falhas"
-        *ngIf="falhasFiltradas.length > 0; else semDados"
-      >
+      <ul class="lista-falhas" *ngIf="falhasFiltradas.length > 0; else semDados">
         <li
           *ngFor="let falha of falhasFiltradas"
           (click)="selecionarFalha(falha)"
@@ -56,13 +61,17 @@
           <div>
             <strong>{{ falha.titulo }}</strong>
             <div class="data">{{ falha.data }}</div>
-            <div class="descricao">
-              {{ getDescricaoCurta(falha.descricao, 30) }}
+            <div class="descricao">{{ getDescricaoCurta(falha.descricao, 30) }}</div>
+            <div class="status-card">
+              <span class="tag-status">
+                {{ falha.visualizado ? 'Visualizado' : 'Não Visualizado' }}
+              </span>
             </div>
           </div>
         </li>
       </ul>
 
+      <!-- SEM DADOS -->
       <ng-template #semDados>
         <div class="estado-container">
           <div class="alert alert-info" role="alert">
@@ -71,6 +80,7 @@
         </div>
       </ng-template>
 
+      <!-- DETALHES DO CLIPE -->
       <div class="detalhes" *ngIf="falhaSelecionada">
         <video controls [src]="falhaSelecionada.videoUrl">
           <source [src]="falhaSelecionada.videoUrl" type="video/mp4" />
@@ -79,71 +89,31 @@
 
         <div class="info-bloco">
           <h3>{{ falhaSelecionada.titulo }}</h3>
-          <ng-container *ngIf="!editMode; else modoEdicao">
-            <ul class="descricao-detalhes">
-              <li *ngIf="falhaSelecionada.raw.evidence && falhaSelecionada.raw.evidence['human_description']">
-                <b>Descrição (humana):</b> {{ falhaSelecionada.raw.evidence['human_description'] }}
-              </li>
-              <li><b>Categoria:</b> {{ falhaSelecionada.raw.category || '—' }}</li>
-              <li><b>Tipo detectado:</b> {{ falhaSelecionada.raw.type || '—' }}</li>
-              <li><b>Severidade:</b> {{ falhaSelecionada.raw.severity || '—' }}</li>
-              <li><b>Confiança:</b> {{ (falhaSelecionada.raw.confidence || 0) * 100 | number:'1.0-1' }}%</li>
-              <li><b>Duração:</b> {{ falhaSelecionada.duracao }}</li>
-              <li><b>Início:</b> {{ falhaSelecionada.raw.start_ts | date:'dd/MM/yyyy HH:mm:ss' }}</li>
-              <li><b>Fim:</b> {{ falhaSelecionada.raw.end_ts | date:'dd/MM/yyyy HH:mm:ss' }}</li>
-              <li><b>Clip:</b> {{ falhaSelecionada.videoUrl }}</li>
-            </ul>
-          </ng-container>
-          <ng-template #modoEdicao>
-            <div class="edicao">
-              <label>Descrição (humana)</label>
-              <textarea [(ngModel)]="edicaoDescricao" rows="5" placeholder="Descreva o ocorrido por extenso..."></textarea>
-              <div class="grid-edicao">
-                <div>
-                  <label>Categoria</label>
-                  <input [(ngModel)]="edicaoCategoria" placeholder="Ex.: Vídeo Técnico" />
-                </div>
-                <div>
-                  <label>Tipo detectado</label>
-                  <input [(ngModel)]="edicaoTipo" placeholder="Ex.: Bloco, Ruído..." />
-                </div>
-                <div>
-                  <label>Duração (s)</label>
-                  <input [(ngModel)]="edicaoDuracao" placeholder="Ex.: 10.0" />
-                </div>
-              </div>
-              <div class="botoes-edicao">
-                <button class="btn-verde" (click)="salvarEdicao()">💾 Salvar</button>
-                <button class="btn-vermelho" (click)="editMode=false">✖️ Cancelar</button>
-              </div>
-            </div>
-          </ng-template>
+          <p><b>Descrição:</b> {{ falhaSelecionada.descricao }}</p>
+          <p><b>Horário:</b> {{ falhaSelecionada.horario }}</p>
+          <p><b>Data:</b> {{ falhaSelecionada.dataCompleta }}</p>
+          <p><b>Programa:</b> {{ falhaSelecionada.programa }}</p>
+          <p><b>Duração:</b> {{ falhaSelecionada.duracao }}</p>
+          <p><b>Status:</b> {{ falhaSelecionada.visualizado ? 'Visualizado' : 'Não Visualizado' }}</p>
         </div>
 
         <div class="acoes">
-          <button class="btn-azul" (click)="downloadClip(falhaSelecionada!)">
-            ⬇️ Download Clipe
-          </button>
-          <button class="btn-azul" (click)="editMode=true" *ngIf="!editMode">✏️ Editar manualmente</button>
+          <button class="btn-azul" (click)="downloadClip(falhaSelecionada!)">⬇️ Download Clipe</button>
+          <button class="btn-verde">✔️ Marcar como Resolvido</button>
+          <button class="btn-vermelho">📩 Abrir Ticket</button>
         </div>
       </div>
     </div>
+
+    <!-- PAGINAÇÃO -->
     <div class="paginacao-container" *ngIf="falhasFiltradas.length > 0">
-      <button
-        class="btn-paginacao"
-        (click)="paginaAnterior()"
-        [disabled]="paginaAtual === 1"
-      >
+      <button class="btn-paginacao" (click)="paginaAnterior()" [disabled]="paginaAtual === 1">
         Anterior
       </button>
 
       <span class="pagina-info">{{ paginaAtual }} de {{ totalPaginas }}</span>
 
-      <button
-        class="btn-paginacao"
-        (click)="proximaPagina()"
-        [disabled]="paginaAtual === totalPaginas"
-      >
+      <button class="btn-paginacao" (click)="proximaPagina()" [disabled]="paginaAtual === totalPaginas">
         Próximo
       </button>
 
@@ -151,19 +121,10 @@
       <div class="paginacao-separador">•</div>
 
       <div class="menu-itens">
-        <button class="menu-btn" (click)="toggleDropdown()">
-          <i class="bi bi-list"></i>
-        </button>
-
-        <div
-          class="dropdown-itens"
-          [style.display]="mostrarDropdown ? 'flex' : 'none'"
-        >
+        <button class="menu-btn" (click)="toggleDropdown()"><i class="bi bi-list"></i></button>
+        <div class="dropdown-itens" [style.display]="mostrarDropdown ? 'flex' : 'none'">
           <label>Itens por página</label>
-          <select
-            [value]="itensPorPagina"
-            (change)="mudarItensPorPagina($event)"
-          >
+          <select [value]="itensPorPagina" (change)="mudarItensPorPagina($event)">
             <option [value]="10">10</option>
             <option [value]="20">20</option>
             <option [value]="50">50</option>
@@ -175,5 +136,3 @@
     </div>
   </div>
 </div>
-
-
