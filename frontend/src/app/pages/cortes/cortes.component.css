@@ -240,6 +240,11 @@ video {
   align-items: center;
 }
 
+.categoria-card small {
+  color: var(--cor-10, #c5c9d3);
+  font-size: 0.85rem;
+}
+
 .info-bloco h3 {
   color: var(--texto-cor, #fff);
   font-weight: 600;

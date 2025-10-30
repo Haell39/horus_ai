@@ -23,6 +23,13 @@
       </select>
     </div>
 
+    <div class="categoria">
+      <select [(ngModel)]="filtroCategoria">
+        <option value="">Categoria</option>
+        <option *ngFor="let c of tiposCategoria" [value]="c">{{ c }}</option>
+      </select>
+    </div>
+
     <div class="severidade">
       <select [(ngModel)]="filtroSeveridade">
         <option value="">Severidade</option>
@@ -65,6 +72,9 @@
             >
             <p class="descricao-card">
               {{ getDescricaoCurta(falha.descricao || "", 80) }}
+            </p>
+            <p class="categoria-card" *ngIf="falha.categoria">
+              <small>{{ falha.categoria }}</small>
             </p>
           </div>
 
@@ -112,6 +122,9 @@
           </p>
           <p><b>Horário:</b> {{ falhaSelecionada.horario }}</p>
           <p><b>Data:</b> {{ falhaSelecionada.dataCompleta }}</p>
+          <p *ngIf="falhaSelecionada.categoria">
+            <b>Categoria:</b> {{ falhaSelecionada.categoria }}
+          </p>
           <p><b>Duração:</b> {{ falhaSelecionada.duracao }}</p>
           <p><b>Severidade:</b> {{ falhaSelecionada.severidade }}</p>
         </div>
@@ -121,7 +134,12 @@
           <input type="text" [(ngModel)]="editForm.type" />
 
           <label><b>Categoria</b></label>
-          <input type="text" [(ngModel)]="editForm.category" />
+          <select [(ngModel)]="editForm.category">
+            <option value="">-- Selecionar --</option>
+            <option *ngFor="let c of tiposCategoria" [value]="c">
+              {{ c }}
+            </option>
+          </select>
 
           <label><b>Duração (s)</b></label>
           <input type="number" [(ngModel)]="editForm.duration_s" />

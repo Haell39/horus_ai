@@ -18,6 +18,7 @@ interface Falha {
   icone: string;
   tipo: string;
   severidade: string;
+  categoria?: string;
   dataISO: string;
 }
 
@@ -38,14 +39,32 @@ export class CortesComponent implements OnInit {
   itensPorPagina = 10;
   paginaAtual = 1;
   mostrarDropdown = false;
-
-  tiposFalha: string[] = ['Fade', 'Freeze'];
-  tiposSeveridade: string[] = [
-    'A - Grave',
-    'B - Médio',
-    'C - Leve',
-    'X - Gravíssima',
+  // Lista completa de tipos solicitada pelo usuário
+  tiposFalha: string[] = [
+    'Ausência áudio',
+    'Volume baixo',
+    'Eco',
+    'Ruido/chiado',
+    'Sinal de teste 1khz',
+    'Freeze',
+    'Fade',
+    'Efeito bloco/variação',
+    'Fora de foco/imagem borrada',
   ];
+
+  // Severidade conforme o backend envia (human readable)
+  tiposSeveridade: string[] = [
+    'Gravíssima (X)',
+    'Grave (A)',
+    'Média (B)',
+    'Leve (C)',
+  ];
+
+  // Categorias possíveis
+  tiposCategoria: string[] = ['Áudio Técnico', 'Vídeo Técnico'];
+
+  // filtro de categoria
+  filtroCategoria = '';
 
   // Lista real que virá do backend (mapeada para a interface Falha usada pela UI)
   falhas: Falha[] = [];
@@ -62,16 +81,46 @@ export class CortesComponent implements OnInit {
 
   /** 🔹 Filtragem + Paginação */
   get falhasFiltradas(): Falha[] {
+    const normalize = (s: string) =>
+      (s || '')
+        .toString()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\//g, ' ')
+        .toLowerCase()
+        .trim();
+
+    const matchesFilter = (
+      value: string | undefined,
+      filter: string | undefined
+    ) => {
+      if (!filter) return true;
+      if (!value) return false;
+      const nVal = normalize(value);
+      const nFil = normalize(filter);
+      return nVal.includes(nFil) || nFil.includes(nVal);
+    };
+
+    const textoOk = (f: Falha) => {
+      if (!this.filtroTexto) return true;
+      const q = normalize(this.filtroTexto);
+      return (
+        normalize(f.titulo).includes(q) || normalize(f.descricao).includes(q)
+      );
+    };
+
     const filtradas = this.falhas.filter((f) => {
-      const textoOk =
-        !this.filtroTexto ||
-        f.titulo.toLowerCase().includes(this.filtroTexto.toLowerCase()) ||
-        f.descricao.toLowerCase().includes(this.filtroTexto.toLowerCase());
-      const tipoOk = !this.filtroTipo || f.tipo === this.filtroTipo;
-      const dataOk = !this.filtroData || f.dataISO === this.filtroData;
-      const severidadeOk =
-        !this.filtroSeveridade || f.severidade === this.filtroSeveridade;
-      return textoOk && tipoOk && dataOk && severidadeOk;
+      const okTexto = textoOk(f);
+      const okTipo = matchesFilter(f.tipo, this.filtroTipo);
+      const okCategoria = matchesFilter(
+        f.categoria || '',
+        this.filtroCategoria
+      );
+      const okData = !this.filtroData || f.dataISO === this.filtroData;
+      const okSev =
+        !this.filtroSeveridade ||
+        normalize(f.severidade) === normalize(this.filtroSeveridade);
+      return okTexto && okTipo && okCategoria && okData && okSev;
     });
 
     this.totalPaginas = Math.max(
@@ -98,7 +147,10 @@ export class CortesComponent implements OnInit {
     if (this.falhaSelecionada) {
       // popula o formulário de edição com os valores atuais
       this.editForm = {
-        category: this.falhaSelecionada.tipo || this.falhaSelecionada.titulo,
+        category:
+          this.falhaSelecionada.categoria ||
+          this.falhaSelecionada.tipo ||
+          this.falhaSelecionada.titulo,
         type: this.falhaSelecionada.tipo,
         duration_s: this.parseDurationSeconds(this.falhaSelecionada.duracao),
         human_description: this.falhaSelecionada.descricao,
@@ -220,7 +272,32 @@ export class CortesComponent implements OnInit {
     });
     const dur = oc.duration_s ? this.formatDuration(oc.duration_s) : '';
     const evidence = oc.evidence || {};
-    const titulo = `${oc.type || oc.category || 'Ocorrência'} #${oc.id}`;
+    // inferir categoria quando não estiver preenchida no banco
+    let inferredCategory = oc.category || '';
+    if (!inferredCategory && oc.type) {
+      const t = oc.type.toLowerCase();
+      const audioTypes = [
+        'ausência áudio',
+        'volume baixo',
+        'eco',
+        'ruido/chiado',
+        'sinal de teste 1khz',
+      ];
+      const videoTypes = [
+        'freeze',
+        'fade',
+        'efeito bloco/variação',
+        'fora de foco/imagem borrada',
+        'borrado',
+        'bloco',
+      ];
+      if (audioTypes.find((a) => t.includes(a)))
+        inferredCategory = 'Áudio Técnico';
+      else if (videoTypes.find((v) => t.includes(v)))
+        inferredCategory = 'Vídeo Técnico';
+    }
+
+    const titulo = `${oc.type || inferredCategory || 'Ocorrência'} #${oc.id}`;
     const ev = oc.evidence || {};
     const descricao = ev['human_description'] || '';
     return {
@@ -237,6 +314,7 @@ export class CortesComponent implements OnInit {
           ? 'bi bi-pause-circle-fill'
           : 'bi bi-play-circle-fill',
       tipo: oc.type || oc.category || '',
+      categoria: inferredCategory || oc.category || '',
       severidade: oc.severity || '',
       dataISO: start.toISOString().slice(0, 10),
     };

@@ -147,3 +147,18 @@ input:checked + .slider:before {
   transition: background-color 0.2s;
   color: white;
 }
+
+/* Small export button (used inside the Exportação card) */
+.exportar-btn {
+  background-color: var(--btn-bg);
+  color: white;
+  padding: 0.45rem 0.8rem;
+  font-size: 0.95rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  margin-left: 12px; /* replicate previous inline spacing */
+  display: inline-block;
+}
+.exportar-btn:hover { background-color: var(--btn-hover-bg); }
