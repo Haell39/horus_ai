@@ -21,7 +21,8 @@ interface Falha {
   tipo: string;
   severidade: string;
   dataISO: string;
-  visualizado: boolean; // ✅ Novo campo
+  visualizado: boolean; 
+  programa: string;
 }
 
 @Component({
