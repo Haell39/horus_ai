@@ -42,9 +42,18 @@ export class OcorrenciaService {
   /** Atualiza campos corrigidos pelo humano */
   updateOcorrencia(
     id: number,
-    payload: { type?: string; human_description?: string }
+    payload: {
+      type?: string;
+      category?: string;
+      duration_s?: number;
+      human_description?: string;
+      severity?: string;
+    }
   ): Observable<Ocorrencia> {
-    return this.http.patch<Ocorrencia>(`${this.apiUrl}/ocorrencias/${id}`, payload);
+    return this.http.patch<Ocorrencia>(
+      `${this.apiUrl}/ocorrencias/${id}`,
+      payload
+    );
   }
 
   /** Exporta CSV do backend */

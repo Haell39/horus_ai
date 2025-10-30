@@ -1,7 +1,10 @@
-import { Component, HostListener } from '@angular/core';
+import { Component, HostListener, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SidebarComponent } from '../../shared/sidebar/sidebar.component';
+import { OcorrenciaService } from '../../services/ocorrencia.service';
+import { Ocorrencia } from '../../models/ocorrencia';
+import { environment } from '../../../environments/environment';
 
 interface Falha {
   titulo: string;
@@ -25,7 +28,7 @@ interface Falha {
   templateUrl: './cortes.component.html',
   styleUrls: ['./cortes.component.css'],
 })
-export class CortesComponent {
+export class CortesComponent implements OnInit {
   filtroTexto = '';
   filtroTipo = '';
   filtroData = '';
@@ -37,40 +40,25 @@ export class CortesComponent {
   mostrarDropdown = false;
 
   tiposFalha: string[] = ['Fade', 'Freeze'];
-  tiposSeveridade: string[] = ['A - Grave', 'B - Médio', 'C - Leve', 'X - Gravíssima'];
-
-  falhas: Falha[] = [
-    {
-      titulo: 'Fade na Abertura',
-      descricao: 'Fade aplicado no início do vídeo.',
-      data: 'Dia 23/09, 21:36',
-      dataCompleta: '2025-09-23',
-      horario: '21:36',
-      programa: 'Primeiro Vídeo',
-      duracao: '00:30',
-      videoUrl: 'assets/videos/video1.mp4',
-      icone: 'bi bi-play-circle-fill',
-      tipo: 'Fade',
-      severidade: 'B - Médio',
-      dataISO: '2025-09-23',
-    },
-    {
-      titulo: 'Freeze na Cena 2',
-      descricao: 'Freeze inesperado durante a cena.',
-      data: 'Dia 24/09, 14:20',
-      dataCompleta: '2025-09-24',
-      horario: '14:20',
-      programa: 'Segundo Vídeo',
-      duracao: '00:45',
-      videoUrl: 'assets/videos/video2.mp4',
-      icone: 'bi bi-pause-circle-fill',
-      tipo: 'Freeze',
-      severidade: 'A - Grave',
-      dataISO: '2025-09-24',
-    },
-
-    // Adicione outras falhas conforme necessário
+  tiposSeveridade: string[] = [
+    'A - Grave',
+    'B - Médio',
+    'C - Leve',
+    'X - Gravíssima',
   ];
+
+  // Lista real que virá do backend (mapeada para a interface Falha usada pela UI)
+  falhas: Falha[] = [];
+
+  // Estado de edição
+  editMode = false;
+  editForm: {
+    category?: string;
+    type?: string;
+    duration_s?: number | null;
+    human_description?: string | null;
+    severity?: string | null;
+  } = {};
 
   /** 🔹 Filtragem + Paginação */
   get falhasFiltradas(): Falha[] {
@@ -81,11 +69,15 @@ export class CortesComponent {
         f.descricao.toLowerCase().includes(this.filtroTexto.toLowerCase());
       const tipoOk = !this.filtroTipo || f.tipo === this.filtroTipo;
       const dataOk = !this.filtroData || f.dataISO === this.filtroData;
-      const severidadeOk = !this.filtroSeveridade || f.severidade === this.filtroSeveridade;
+      const severidadeOk =
+        !this.filtroSeveridade || f.severidade === this.filtroSeveridade;
       return textoOk && tipoOk && dataOk && severidadeOk;
     });
 
-    this.totalPaginas = Math.max(1, Math.ceil(filtradas.length / this.itensPorPagina));
+    this.totalPaginas = Math.max(
+      1,
+      Math.ceil(filtradas.length / this.itensPorPagina)
+    );
     const inicio = (this.paginaAtual - 1) * this.itensPorPagina;
     const fim = inicio + this.itensPorPagina;
     return filtradas.slice(inicio, fim);
@@ -96,11 +88,26 @@ export class CortesComponent {
   /** 🔹 Métodos de interação */
   getDescricaoCurta(descricao: string, tamanho: number = 50): string {
     if (!descricao) return '';
-    return descricao.length > tamanho ? descricao.slice(0, tamanho) + '...' : descricao;
+    return descricao.length > tamanho
+      ? descricao.slice(0, tamanho) + '...'
+      : descricao;
   }
 
   selecionarFalha(falha: Falha) {
     this.falhaSelecionada = this.falhaSelecionada === falha ? null : falha;
+    if (this.falhaSelecionada) {
+      // popula o formulário de edição com os valores atuais
+      this.editForm = {
+        category: this.falhaSelecionada.tipo || this.falhaSelecionada.titulo,
+        type: this.falhaSelecionada.tipo,
+        duration_s: this.parseDurationSeconds(this.falhaSelecionada.duracao),
+        human_description: this.falhaSelecionada.descricao,
+        severity: this.falhaSelecionada.severidade || null,
+      };
+      this.editMode = false;
+    } else {
+      this.editMode = false;
+    }
   }
 
   getCor(falha: Falha): string {
@@ -115,20 +122,206 @@ export class CortesComponent {
   }
 
   getCorSeveridade(sev: string): string {
-    switch (sev) {
-      case 'A - Grave': return '#e74c3c';
-      case 'B - Médio': return '#f1c40f';
-      case 'C - Leve': return '#2ecc71';
-      case 'X - Gravíssima': return '#9b59b6';
-      default: return '#7f8c8d';
-    }
+    if (!sev) return '#7f8c8d';
+    const s = sev.toLowerCase();
+    // Gravíssima (X) -> vermelho
+    if (
+      s.includes('gravíssima') ||
+      s.includes('(x)') ||
+      s.includes('gravíssima (x)')
+    )
+      return '#e74c3c';
+    // Grave (A) -> laranja
+    if (s.includes('grave') || s.includes('(a)')) return '#d35400';
+    // Média (B) -> amarelo
+    if (s.includes('média') || s.includes('(b)')) return '#f1c40f';
+    // Leve (C) -> cinza
+    if (s.includes('leve') || s.includes('(c)')) return '#95a5a6';
+    return '#7f8c8d';
   }
 
   downloadClip(falha: Falha) {
     const link = document.createElement('a');
     link.href = falha.videoUrl;
+    link.target = '_blank';
     link.download = `${falha.titulo}.mp4`;
     link.click();
+  }
+
+  /** Converte strings "00:30" ou "30" para segundos (aprox) */
+  parseDurationSeconds(dur: string | undefined): number | null {
+    if (!dur) return null;
+    // tenta extrair números
+    const parts = dur.split(':').map((s) => s.trim());
+    if (parts.length === 2) {
+      const mm = Number(parts[0] || 0);
+      const ss = Number(parts[1] || 0);
+      return mm * 60 + ss;
+    }
+    const n = Number(dur.replace(/[^0-9.]/g, ''));
+    return isNaN(n) ? null : n;
+  }
+
+  /** Monta a URL pública do clipe a partir do campo evidence do backend */
+  buildClipUrl(evidence: { [k: string]: any } | undefined): string {
+    const backendBase =
+      environment.backendBase || environment.apiUrl || 'http://localhost:8000';
+    if (!evidence) return 'assets/videos/video1.mp4';
+    const candidates = ['clip_path', 'path', 'file', 'frame'];
+    for (const c of candidates) {
+      const v = evidence[c];
+      if (!v) continue;
+      // se já for URL absoluta
+      if (
+        typeof v === 'string' &&
+        (v.startsWith('http://') || v.startsWith('https://'))
+      )
+        return v;
+      // se contiver '/clips/' extrai o nome
+      if (typeof v === 'string' && v.includes('/clips/')) {
+        const idx = v.indexOf('/clips/');
+        return `${backendBase}${v.substring(idx)}`;
+      }
+      // se for somente o nome do arquivo
+      if (typeof v === 'string') return `${backendBase}/clips/${v}`;
+    }
+    return 'assets/videos/video1.mp4';
+  }
+
+  // Carrega ocorrências reais do backend
+  constructor(private ocorrenciaService: OcorrenciaService) {}
+
+  ngOnInit(): void {
+    this.loadOcorrencias();
+  }
+
+  loadOcorrencias() {
+    this.ocorrenciaService.getOcorrencias().subscribe({
+      next: (list: Ocorrencia[]) => {
+        this.falhas = list.map((oc) => this.mapOcorrenciaToFalha(oc));
+        this.totalPaginas = Math.max(
+          1,
+          Math.ceil(this.falhas.length / this.itensPorPagina)
+        );
+      },
+      error: (err) => {
+        console.error('Erro ao carregar ocorrências', err);
+      },
+    });
+  }
+
+  private mapOcorrenciaToFalha(oc: Ocorrencia): Falha {
+    const start = new Date(oc.start_ts);
+    const end = new Date(oc.end_ts);
+    const data = start.toLocaleDateString();
+    const horario = start.toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const dur = oc.duration_s ? this.formatDuration(oc.duration_s) : '';
+    const evidence = oc.evidence || {};
+    const titulo = `${oc.type || oc.category || 'Ocorrência'} #${oc.id}`;
+    const ev = oc.evidence || {};
+    const descricao = ev['human_description'] || '';
+    return {
+      titulo,
+      descricao,
+      data: `Dia ${data}, ${horario}`,
+      dataCompleta: start.toISOString().slice(0, 10),
+      horario,
+      programa: evidence['program'] || evidence['programa'] || '',
+      duracao: dur,
+      videoUrl: this.buildClipUrl(evidence),
+      icone:
+        oc.type && oc.type.toLowerCase().includes('freeze')
+          ? 'bi bi-pause-circle-fill'
+          : 'bi bi-play-circle-fill',
+      tipo: oc.type || oc.category || '',
+      severidade: oc.severity || '',
+      dataISO: start.toISOString().slice(0, 10),
+    };
+  }
+
+  private humanizeOcorrencia(oc: Ocorrencia): string {
+    const sb: string[] = [];
+    sb.push(`ID ${oc.id}`);
+    if (oc.type) sb.push(`Tipo: ${oc.type}`);
+    if (oc.category) sb.push(`Categoria: ${oc.category}`);
+    if (oc.severity) sb.push(`Severidade: ${oc.severity}`);
+    if (oc.duration_s != null)
+      sb.push(`Duração: ${this.formatDuration(oc.duration_s)}`);
+    if (oc.confidence != null)
+      sb.push(`Confiança: ${(oc.confidence * 100).toFixed(1)}%`);
+    const ev = oc.evidence || {};
+    if (ev['human_description'])
+      sb.push(`Observação: ${ev['human_description']}`);
+    return sb.join(' • ');
+  }
+
+  private formatDuration(sec: number): string {
+    if (!isFinite(sec)) return '';
+    const s = Math.round(sec);
+    if (s >= 60) {
+      const m = Math.floor(s / 60);
+      const r = s % 60;
+      return `${m.toString().padStart(2, '0')}:${r
+        .toString()
+        .padStart(2, '0')}`;
+    }
+    return `00:${s.toString().padStart(2, '0')}`;
+  }
+
+  /** Alterna para o modo de edição no painel de detalhes */
+  enableEdit() {
+    if (!this.falhaSelecionada) return;
+    this.editMode = true;
+  }
+
+  cancelEdit() {
+    this.editMode = false;
+    if (this.falhaSelecionada) {
+      // restaura descrição do banco (já está no objeto local se carregado)
+      this.editForm.human_description = this.falhaSelecionada.descricao;
+    }
+  }
+
+  saveEdit() {
+    if (!this.falhaSelecionada) return;
+    const idPart = (this.falhaSelecionada.titulo || '').split('#').pop();
+    const id = idPart ? Number(idPart) : null;
+    if (!id) return;
+    const payload: any = {};
+    if (this.editForm.type !== undefined) payload.type = this.editForm.type;
+    if (this.editForm.category !== undefined)
+      payload.category = this.editForm.category;
+    if (
+      this.editForm.duration_s !== undefined &&
+      this.editForm.duration_s !== null
+    )
+      payload.duration_s = this.editForm.duration_s;
+    if (this.editForm.human_description !== undefined)
+      payload.human_description = this.editForm.human_description;
+    if (
+      this.editForm.severity !== undefined &&
+      this.editForm.severity !== null &&
+      this.editForm.severity !== ''
+    )
+      payload.severity = this.editForm.severity;
+
+    this.ocorrenciaService.updateOcorrencia(id, payload).subscribe({
+      next: (updated) => {
+        // atualiza a entrada local e sai do modo edição
+        this.falhas = this.falhas.map((f) =>
+          f.titulo.endsWith(`#${id}`) ? this.mapOcorrenciaToFalha(updated) : f
+        );
+        this.falhaSelecionada =
+          this.falhas.find((f) => f.titulo.endsWith(`#${id}`)) || null;
+        this.editMode = false;
+      },
+      error: (err) => {
+        console.error('Erro ao salvar edição', err);
+      },
+    });
   }
 
   mudarItensPorPagina(event: Event): void {

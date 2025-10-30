@@ -80,7 +80,8 @@ print("INFO: Endpoints de Ocorrências (GET, POST) configurados.")
 class OcorrenciaUpdate(BaseModel):
     type: Optional[str] = None
     category: Optional[str] = None
-    # severity é derivada de duration_s (cartilha); não editar diretamente
+    # Permitimos agora editar severity manualmente (operador), mas não a confidence
+    severity: Optional[str] = None
     confidence: Optional[float] = None
     duration_s: Optional[float] = None
     human_description: Optional[str] = None
@@ -120,20 +121,24 @@ def update_ocorrencia(
             db_oc.type = payload.type
         if payload.category is not None:
             db_oc.category = payload.category
-        # confiança é do modelo; não deve ser editada se não for admin. Ignoramos se vier
-        # duration pode ser editada (ajuste humano) e atualiza a severidade automáticamente
-        if payload.duration_s is not None:
-            try:
-                db_oc.duration_s = float(payload.duration_s)
-            except Exception:
-                pass
-            sev = _compute_severity(db_oc.duration_s)
-            if sev:
-                db_oc.severity = sev
-        elif (db_oc.severity is None) or (db_oc.severity.lower().startswith('auto')):
-            sev = _compute_severity(db_oc.duration_s)
-            if sev:
-                db_oc.severity = sev
+        # Se foi passada uma severidade explícita, respeitamos o override humano
+        if getattr(payload, 'severity', None) is not None:
+            db_oc.severity = payload.severity
+        else:
+            # confiança é do modelo; não deve ser editada se não for admin. Ignoramos se vier
+            # duration pode ser editada (ajuste humano) e atualiza a severidade automaticamente
+            if payload.duration_s is not None:
+                try:
+                    db_oc.duration_s = float(payload.duration_s)
+                except Exception:
+                    pass
+                sev = _compute_severity(db_oc.duration_s)
+                if sev:
+                    db_oc.severity = sev
+            elif (db_oc.severity is None) or (db_oc.severity.lower().startswith('auto')):
+                sev = _compute_severity(db_oc.duration_s)
+                if sev:
+                    db_oc.severity = sev
 
         # Atualiza/insere descrição humana em evidence
         if payload.human_description is not None:

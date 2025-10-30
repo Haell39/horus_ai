@@ -17,7 +17,9 @@
     <div class="tipo">
       <select [(ngModel)]="filtroTipo">
         <option value="">Tipos de falha</option>
-        <option *ngFor="let tipo of tiposFalha" [value]="tipo">{{ tipo }}</option>
+        <option *ngFor="let tipo of tiposFalha" [value]="tipo">
+          {{ tipo }}
+        </option>
       </select>
     </div>
 
@@ -37,9 +39,11 @@
   <div class="conteudo" [class.expandido]="!falhaSelecionada">
     <!-- Lista lateral -->
     <ul class="lista-falhas">
-      <li *ngFor="let falha of falhasFiltradas" 
-          (click)="selecionarFalha(falha)" 
-          [class.selecionada]="falha === falhaSelecionada">
+      <li
+        *ngFor="let falha of falhasFiltradas"
+        (click)="selecionarFalha(falha)"
+        [class.selecionada]="falha === falhaSelecionada"
+      >
         <div class="icone-tipo">
           <i [class]="falha.icone" [ngStyle]="{ color: getCor(falha) }"></i>
         </div>
@@ -47,14 +51,21 @@
         <div class="conteudo-card">
           <div class="cabecalho-card">
             <strong>{{ falha.titulo }}</strong>
-            <span class="tag-severidade" [ngStyle]="{ background: getCorSeveridade(falha.severidade) }">
+            <span
+              class="tag-severidade"
+              [ngStyle]="{ background: getCorSeveridade(falha.severidade) }"
+            >
               {{ falha.severidade }}
             </span>
           </div>
 
           <div class="info-card">
-            <span class="data-hora">{{ falha.data }} | {{ falha.horario }}</span>
-            <p class="descricao-card">{{ getDescricaoCurta(falha.descricao, 50) }}</p>
+            <span class="data-hora"
+              >{{ falha.data }} | {{ falha.horario }}</span
+            >
+            <p class="descricao-card">
+              {{ getDescricaoCurta(falha.descricao || "", 80) }}
+            </p>
           </div>
 
           <div class="status-card">
@@ -73,32 +84,83 @@
       </video>
 
       <div class="info-bloco">
-        <h3>{{ falhaSelecionada.titulo }}</h3>
-        <p><b>Descrição:</b> {{ falhaSelecionada.descricao }}</p>
-        <p><b>Horário:</b> {{ falhaSelecionada.horario }}</p>
-        <p><b>Data:</b> {{ falhaSelecionada.dataCompleta }}</p>
-        <p><b>Programa:</b> {{ falhaSelecionada.programa }}</p>
-        <p><b>Duração:</b> {{ falhaSelecionada.duracao }}</p>
-        <p><b>Severidade:</b> {{ falhaSelecionada.severidade }}</p>
-      </div>
+        <div class="header-detail">
+          <h3>{{ falhaSelecionada.titulo }}</h3>
+          <div class="acoes in-card">
+            <button class="btn-azul" (click)="downloadClip(falhaSelecionada!)">
+              ⬇️ Download Clipe
+            </button>
+            <button class="btn-verde" *ngIf="!editMode" (click)="enableEdit()">
+              ✏️ Editar
+            </button>
+            <button class="btn-verde" *ngIf="editMode" (click)="saveEdit()">
+              💾 Salvar
+            </button>
+            <button
+              class="btn-vermelho"
+              *ngIf="editMode"
+              (click)="cancelEdit()"
+            >
+              ✖️ Cancelar
+            </button>
+          </div>
+        </div>
 
-      <div class="acoes">
-        <button class="btn-azul" (click)="downloadClip(falhaSelecionada!)">⬇️ Download Clipe</button>
-        <button class="btn-verde">✔️ Marcar como Resolvido</button>
-        <button class="btn-vermelho">📩 Abrir Ticket</button>
+        <div *ngIf="!editMode">
+          <p *ngIf="falhaSelecionada.descricao">
+            <b>Descrição:</b> {{ falhaSelecionada.descricao }}
+          </p>
+          <p><b>Horário:</b> {{ falhaSelecionada.horario }}</p>
+          <p><b>Data:</b> {{ falhaSelecionada.dataCompleta }}</p>
+          <p><b>Duração:</b> {{ falhaSelecionada.duracao }}</p>
+          <p><b>Severidade:</b> {{ falhaSelecionada.severidade }}</p>
+        </div>
+
+        <div *ngIf="editMode">
+          <label><b>Tipo</b></label>
+          <input type="text" [(ngModel)]="editForm.type" />
+
+          <label><b>Categoria</b></label>
+          <input type="text" [(ngModel)]="editForm.category" />
+
+          <label><b>Duração (s)</b></label>
+          <input type="number" [(ngModel)]="editForm.duration_s" />
+
+          <label><b>Severidade</b></label>
+          <select [(ngModel)]="editForm.severity">
+            <option value="">-- Manter/Automático --</option>
+            <option *ngFor="let s of tiposSeveridade" [value]="s">
+              {{ s }}
+            </option>
+          </select>
+
+          <label><b>Descrição / Observação</b></label>
+          <textarea
+            rows="5"
+            [(ngModel)]="editForm.human_description"
+          ></textarea>
+        </div>
       </div>
     </div>
   </div>
 
   <!-- PAGINAÇÃO -->
   <div class="paginacao-container">
-    <button class="btn-paginacao" (click)="paginaAnterior()" [disabled]="paginaAtual === 1">
+    <button
+      class="btn-paginacao"
+      (click)="paginaAnterior()"
+      [disabled]="paginaAtual === 1"
+    >
       Anterior
     </button>
 
     <span class="pagina-info">{{ paginaAtual }} de {{ totalPaginas }}</span>
 
-    <button class="btn-paginacao" (click)="proximaPagina()" [disabled]="paginaAtual === totalPaginas">
+    <button
+      class="btn-paginacao"
+      (click)="proximaPagina()"
+      [disabled]="paginaAtual === totalPaginas"
+    >
       Próximo
     </button>
 
@@ -110,7 +172,10 @@
         <i class="bi bi-list"></i>
       </button>
 
-      <div class="dropdown-itens" [style.display]="mostrarDropdown ? 'flex' : 'none'">
+      <div
+        class="dropdown-itens"
+        [style.display]="mostrarDropdown ? 'flex' : 'none'"
+      >
         <label>Itens por página</label>
         <select [value]="itensPorPagina" (change)="mudarItensPorPagina($event)">
           <option [value]="10">10</option>
