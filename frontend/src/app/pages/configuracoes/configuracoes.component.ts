@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { TemaService } from '../../services/preloaderService/tema.service';
 import { GerenciarClipesComponent } from '../../components/gerenciar-clipes/gerenciar-clipes.component';
 import { CommonModule } from '@angular/common';
+import { OcorrenciaService } from '../../services/ocorrencia.service';
 
 interface Configuracoes {
   somAlerta: string;
@@ -29,7 +30,7 @@ export class ConfiguracoesComponent implements OnInit {
 
   mostrarModal = false; // Modal de Gerenciar Clipes
 
-  constructor(public temaService: TemaService) {}
+  constructor(public temaService: TemaService, private ocorrenciaService: OcorrenciaService) {}
 
   ngOnInit(): void {
     const saved = localStorage.getItem('configuracoes');
@@ -97,5 +98,35 @@ export class ConfiguracoesComponent implements OnInit {
 
   fecharGerenciarClipes(): void {
     this.mostrarModal = false;
+  }
+
+  /** Exportação */
+  exportar(): void {
+    const formato = (this.configuracoes.formatoRelatorio || 'padrao').toLowerCase();
+    if (formato === 'csv') {
+      this.ocorrenciaService.exportCsv().subscribe({
+        next: (blob) => {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'ocorrencias.csv';
+          a.click();
+          window.URL.revokeObjectURL(url);
+        },
+        error: (e) => alert('Falha ao exportar CSV'),
+      });
+    } else if (formato === 'pdf') {
+      // PDF simples: instruir o usuário a usar a exportação via Cortes ou imprimir
+      const w = window.open('', '_blank');
+      if (!w) return;
+      w.document.write('<html><head><title>Relatório de Ocorrências</title></head><body>');
+      w.document.write('<h3>Relatório de Ocorrências</h3><p>Use a página Cortes para um PDF detalhado ou selecione CSV aqui.</p>');
+      w.document.write('</body></html>');
+      w.document.close();
+      w.focus();
+      w.print();
+    } else {
+      alert('Selecione CSV ou PDF em Formato de Relatórios');
+    }
   }
 }

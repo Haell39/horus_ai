@@ -15,7 +15,6 @@ interface Falha {
   data: string;
   dataCompleta: string;
   horario: string;
-  programa: string;
   duracao: string;
   videoUrl: string;
   icone: string;
@@ -40,6 +39,15 @@ export class CortesComponent implements OnInit {
   filtroSeveridade = '';
   filtroData = '';
   falhaSelecionada: Falha | null = null;
+  // edição humana
+  edicaoDescricao: string = '';
+  edicaoTipo: string = '';
+  editMode = false;
+  edicaoCategoria: string = '';
+  edicaoDuracao: string = '';
+
+  // exportação
+  formatoExport: 'csv' | 'pdf' = 'csv';
 
   // Paginação
   itensPorPagina = 10;

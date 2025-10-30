@@ -185,6 +185,9 @@ async def analyze_media(
                         "model": model_name,
                         "original_filename": file.filename,
                         "confidence_raw": float(confidence),
+                        # Como este fluxo não adiciona margens, clip_duration_s ≈ duration_s
+                        "clip_duration_s": float(duration_s),
+                        "event_window": {"before_margin_s": 0.0, "after_margin_s": 0.0},
                     }
                 except Exception as mv_err:
                     print(f"AVISO: Falha mover arquivo temp para clips: {mv_err}")

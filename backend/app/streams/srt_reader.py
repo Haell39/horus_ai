@@ -247,11 +247,15 @@ class SRTIngestor:
                                 # Tenta gerar um pequeno clipe a partir dos frames próximos ao índice
                                 evidence_obj = {'frame': f}
                                 try:
-                                    # calcula janela de frames (ex: 2 frames antes e depois)
+                                    # calcula janela com margem em segundos (ex: 2s antes e 2s depois)
                                     idx_base = idx
-                                    start_idx = max(1, idx_base - 2)
-                                    end_idx = idx_base + 2
-                                    num_frames = end_idx - start_idx + 1
+                                    margin_seconds = 2.0
+                                    before_frames = max(0, int(self.fps * margin_seconds))
+                                    after_frames = max(0, int(self.fps * margin_seconds))
+                                    start_idx = max(1, idx_base - before_frames)
+                                    end_idx = idx_base + after_frames
+                                    num_frames = max(1, end_idx - start_idx + 1)
+                                    clip_duration_s = float(num_frames) / max(1.0, float(self.fps))
                                     # cria arquivo temporário de saída no tmpdir
                                     out_name = f"clip_{int(time.time())}_{idx_base}.mp4"
                                     out_tmp = os.path.join(self._tmpdir, out_name)
@@ -272,6 +276,11 @@ class SRTIngestor:
                                         dest_path = os.path.join(clips_dir, out_name)
                                         shutil.move(out_tmp, dest_path)
                                         evidence_obj['clip_path'] = f"/clips/{out_name}"
+                                        evidence_obj['clip_duration_s'] = clip_duration_s
+                                        evidence_obj['event_window'] = {
+                                            'before_margin_s': float(before_frames) / max(1.0, float(self.fps)),
+                                            'after_margin_s': float(after_frames) / max(1.0, float(self.fps)),
+                                        }
                                     except Exception as clip_err:
                                         # fallback: apenas registra o frame path
                                         print(f"AVISO: Falha gerar clipe de frames: {clip_err}")
@@ -279,13 +288,27 @@ class SRTIngestor:
                                     # Se algo falhar, deixamos apenas o frame
                                     evidence_obj = {'frame': f}
 
+                                # Deriva severidade pela duração (cartilha Globo)
+                                def _sev(d: float) -> str:
+                                    try:
+                                        d = float(d)
+                                        if d >= 60:
+                                            return 'Gravíssima (X)'
+                                        if d >= 10:
+                                            return 'Grave (A)'
+                                        if d >= 5:
+                                            return 'Média (B)'
+                                        return 'Leve (C)'
+                                    except Exception:
+                                        return 'Leve (C)'
+
                                 db_oc = models.Ocorrencia(
                                     start_ts=start_ts_calc,
                                     end_ts=end_ts_now,
                                     duration_s=1.0,
                                     category='Vídeo Técnico',
                                     type=pred_class,
-                                    severity='Auto',
+                                    severity=_sev(1.0),
                                     confidence=float(confidence),
                                     evidence=evidence_obj
                                 )
