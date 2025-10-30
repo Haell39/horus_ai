@@ -4,31 +4,35 @@
   <h2>Configurações</h2>
 
   <div class="cards-container">
-
     <!-- Tema -->
     <div class="card">
       <h3>Tema</h3>
       <div class="linha">
         <label>Modo Escuro</label>
         <label class="switch">
-          <input type="checkbox" [checked]="isModoEscuro" (change)="alternarTema()">
+          <input
+            type="checkbox"
+            [checked]="isModoEscuro"
+            (change)="alternarTema()"
+          />
           <span class="slider"></span>
         </label>
       </div>
       <p class="descricao">
-        Tema escuro {{ isModoEscuro ? 'ativado' : 'desativado' }}
+        Tema escuro {{ isModoEscuro ? "ativado" : "desativado" }}
       </p>
     </div>
 
     <!-- Armazenamento -->
     <div class="card card-armazenamento" (click)="abrirGerenciarClipes()">
-
       <h3>Armazenamento</h3>
       <div class="linha">
         <label>Gerenciar espaço em disco</label>
         <div class="espaco-usado">
           <span>Usado</span>
-          <strong>{{ storageUsed.toFixed(2) }} GB / {{ storageTotal }} GB</strong>
+          <strong
+            >{{ storageUsed.toFixed(2) }} GB / {{ storageTotal }} GB</strong
+          >
         </div>
         <div class="barra">
           <div class="progresso" [style.width.%]="storagePercent"></div>
@@ -66,14 +70,11 @@
         <button class="exportar-btn" (click)="exportar()">Exportar</button>
       </div>
     </div>
-
   </div>
 
   <button class="salvar-tudo" (click)="salvarTudo()">Salvar Alterações</button>
 </div>
 
 <!-- Modal Gerenciar Clipes -->
-<app-gerenciar-clipes
-  *ngIf="mostrarModal"
-  (fechar)="fecharGerenciarClipes()">
+<app-gerenciar-clipes *ngIf="mostrarModal" (fechar)="fecharGerenciarClipes()">
 </app-gerenciar-clipes>
