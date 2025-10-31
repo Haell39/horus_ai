@@ -118,7 +118,3 @@ Get-Process -Name ffmpeg -ErrorAction SilentlyContinue | Stop-Process -Force
 ## Contato / Contribuição
 
 Abra issues e PRs no repositório. Se for contribuir com mudanças em ffmpeg/startup behavior, teste localmente sem `--reload` e valide que o frontend consegue se conectar automaticamente depois do `start`.
-
----
-
-Obrigado — se quiser eu posso também gerar um runbook ops (limpeza e recuperação) ou o endpoint `/streams/cleanup` agora.
