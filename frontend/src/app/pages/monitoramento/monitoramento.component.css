@@ -194,6 +194,14 @@ h1 {
   transform: scale(1.02);
 }
 
+/* make stat cards that are clickable show pointer and slight lift */
+.card.clickable {
+  cursor: pointer;
+}
+.card.clickable:active {
+  transform: scale(0.995);
+}
+
 .card p:first-child {
   font-size: 1.5rem;
   opacity: 0.9;

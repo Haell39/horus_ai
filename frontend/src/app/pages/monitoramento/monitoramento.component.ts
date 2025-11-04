@@ -10,6 +10,7 @@ import {
   ChangeDetectionStrategy, // Importa ChangeDetectionStrategy
   ChangeDetectorRef, // Importa ChangeDetectorRef
 } from '@angular/core';
+import { Router } from '@angular/router';
 import {
   ChartComponent,
   NgApexchartsModule,
@@ -105,8 +106,18 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
     private ocorrenciaService: OcorrenciaService,
     private datePipe: DatePipe,
     private websocketService: WebsocketService, // <<< INJETADO
-    private cdr: ChangeDetectorRef // <<< INJETADO (Change Detector)
+    private cdr: ChangeDetectorRef, // <<< INJETADO (Change Detector)
+    private router: Router
   ) {}
+
+  // Navega para a página de Cortes. opcionalmente aceita filtros no futuro.
+  public goToCortes() {
+    try {
+      this.router.navigate(['/cortes']);
+    } catch (e) {
+      console.warn('Falha ao navegar para /cortes', e);
+    }
+  }
 
   ngOnInit() {
     console.log('MonitoramentoComponent: ngOnInit');
@@ -346,47 +357,51 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
   public startStreamClicked() {
     const live = environment.liveStreamUrl || '';
     // Solicita ao backend iniciar o stream configurado via streamId (seguro, sem expor SRT no frontend)
-    this.ocorrenciaService.startStream({ streamId: environment.streamId, fps: 1.0 }).subscribe({
-      next: () => {
-        console.log('Start requested');
-        // mark streaming and wait for playlist to be ready before attaching
-        this.isStreaming = true;
-        const videoEl = this.videoPlayer?.nativeElement;
-        if (videoEl) {
-          videoEl.src = `${environment.backendBase}/hls/stream.m3u8`;
-          // poll playlist until it contains segments then attach
-          this.waitForPlaylistThenAttach(
-            `${environment.backendBase}/hls/stream.m3u8`,
-            videoEl
-          );
-        }
-      },
-      error: (err) => {
-        // If backend reports "Stream already running" (400), treat as success
-        try {
-          const detail = err?.error?.detail || '';
-          if (
-            err.status === 400 &&
-            detail.toString().toLowerCase().includes('already running')
-          ) {
-            console.warn('Stream already running - attaching to existing HLS');
-            this.isStreaming = true;
-            const videoEl = this.videoPlayer?.nativeElement;
-            if (videoEl) {
-              videoEl.src = `${environment.backendBase}/hls/stream.m3u8`;
-              this.waitForPlaylistThenAttach(
-                `${environment.backendBase}/hls/stream.m3u8`,
-                videoEl
-              );
-            }
-            return;
+    this.ocorrenciaService
+      .startStream({ streamId: environment.streamId, fps: 1.0 })
+      .subscribe({
+        next: () => {
+          console.log('Start requested');
+          // mark streaming and wait for playlist to be ready before attaching
+          this.isStreaming = true;
+          const videoEl = this.videoPlayer?.nativeElement;
+          if (videoEl) {
+            videoEl.src = `${environment.backendBase}/hls/stream.m3u8`;
+            // poll playlist until it contains segments then attach
+            this.waitForPlaylistThenAttach(
+              `${environment.backendBase}/hls/stream.m3u8`,
+              videoEl
+            );
           }
-        } catch (e) {
-          // fallthrough to generic error
-        }
-        console.error('Erro ao iniciar stream:', err);
-      },
-    });
+        },
+        error: (err) => {
+          // If backend reports "Stream already running" (400), treat as success
+          try {
+            const detail = err?.error?.detail || '';
+            if (
+              err.status === 400 &&
+              detail.toString().toLowerCase().includes('already running')
+            ) {
+              console.warn(
+                'Stream already running - attaching to existing HLS'
+              );
+              this.isStreaming = true;
+              const videoEl = this.videoPlayer?.nativeElement;
+              if (videoEl) {
+                videoEl.src = `${environment.backendBase}/hls/stream.m3u8`;
+                this.waitForPlaylistThenAttach(
+                  `${environment.backendBase}/hls/stream.m3u8`,
+                  videoEl
+                );
+              }
+              return;
+            }
+          } catch (e) {
+            // fallthrough to generic error
+          }
+          console.error('Erro ao iniciar stream:', err);
+        },
+      });
   }
 
   // Poll the HLS playlist until it contains EXTINF segments, then attach HLS to the video element
