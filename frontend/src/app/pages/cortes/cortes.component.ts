@@ -1,4 +1,10 @@
-import { Component, HostListener, OnInit } from '@angular/core';
+import {
+  Component,
+  HostListener,
+  OnInit,
+  ViewChild,
+  ElementRef,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SidebarComponent } from '../../shared/sidebar/sidebar.component';
@@ -37,6 +43,7 @@ export class CortesComponent implements OnInit {
   filtroData = '';
   filtroSeveridade = '';
   falhaSelecionada: Falha | null = null;
+  @ViewChild('detailVideo') detailVideo?: ElementRef<HTMLVideoElement>;
 
   itensPorPagina = 10;
   paginaAtual = 1;
@@ -162,8 +169,24 @@ export class CortesComponent implements OnInit {
         severity: this.falhaSelecionada.severidade || null,
       };
       this.editMode = false;
+      // garantimos que o elemento <video> recarregue a nova fonte quando a seleção mudar
+      // usamos microtask para esperar o template atualizar
+      Promise.resolve().then(() => this.reloadDetailVideo());
     } else {
       this.editMode = false;
+    }
+  }
+
+  private reloadDetailVideo() {
+    try {
+      if (!this.detailVideo) return;
+      const v = this.detailVideo.nativeElement;
+      // pause current playback, then reload sources so browser picks up the new <source src=>
+      v.pause();
+      // calling load() makes the browser re-evaluate <source> children and switch to the new src
+      v.load();
+    } catch (e) {
+      // no-op on error
     }
   }
 

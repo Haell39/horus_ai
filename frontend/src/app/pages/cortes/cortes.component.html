@@ -90,7 +90,7 @@
 
     <!-- Painel de detalhes -->
     <div class="detalhes" *ngIf="falhaSelecionada">
-      <video controls>
+      <video #detailVideo controls>
         <source [src]="falhaSelecionada.videoUrl" type="video/mp4" />
         Seu navegador não suporta vídeo.
       </video>
