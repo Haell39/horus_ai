@@ -19,6 +19,7 @@ interface Falha {
   tipo: string;
   severidade: string;
   categoria?: string;
+  seen?: boolean;
   dataISO: string;
 }
 
@@ -145,6 +146,8 @@ export class CortesComponent implements OnInit {
   selecionarFalha(falha: Falha) {
     this.falhaSelecionada = this.falhaSelecionada === falha ? null : falha;
     if (this.falhaSelecionada) {
+      // marca como visto quando o operador abre o detalhe
+      this.falhaSelecionada.seen = true;
       // popula o formulário de edição com os valores atuais
       this.editForm = {
         category:

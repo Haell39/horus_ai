@@ -79,7 +79,9 @@
           </div>
 
           <div class="status-card">
-            <span class="tag-status">Pendente</span>
+            <span class="tag-status" [ngClass]="{ visto: falha.seen }">
+              {{ falha.seen ? "Visto" : "Pendente" }}
+            </span>
             <span class="duracao">{{ falha.duracao }}</span>
           </div>
         </div>
