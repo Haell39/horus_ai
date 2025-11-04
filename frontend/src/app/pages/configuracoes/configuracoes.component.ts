@@ -1,4 +1,6 @@
 import { Component, OnInit } from '@angular/core';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { SidebarComponent } from '../../shared/sidebar/sidebar.component';
 import { FormsModule } from '@angular/forms';
 import { TemaService } from '../../services/preloaderService/tema.service';
@@ -116,15 +118,62 @@ export class ConfiguracoesComponent implements OnInit {
         error: (e) => alert('Falha ao exportar CSV'),
       });
     } else if (formato === 'pdf') {
-      // PDF simples: instruir o usuário a usar a exportação via Cortes ou imprimir
-      const w = window.open('', '_blank');
-      if (!w) return;
-      w.document.write('<html><head><title>Relatório de Ocorrências</title></head><body>');
-      w.document.write('<h3>Relatório de Ocorrências</h3><p>Use a página Cortes para um PDF detalhado ou selecione CSV aqui.</p>');
-      w.document.write('</body></html>');
-      w.document.close();
-      w.focus();
-      w.print();
+      // Client-side PDF using jsPDF + autotable
+      this.ocorrenciaService.getOcorrencias().subscribe({
+        next: (data) => {
+          try {
+            const doc = new jsPDF('p', 'mm', 'a4');
+            const title = 'Relatório de Ocorrências';
+            doc.setFontSize(14);
+            doc.text(title, 14, 16);
+
+            const columns = [
+              'ID',
+              'Tipo',
+              'Categoria',
+              'Severidade',
+              'Início',
+              'Duração',
+              'Descrição',
+            ];
+
+            const rows = (data || []).map((oc: any) => {
+              const start = oc.start_ts ? new Date(oc.start_ts).toLocaleString() : '';
+              const duration = oc.duration_s != null ? `${oc.duration_s}s` : '';
+              const desc = oc.evidence && (oc.evidence.human_description || oc.evidence.description || '') || '';
+              return [oc.id, oc.type || '', oc.category || '', oc.severity || '', start, duration, desc];
+            });
+
+            autoTable(doc as any, {
+              startY: 22,
+              head: [columns],
+              body: rows,
+              styles: { fontSize: 9, cellPadding: 3 },
+              headStyles: { fillColor: [30, 30, 30], textColor: 255 },
+              alternateRowStyles: { fillColor: [245, 245, 245] },
+              margin: { left: 14, right: 14 },
+              didDrawPage: (dataArg: any) => {
+                const pageStr = 'Página ' + (doc as any).internal.getNumberOfPages();
+                doc.setFontSize(9);
+                doc.text(
+                  pageStr,
+                  (doc as any).internal.pageSize.getWidth() - 30,
+                  (doc as any).internal.pageSize.getHeight() - 10
+                );
+              },
+            });
+
+            doc.save('ocorrencias.pdf');
+          } catch (e) {
+            console.error('Erro gerando PDF', e);
+            alert('Falha ao gerar PDF. Veja console para detalhes.');
+          }
+        },
+        error: (e) => {
+          console.error('Falha ao buscar ocorrências para PDF', e);
+          alert('Falha ao gerar PDF');
+        },
+      });
     } else {
       alert('Selecione CSV ou PDF em Formato de Relatórios');
     }
