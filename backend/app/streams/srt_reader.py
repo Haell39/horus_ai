@@ -408,3 +408,127 @@ class SRTIngestor:
 
 # Singleton instance
 srt_ingestor = SRTIngestor()
+
+
+class CaptureIngestor(SRTIngestor):
+    """Ingestor that reads from a local capture device (dshow on Windows, v4l2 on Linux).
+    It reuses most of SRTIngestor behaviour (writing HLS, extracting frames) but
+    constructs ffmpeg commands for device input.
+    """
+    def start(self, device: str):
+        if self._running:
+            return False
+        # create tmpdir to hold frames
+        self._tmpdir = tempfile.mkdtemp(prefix='capture_frames_')
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        hls_dir = os.path.join(repo_root, 'static', 'hls')
+        os.makedirs(hls_dir, exist_ok=True)
+        out_hls = os.path.join(hls_dir, 'stream.m3u8')
+
+        # Determine platform and build input spec
+        import platform
+        system = platform.system().lower()
+        # device may be provided as a raw ffmpeg -i argument (good), or a simple path (/dev/video0)
+        # For Windows (dshow) the caller should pass a dshow spec like: 'video="Device Name":audio="Microphone"'
+        # We'll assemble the -f and -i parts accordingly
+        if 'windows' in system:
+            input_args = ['-f', 'dshow', '-i', device]
+        elif 'linux' in system:
+            # assume v4l2 for video-only devices; device could be '/dev/video0' or similar
+            input_args = ['-f', 'v4l2', '-i', device]
+        else:
+            # fallback: treat device as generic -i value
+            input_args = ['-i', device]
+
+        # HLS ffmpeg command using the device input
+        cmd_hls = ['ffmpeg', '-hide_banner'] + input_args + [
+            '-fflags', '+genpts+igndts', '-avoid_negative_ts', 'make_zero',
+            '-use_wallclock_as_timestamps', '1',
+            '-c:v', 'copy', '-c:a', 'aac', '-ar', '44100', '-ac', '2',
+            '-f', 'hls', '-hls_time', '2', '-hls_list_size', '5', '-hls_flags', 'delete_segments',
+            out_hls
+        ]
+
+        log_path = os.path.join(hls_dir, 'hls_ffmpeg_capture.log')
+        try:
+            self._hls_log_file = open(log_path, 'ab')
+            self._proc_hls = subprocess.Popen(cmd_hls, stdout=self._hls_log_file, stderr=self._hls_log_file)
+        except Exception as e:
+            print(f"ERRO: falha iniciar ffmpeg HLS (capture): {e}")
+            try:
+                if self._tmpdir and os.path.exists(self._tmpdir):
+                    shutil.rmtree(self._tmpdir)
+            except Exception:
+                pass
+            try:
+                if self._hls_log_file:
+                    self._hls_log_file.close()
+                self._hls_log_file = None
+            except Exception:
+                pass
+            return False
+
+        time.sleep(2.0)
+        if self._proc_hls.poll() is not None:
+            print(f"ERRO: ffmpeg HLS (capture) process terminated immediately. See {log_path} for details.")
+            try:
+                if self._hls_log_file:
+                    self._hls_log_file.flush()
+            except Exception:
+                pass
+            try:
+                if self._tmpdir and os.path.exists(self._tmpdir):
+                    shutil.rmtree(self._tmpdir)
+            except Exception:
+                pass
+            try:
+                if self._hls_log_file:
+                    self._hls_log_file.close()
+            except Exception:
+                pass
+            self._proc_hls = None
+            self._hls_log_file = None
+            return False
+
+        # Frame extractor command: use same input_args and capture frames at fps
+        out_pattern = os.path.join(self._tmpdir, 'frame_%06d.jpg')
+        cmd = ['ffmpeg', '-hide_banner', '-loglevel', 'error'] + input_args + ['-vf', f'fps={self.fps}', '-q:v', '2', out_pattern]
+
+        try:
+            self._proc = subprocess.Popen(cmd)
+        except Exception as e:
+            print(f"ERRO: falha iniciar ffmpeg frames extractor (capture): {e}")
+            try:
+                if self._proc_hls and self._proc_hls.poll() is None:
+                    try:
+                        self._proc_hls.terminate()
+                        self._proc_hls.wait(timeout=2)
+                    except Exception:
+                        try:
+                            self._proc_hls.kill()
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+            try:
+                if self._tmpdir and os.path.exists(self._tmpdir):
+                    shutil.rmtree(self._tmpdir)
+            except Exception:
+                pass
+            try:
+                if self._hls_log_file:
+                    self._hls_log_file.close()
+            except Exception:
+                pass
+            self._proc_hls = None
+            self._hls_log_file = None
+            return False
+
+        self._running = True
+        self._thread = threading.Thread(target=self._watch_loop, daemon=True)
+        self._thread.start()
+        return True
+
+
+# Singleton instance for capture
+capture_ingestor = CaptureIngestor()

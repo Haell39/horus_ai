@@ -16,23 +16,30 @@ interface Configuracoes {
 @Component({
   selector: 'app-configuracoes',
   standalone: true,
-  imports: [CommonModule, FormsModule, SidebarComponent, GerenciarClipesComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    SidebarComponent,
+    GerenciarClipesComponent,
+  ],
   templateUrl: './configuracoes.component.html',
-  styleUrls: ['./configuracoes.component.css']
+  styleUrls: ['./configuracoes.component.css'],
 })
 export class ConfiguracoesComponent implements OnInit {
-
   configuracoes: Configuracoes = {
     somAlerta: 'beep',
-    formatoRelatorio: 'padrao'
+    formatoRelatorio: 'padrao',
   };
 
   storageUsed = 4.2; // GB usados
-  storageTotal = 10;  // GB totais
+  storageTotal = 10; // GB totais
 
   mostrarModal = false; // Modal de Gerenciar Clipes
 
-  constructor(public temaService: TemaService, private ocorrenciaService: OcorrenciaService) {}
+  constructor(
+    public temaService: TemaService,
+    private ocorrenciaService: OcorrenciaService
+  ) {}
 
   ngOnInit(): void {
     const saved = localStorage.getItem('configuracoes');
@@ -65,7 +72,7 @@ export class ConfiguracoesComponent implements OnInit {
     const sons: { [key: string]: string[] } = {
       beep: ['Alerta-Curto.mp3'],
       digital: ['Alerta-Digital.mp3'],
-      alerta: ['Alerta-Sutil.mp3']
+      alerta: ['Alerta-Sutil.mp3'],
     };
 
     const tipo = this.configuracoes.somAlerta;
@@ -78,7 +85,7 @@ export class ConfiguracoesComponent implements OnInit {
 
       audio.addEventListener('canplaythrough', () => {
         if (!reproduzido) {
-          audio.play().catch(err => console.error('Erro ao tocar som:', err));
+          audio.play().catch((err) => console.error('Erro ao tocar som:', err));
           reproduzido = true;
         }
       });
@@ -104,7 +111,9 @@ export class ConfiguracoesComponent implements OnInit {
 
   /** Exportação */
   exportar(): void {
-    const formato = (this.configuracoes.formatoRelatorio || 'padrao').toLowerCase();
+    const formato = (
+      this.configuracoes.formatoRelatorio || 'padrao'
+    ).toLowerCase();
     if (formato === 'csv') {
       this.ocorrenciaService.exportCsv().subscribe({
         next: (blob) => {
@@ -138,10 +147,25 @@ export class ConfiguracoesComponent implements OnInit {
             ];
 
             const rows = (data || []).map((oc: any) => {
-              const start = oc.start_ts ? new Date(oc.start_ts).toLocaleString() : '';
+              const start = oc.start_ts
+                ? new Date(oc.start_ts).toLocaleString()
+                : '';
               const duration = oc.duration_s != null ? `${oc.duration_s}s` : '';
-              const desc = oc.evidence && (oc.evidence.human_description || oc.evidence.description || '') || '';
-              return [oc.id, oc.type || '', oc.category || '', oc.severity || '', start, duration, desc];
+              const desc =
+                (oc.evidence &&
+                  (oc.evidence.human_description ||
+                    oc.evidence.description ||
+                    '')) ||
+                '';
+              return [
+                oc.id,
+                oc.type || '',
+                oc.category || '',
+                oc.severity || '',
+                start,
+                duration,
+                desc,
+              ];
             });
 
             autoTable(doc as any, {
@@ -153,7 +177,8 @@ export class ConfiguracoesComponent implements OnInit {
               alternateRowStyles: { fillColor: [245, 245, 245] },
               margin: { left: 14, right: 14 },
               didDrawPage: (dataArg: any) => {
-                const pageStr = 'Página ' + (doc as any).internal.getNumberOfPages();
+                const pageStr =
+                  'Página ' + (doc as any).internal.getNumberOfPages();
                 doc.setFontSize(9);
                 doc.text(
                   pageStr,

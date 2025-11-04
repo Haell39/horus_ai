@@ -69,6 +69,20 @@ h1 {
   margin: 8px 0 12px 0;
 }
 
+.input-modo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.input-modo select,
+.input-modo input {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: none;
+  background: var(--card-bg);
+  color: var(--texto-cor);
+}
+
 .live-badge {
   font-weight: 700;
   color: #fff;

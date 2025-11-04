@@ -16,6 +16,19 @@
       </div>
 
       <div class="video-controls">
+        <div class="input-modo">
+          <label>Fonte:</label>
+          <select [(ngModel)]="streamMode">
+            <option value="srt">Link SRT</option>
+            <option value="capture">Placa de Captura</option>
+          </select>
+          <input
+            *ngIf="streamMode === 'capture'"
+            type="text"
+            placeholder="device (ex: /dev/video0 or video=... )"
+            [(ngModel)]="captureDevice"
+          />
+        </div>
         <span class="live-badge" [class.on]="isLive">● LIVE</span>
         <button
           class="btn-start"

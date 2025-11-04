@@ -12,6 +12,11 @@ class StreamStartRequest(BaseModel):
     url: Optional[str] = None
     streamId: Optional[str] = None
     fps: Optional[float] = 1.0
+    # mode: 'srt' (default) or 'capture'
+    mode: Optional[str] = 'srt'
+    # capture device input spec (optional). On Windows (dshow) this can be like
+    # 'video="Device Name":audio="Microphone"' or on Linux '/dev/video0'
+    device: Optional[str] = None
 
 
 def _resolve_srt_url(req: StreamStartRequest) -> str:
@@ -38,14 +43,28 @@ def start_stream(req: StreamStartRequest):
 
     # start synchronously and return success only if start() succeeded.
     try:
-        srt_ingestor.fps = req.fps or 1.0
-        resolved_url = _resolve_srt_url(req)
-        if not resolved_url:
-            raise HTTPException(status_code=400, detail='No SRT URL available (provide url or valid streamId)')
-        ok = srt_ingestor.start(resolved_url)
-        if not ok:
-            raise HTTPException(status_code=500, detail='Failed to start SRT ingest (ffmpeg error)')
-        return {'status': 'started'}
+        # set fps on the appropriate ingestor
+        fps = req.fps or 1.0
+        if req.mode and req.mode.lower() == 'capture':
+            # start capture-based ingest; require a device spec or env fallback
+            from app.streams.srt_reader import capture_ingestor
+            capture_ingestor.fps = fps
+            device = req.device or os.getenv('CAPTURE_INPUT', '')
+            if not device:
+                raise HTTPException(status_code=400, detail='No capture device provided (pass device or set CAPTURE_INPUT env)')
+            ok = capture_ingestor.start(device)
+            if not ok:
+                raise HTTPException(status_code=500, detail='Failed to start capture ingest (ffmpeg error)')
+            return {'status': 'started', 'mode': 'capture'}
+        else:
+            srt_ingestor.fps = fps
+            resolved_url = _resolve_srt_url(req)
+            if not resolved_url:
+                raise HTTPException(status_code=400, detail='No SRT URL available (provide url or valid streamId)')
+            ok = srt_ingestor.start(resolved_url)
+            if not ok:
+                raise HTTPException(status_code=500, detail='Failed to start SRT ingest (ffmpeg error)')
+            return {'status': 'started', 'mode': 'srt'}
     except HTTPException:
         raise
     except Exception as e:
