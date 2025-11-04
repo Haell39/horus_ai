@@ -8,6 +8,7 @@ import { environment } from '../../../environments/environment';
 
 interface Falha {
   titulo: string;
+  id: number;
   descricao: string;
   data: string;
   dataCompleta: string;
@@ -146,8 +147,9 @@ export class CortesComponent implements OnInit {
   selecionarFalha(falha: Falha) {
     this.falhaSelecionada = this.falhaSelecionada === falha ? null : falha;
     if (this.falhaSelecionada) {
-      // marca como visto quando o operador abre o detalhe
+      // marca como visto quando o operador abre o detalhe (persistido em localStorage)
       this.falhaSelecionada.seen = true;
+      this.markAsSeen(this.falhaSelecionada.id);
       // popula o formulário de edição com os valores atuais
       this.editForm = {
         category:
@@ -304,6 +306,7 @@ export class CortesComponent implements OnInit {
     const ev = oc.evidence || {};
     const descricao = ev['human_description'] || '';
     return {
+      id: oc.id,
       titulo,
       descricao,
       data: `Dia ${data}, ${horario}`,
@@ -319,8 +322,44 @@ export class CortesComponent implements OnInit {
       tipo: oc.type || oc.category || '',
       categoria: inferredCategory || oc.category || '',
       severidade: oc.severity || '',
+      // marca como visto se estiver salvo no localStorage
+      seen: this.isSeen(oc.id),
       dataISO: start.toISOString().slice(0, 10),
     };
+  }
+
+  private seenStorageKey = 'horus_seen_ocorrencias';
+
+  private loadSeenSet(): Set<number> {
+    try {
+      const raw = localStorage.getItem(this.seenStorageKey) || '[]';
+      const arr = JSON.parse(raw) as number[];
+      return new Set(arr || []);
+    } catch (e) {
+      return new Set();
+    }
+  }
+
+  private saveSeenSet(s: Set<number>) {
+    try {
+      const arr = Array.from(s.values());
+      localStorage.setItem(this.seenStorageKey, JSON.stringify(arr));
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  private isSeen(id: number | undefined): boolean {
+    if (!id && id !== 0) return false;
+    const s = this.loadSeenSet();
+    return s.has(Number(id));
+  }
+
+  private markAsSeen(id: number | undefined) {
+    if (!id && id !== 0) return;
+    const s = this.loadSeenSet();
+    s.add(Number(id));
+    this.saveSeenSet(s);
   }
 
   private humanizeOcorrencia(oc: Ocorrencia): string {
@@ -368,9 +407,8 @@ export class CortesComponent implements OnInit {
 
   saveEdit() {
     if (!this.falhaSelecionada) return;
-    const idPart = (this.falhaSelecionada.titulo || '').split('#').pop();
-    const id = idPart ? Number(idPart) : null;
-    if (!id) return;
+    const id = this.falhaSelecionada.id;
+    if (!id && id !== 0) return;
     const payload: any = {};
     if (this.editForm.type !== undefined) payload.type = this.editForm.type;
     if (this.editForm.category !== undefined)
@@ -393,10 +431,9 @@ export class CortesComponent implements OnInit {
       next: (updated) => {
         // atualiza a entrada local e sai do modo edição
         this.falhas = this.falhas.map((f) =>
-          f.titulo.endsWith(`#${id}`) ? this.mapOcorrenciaToFalha(updated) : f
+          f.id === id ? this.mapOcorrenciaToFalha(updated) : f
         );
-        this.falhaSelecionada =
-          this.falhas.find((f) => f.titulo.endsWith(`#${id}`)) || null;
+        this.falhaSelecionada = this.falhas.find((f) => f.id === id) || null;
         this.editMode = false;
       },
       error: (err) => {

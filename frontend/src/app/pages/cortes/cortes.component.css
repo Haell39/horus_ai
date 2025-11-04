@@ -177,8 +177,18 @@
   font-size: 0.75rem;
   padding: 2px 6px;
   border-radius: 4px;
-  background-color: #c49f24; /* amarelo para Pendente */
+  background-color: #95a5a6; /* cinza para Pendente */
   color: #fff;
+}
+
+/* Quando o item já foi visto pelo operador */
+.tag-status.visto {
+  background-color: #27ae60; /* verde */
+  color: #fff;
+}
+
+.tag-status {
+  transition: background-color 0.15s ease;
 }
 
 .duracao {
