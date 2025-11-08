@@ -145,13 +145,19 @@ async def upload_analysis(
             # monta ocorrência usando clip_to_save
             clip_basename = os.path.basename(clip_to_save)
             clip_dur_saved = _get_duration_seconds(clip_to_save)
+            # calcula severidade e duração (mesma lógica usada pelo background worker)
+            try:
+                dur_calc, severity = calcular_severidade_e_duracao(clip_to_save)
+            except Exception:
+                dur_calc, severity = (clip_dur_saved or duration_s or 0.0), 'Leve (C)'
+
             oc = schemas.OcorrenciaCreate(
-                start_ts=now - timedelta(seconds=clip_dur_saved or duration_s or 0),
+                start_ts=now - timedelta(seconds=dur_calc or duration_s or 0),
                 end_ts=now,
-                duration_s=clip_dur_saved or duration_s,
+                duration_s=dur_calc or clip_dur_saved or duration_s,
                 category='video-file',
                 type=pred_class,
-                severity=None,
+                severity=severity,
                 confidence=float(confidence or 0.0),
                 evidence={'clip_path': f'/clips/{clip_basename}', 'clip_duration_s': float(clip_dur_saved or duration_s), 'event_window': {'before_margin_s': (before_s if event_time is not None else 0.0), 'after_margin_s': (after_s if event_time is not None else 0.0)}}
             )
