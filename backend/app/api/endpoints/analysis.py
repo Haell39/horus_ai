@@ -16,8 +16,11 @@ router = APIRouter()
 print("INFO: analysis router module imported and ready")
 
 # Configuráveis (podem ser movidos para core.config mais tarde)
+# NOTE: main.py monta /clips a partir de backend/static/clips (um nível acima de 'app').
+# Use a mesma pasta que o main para garantir que arquivos salvos sejam servidos.
 UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'uploads'))
-CLIPS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'clips'))
+# Ajuste: salvar em backend/static/clips (três níveis acima de 'app/api/endpoints') para corresponder ao mount em main.py
+CLIPS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'static', 'clips'))
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(CLIPS_DIR, exist_ok=True)
 
@@ -80,10 +83,12 @@ async def upload_analysis(
     clip_path = os.path.join(CLIPS_DIR, clip_name)
     try:
         shutil.copy2(tmp_path, clip_path)
+        print(f"DEBUG: upload_analysis -> clip copiado para: {clip_path}")
     except Exception:
         # fallback: try move
         try:
             shutil.move(tmp_path, clip_path)
+            print(f"DEBUG: upload_analysis -> clip movido para: {clip_path}")
         except Exception as e:
             raise HTTPException(status_code=500, detail=f'Erro ao preparar clip: {e}')
 
@@ -113,28 +118,57 @@ async def upload_analysis(
                 'message': f'Arquivo analisado — sem falhas detectadas (classe={pred_class}, conf={confidence:.3f}).'
             }
 
-        # Caso haja falha com confiança suficiente, grava ocorrência completa (MVP grava o clip inteiro)
+        # Caso haja falha com confiança suficiente, grava ocorrência.
+        # Preferimos recortar um trecho curto ao redor do evento (2s antes/2s depois)
+        # se tivermos timestamp, para não salvar o arquivo inteiro por padrão.
         now = datetime.utcnow()
-        oc = schemas.OcorrenciaCreate(
-            start_ts=now,
-            end_ts=now + timedelta(seconds=duration_s or 0),
-            duration_s=duration_s,
-            category='video-file',
-            type=pred_class,
-            severity=None,
-            confidence=float(confidence or 0.0),
-            evidence={'clip_path': f'/clips/{clip_name}'}
-        )
-
+        clip_to_save = clip_path
+        before_s = 2.0
+        after_s = 2.0
         try:
-            db_oc = models.Ocorrencia(**oc.dict())
-            db.add(db_oc)
-            db.commit()
-            db.refresh(db_oc)
-            return db_oc
-        except Exception as e:
-            db.rollback()
-            raise HTTPException(status_code=500, detail=f'Erro ao salvar ocorrência: {e}')
+            if event_time is not None:
+                start = max(0.0, event_time - before_s)
+                duration_cut = before_s + after_s
+                dest_name = f"clip_{uid}_cut{ext}"
+                dest_path = os.path.join(CLIPS_DIR, dest_name)
+                try:
+                    subprocess.run([
+                        'ffmpeg', '-y', '-ss', f"{start}", '-t', f"{duration_cut}",
+                        '-i', clip_path, '-c', 'copy', dest_path
+                    ], check=True, capture_output=True, timeout=60)
+                    clip_to_save = dest_path
+                    print(f"DEBUG: upload_analysis -> recorte inline salvo em: {clip_to_save}")
+                except Exception as e:
+                    print(f"DEBUG: upload_analysis -> falha ao recortar inline via ffmpeg: {e} — usando clip inteiro")
+                    clip_to_save = clip_path
+
+            # monta ocorrência usando clip_to_save
+            clip_basename = os.path.basename(clip_to_save)
+            clip_dur_saved = _get_duration_seconds(clip_to_save)
+            oc = schemas.OcorrenciaCreate(
+                start_ts=now - timedelta(seconds=clip_dur_saved or duration_s or 0),
+                end_ts=now,
+                duration_s=clip_dur_saved or duration_s,
+                category='video-file',
+                type=pred_class,
+                severity=None,
+                confidence=float(confidence or 0.0),
+                evidence={'clip_path': f'/clips/{clip_basename}', 'clip_duration_s': float(clip_dur_saved or duration_s), 'event_window': {'before_margin_s': (before_s if event_time is not None else 0.0), 'after_margin_s': (after_s if event_time is not None else 0.0)}}
+            )
+
+            try:
+                db_oc = models.Ocorrencia(**oc.dict())
+                db.add(db_oc)
+                db.commit()
+                db.refresh(db_oc)
+                print(f"DEBUG: upload_analysis -> ocorrência criada id={db_oc.id} com evidência {oc.evidence}")
+                return db_oc
+            except Exception as e:
+                db.rollback()
+                raise HTTPException(status_code=500, detail=f'Erro ao salvar ocorrência: {e}')
+        except Exception:
+            # Re-raise to let outer handler return 500
+            raise
 
     else:
         # Agenda processamento em background (usando BackgroundTasks do FastAPI).
@@ -176,6 +210,7 @@ async def upload_analysis(
                             '-i', clip_path_local, '-c', 'copy', dest_path
                         ], check=True, capture_output=True, timeout=60)
                         clip_to_save = dest_path
+                        print(f"DEBUG: Background worker -> recorte salvo em: {clip_to_save}")
                     except Exception as e:
                         print(f"Background worker: falha ao recortar com ffmpeg: {e}. Usando clip inteiro.")
                         clip_to_save = clip_path_local
@@ -199,6 +234,8 @@ async def upload_analysis(
                 # calcula duração do clip salvo
                 clip_dur = _get_duration_seconds(clip_to_save)
                 duration_sec = clip_dur or duration_s
+
+                print(f"DEBUG: Background worker -> clip final a salvar: {clip_to_save} (dur={duration_sec}s)")
 
                 # calcula severidade com a função existente
                 dur_calc, severity = calcular_severidade_e_duracao(clip_to_save)
@@ -447,7 +484,8 @@ async def analyze_media(
                 start_ts_calc = end_ts_now - timedelta(seconds=duration_s)
                 # Move o arquivo temporário para a pasta pública de clipes
                 try:
-                    clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'clips'))
+                    # Ensure we use the same clips folder mounted by main.py (/clips)
+                    clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'static', 'clips'))
                     os.makedirs(clips_dir, exist_ok=True)
                     # Se tiver event_time, recorta trecho curto ao redor do evento
                     before_s = 2.0

@@ -32,6 +32,9 @@ body.light-theme {
   background-color: var(--bg-principal);
   box-sizing: border-box;
   transition: margin-left 0.3s ease, color 0.3s ease, background 0.3s ease;
+  /* Contenha o overscroll para evitar que componentes internos (ex: gráficos) tentem
+     chamar preventDefault em listeners passivos ao rolar além do final da página. */
+  overscroll-behavior: contain;
 }
 
 h1 {
@@ -258,6 +261,7 @@ h1 {
   border-radius: 12px;
   box-shadow: 0 0 15px rgba(0, 0, 0, 0.45);
   transition: background 0.3s ease, color 0.3s ease;
+  touch-action: pan-y;
 }
 
 .chart-card h2 {
@@ -272,6 +276,12 @@ apx-chart {
   height: 300px;
   max-width: 100%;
   display: block;
+
+  /* Evita mensagens de "Unable to preventDefault inside passive event listener"
+     Ao impedir o chaining do overscroll para o documento e definindo touch-action
+     reduzimos chamadas de preventDefault em listeners passivos vindos do ApexCharts. */
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 
 /* ALERTAS */
