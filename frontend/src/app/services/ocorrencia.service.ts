@@ -78,4 +78,9 @@ export class OcorrenciaService {
       responseType: 'blob' as 'json',
     }) as unknown as Observable<Blob>;
   }
+
+  /** Get disk usage for a given path (GB) */
+  getDiskUsage(path: string) {
+    return this.http.get(`${this.apiUrl}/admin/disk-usage`, { params: { path } });
+  }
 }

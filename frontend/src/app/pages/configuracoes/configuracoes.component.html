@@ -24,23 +24,41 @@
     </div>
 
     <!-- Armazenamento -->
-    <div class="card card-armazenamento" (click)="abrirGerenciarClipes()">
+    <div class="card card-armazenamento">
       <h3>Armazenamento</h3>
       <div class="linha">
-        <label>Gerenciar espaço em disco</label>
-        <div class="espaco-usado">
-          <span>Usado</span>
-          <strong
-            >{{ storageUsed.toFixed(2) }} GB / {{ storageTotal }} GB</strong
-          >
-        </div>
-        <div class="barra">
-          <div class="progresso" [style.width.%]="storagePercent"></div>
+        <label>Destino</label>
+        <div style="display:flex; gap:12px; align-items:center;">
+          <label><input type="radio" name="storage" [(ngModel)]="configuracoes.storageMode" value="local" /> Local</label>
+          <label><input type="radio" name="storage" [(ngModel)]="configuracoes.storageMode" value="onedrive" /> OneDrive</label>
         </div>
       </div>
-      <p class="descricao">
-        {{ (storageTotal - storageUsed).toFixed(2) }} GB disponíveis
-      </p>
+      <div *ngIf="configuracoes.storageMode === 'local'" style="margin-top:8px">
+        <div class="linha">
+          <label>Caminho Local</label>
+          <input type="text" [(ngModel)]="configuracoes.localPath" placeholder="Ex: C:\\ ou /mnt/data" />
+          <button class="btn-analise" (click)="checkDiskUsage()">Verificar Disco</button>
+        </div>
+        <p class="descricao">
+          Uso do disco para <strong>{{ detectedPath || configuracoes.localPath || '(não verificado)' }}</strong>
+        </p>
+        <div style="display:flex; gap:12px; align-items:center;">
+          <div>Usado: <strong>{{ storageUsed | number:'1.1-1' }} GB</strong></div>
+          <div>Total: <strong>{{ storageTotal | number:'1.1-1' }} GB</strong></div>
+          <div>Percent: <strong>{{ (storageTotal ? ((storageUsed / storageTotal) * 100) : 0) | number:'1.0-0' }}%</strong></div>
+        </div>
+      </div>
+      <div *ngIf="configuracoes.storageMode === 'onedrive'" style="margin-top:8px">
+        <div class="linha">
+          <label>OneDrive - Pasta / Link</label>
+          <input type="text" [(ngModel)]="configuracoes.oneDriveLink" placeholder="https://onedrive.live.com/.." />
+          <button class="btn-analise" (click)="copiarOneDriveLink()">Abrir OneDrive</button>
+        </div>
+        <p class="descricao">Os clipes continuarão sendo salvos localmente até que a integração com OneDrive seja configurada no backend.</p>
+      </div>
+      <div style="margin-top: 8px; display: flex; gap: 8px">
+        <button class="btn-analise" (click)="abrirGerenciarClipes()">Gerenciar Clipes</button>
+      </div>
     </div>
 
     <!-- Notificações -->
@@ -63,7 +81,7 @@
       <div class="linha">
         <label>Formato de Relatórios</label>
         <select [(ngModel)]="configuracoes.formatoRelatorio">
-          <option value="padrao">Formato Padrão</option>
+          <option value="json">JSON</option>
           <option value="csv">CSV</option>
           <option value="pdf">PDF</option>
         </select>

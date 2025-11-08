@@ -11,6 +11,9 @@ import { OcorrenciaService } from '../../services/ocorrencia.service';
 interface Configuracoes {
   somAlerta: string;
   formatoRelatorio: string;
+  storageMode?: string; // 'local' | 'onedrive'
+  localPath?: string;
+  oneDriveLink?: string;
 }
 
 @Component({
@@ -28,13 +31,19 @@ interface Configuracoes {
 export class ConfiguracoesComponent implements OnInit {
   configuracoes: Configuracoes = {
     somAlerta: 'beep',
-    formatoRelatorio: 'padrao',
+    formatoRelatorio: 'json',
+    storageMode: 'local',
+    localPath: '',
+    oneDriveLink: ''
   };
 
   storageUsed = 4.2; // GB usados
   storageTotal = 10; // GB totais
+  // details filled after probe
+  detectedPath: string | null = null;
 
   mostrarModal = false; // Modal de Gerenciar Clipes
+  oneDriveFolder: string | null = null;
 
   constructor(
     public temaService: TemaService,
@@ -45,6 +54,17 @@ export class ConfiguracoesComponent implements OnInit {
     const saved = localStorage.getItem('configuracoes');
     if (saved) {
       this.configuracoes = JSON.parse(saved);
+    }
+    // load oneDrive link/folder if configured by ops
+    try {
+      const od = localStorage.getItem('oneDrive_link') || this.configuracoes.oneDriveLink;
+      this.oneDriveFolder = od || null;
+      // if localPath configured, try to probe disk usage
+      if (this.configuracoes.storageMode === 'local' && this.configuracoes.localPath) {
+        this.checkDiskUsage(this.configuracoes.localPath);
+      }
+    } catch (e) {
+      this.oneDriveFolder = null;
     }
   }
 
@@ -58,7 +78,17 @@ export class ConfiguracoesComponent implements OnInit {
 
   salvarTudo(): void {
     localStorage.setItem('configuracoes', JSON.stringify(this.configuracoes));
-    alert('Configurações salvas com sucesso!');
+    // persist OneDrive link explicitly for backward compatibility
+    try {
+      if (this.configuracoes.oneDriveLink) {
+        localStorage.setItem('oneDrive_link', this.configuracoes.oneDriveLink);
+      }
+    } catch (e) {}
+    // feedback mínimo
+    try {
+      // small alert for admin in config panel
+      alert('Configurações salvas com sucesso!');
+    } catch (e) {}
   }
 
   get storagePercent(): number {
@@ -125,6 +155,26 @@ export class ConfiguracoesComponent implements OnInit {
           window.URL.revokeObjectURL(url);
         },
         error: (e) => alert('Falha ao exportar CSV'),
+      });
+    } else if (formato === 'json') {
+      this.ocorrenciaService.getOcorrencias().subscribe({
+        next: (data) => {
+          try {
+            const blob = new Blob([JSON.stringify(data || [], null, 2)], {
+              type: 'application/json',
+            });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'ocorrencias.json';
+            a.click();
+            window.URL.revokeObjectURL(url);
+          } catch (e) {
+            console.error('Erro ao exportar JSON', e);
+            alert('Falha ao exportar JSON');
+          }
+        },
+        error: (e) => alert('Falha ao exportar JSON'),
       });
     } else if (formato === 'pdf') {
       // Client-side PDF using jsPDF + autotable
@@ -200,7 +250,42 @@ export class ConfiguracoesComponent implements OnInit {
         },
       });
     } else {
-      alert('Selecione CSV ou PDF em Formato de Relatórios');
+      alert('Selecione CSV, JSON ou PDF em Formato de Relatórios');
     }
+  }
+
+  copiarOneDriveLink(): void {
+    try {
+      const link = this.configuracoes.oneDriveLink || this.oneDriveFolder;
+      if (!link) {
+        alert('OneDrive não configurado. Informe o link na configuração.');
+        return;
+      }
+      // abre em nova aba
+      window.open(link, '_blank');
+    } catch (e) {
+      console.warn('Erro ao abrir OneDrive:', e);
+    }
+  }
+
+  // Verifica uso do disco para um caminho local usando o backend
+  checkDiskUsage(path?: string): void {
+    const p = path || this.configuracoes.localPath || '';
+    if (!p) {
+      alert('Informe um caminho local para verificar. Ex: C:\\ ou /mnt/data');
+      return;
+    }
+    this.ocorrenciaService.getDiskUsage(p).subscribe({
+      next: (res: any) => {
+        this.detectedPath = res.path || p;
+  this.storageTotal = res.total_gb || 0;
+  this.storageUsed = res.used_gb || 0;
+  // update oneDriveFolder for UI if relevant
+      },
+      error: (err) => {
+        console.error('Falha ao verificar disco:', err);
+        alert('Falha ao verificar disco: ' + (err?.error?.detail || err?.message || 'erro'));
+      },
+    });
   }
 }

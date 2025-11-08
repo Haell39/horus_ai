@@ -9,6 +9,7 @@ from app.api.endpoints import ocorrencias
 from app.api.endpoints import analysis # <<< ESSA LINHA É CRUCIAL
 from app.api.endpoints import ws
 from app.api.endpoints import streams
+from app.api.endpoints import admin
 from fastapi.staticfiles import StaticFiles
 import os
 
@@ -94,6 +95,11 @@ app.include_router(
     streams.router,
     prefix="/api/v1",
     tags=["Streams"]
+)
+app.include_router(
+    admin.router,
+    prefix="/api/v1",
+    tags=["Admin"]
 )
 # <<< FIM DO BLOCO ADICIONADO >>>
 

@@ -276,11 +276,44 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
       const id = Date.now() + Math.floor(Math.random() * 1000);
       this.toasts.push({ id, message, type });
       this.cdr.markForCheck();
+      // play notification sound according to configuration
+      try {
+        this.playSoundForToast(type);
+      } catch (e) {
+        // noop
+      }
+
       setTimeout(() => {
         this.toasts = this.toasts.filter((t) => t.id !== id);
         this.cdr.markForCheck();
       }, timeout);
     } catch (e) {}
+  }
+
+  // Plays a sound based on saved configuration and toast type
+  private playSoundForToast(type: 'info' | 'success' | 'error') {
+    try {
+      const raw = localStorage.getItem('configuracoes');
+      const cfg = raw ? JSON.parse(raw) : null;
+      const soundPref = cfg?.somAlerta || 'beep';
+      const map: Record<string, string> = {
+        beep: 'Alerta-Curto.mp3',
+        digital: 'Alerta-Digital.mp3',
+        alerta: 'Alerta-Sutil.mp3',
+      };
+      // For errors we prefer the 'digital' alert to be more noticeable
+      let file = map[soundPref] || map['beep'];
+      let volume = 0.8;
+      if (type === 'error') {
+        file = map['digital'] || file;
+        volume = 1.0;
+      }
+      const audio = new Audio(file);
+      audio.volume = volume;
+      audio.play().catch(() => {});
+    } catch (e) {
+      // ignore play errors
+    }
   }
 
   // Tenta carregar hls.js dinamicamente e anexar ao player (se necessário)
@@ -740,6 +773,21 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
 
     // Opcional: Pulsar o gráfico real aqui
     // this.pulsarGraficoReal(novaOcorrencia.severity);
+    // Se for gravíssimo (X) ou grave (A) tocamos um som de alerta mais chamativo
+    try {
+      const sev = (novaOcorrencia.severity || '').toString();
+      if (
+        sev.includes('X') ||
+        sev.includes('Gravíssima') ||
+        /\(X\)/.test(sev)
+      ) {
+        // force error-style sound
+        this.playSoundForToast('error');
+      } else if (sev.includes('A') || /\(A\)/.test(sev)) {
+        // grave — play normal configured sound but louder
+        this.playSoundForToast('error');
+      }
+    } catch (e) {}
   }
 
   // Formata Ocorrencia -> Alerta (Reutilizável)
