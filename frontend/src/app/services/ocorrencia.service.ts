@@ -35,6 +35,14 @@ export class OcorrenciaService {
     return this.http.post(`${this.apiUrl}/streams/start`, payload);
   }
 
+  /** Upload de vídeo para análise (multipart/form-data) */
+  uploadAnalysis(file: File, fps?: number) {
+    const fd = new FormData();
+    fd.append('file', file, file.name);
+    if (fps) fd.append('fps', String(fps));
+    return this.http.post(`${this.apiUrl}/analysis/upload`, fd);
+  }
+
   stopStream() {
     return this.http.post(`${this.apiUrl}/streams/stop`, {});
   }

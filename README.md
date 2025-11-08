@@ -80,6 +80,17 @@ Invoke-RestMethod -Method Get -Uri http://localhost:8000/api/v1/streams/status
 - Clips: `http://<backend-host>:8000/clips/<clip_name>.mp4`
 - WebSocket para ocorrências: `ws://<backend-host>:8000/ws/ocorrencias`
 
+## Análise por arquivo (upload)
+
+O backend fornece um endpoint para upload de vídeos e análise offline:
+
+- POST `/api/v1/analysis/upload` (multipart/form-data) — campo `file` com o vídeo. Retorna a ocorrência criada (caso o processamento seja síncrono para arquivos pequenos) ou um objeto indicando que o processamento foi enfileirado.
+
+Recomendações:
+
+- Limite síncrono (MVP): até 50 MB ou 30s de duração — arquivos maiores são aceitos e processados em segundo plano.
+- Tipos suportados: arquivos com MIME `video/*`.
+
 ## Dicas de desenvolvimento & troubleshooting
 
 - NÃO use `--reload` no uvicorn enquanto estiver testando ingest de streams. O reload reinicia o processo Python, fechando WebSockets e os subprocessos ffmpeg em execução.

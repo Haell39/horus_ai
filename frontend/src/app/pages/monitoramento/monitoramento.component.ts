@@ -81,6 +81,9 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
   private reconnectTimer: any = null;
   public isStreaming: boolean = false; // whether backend ingest is running
   public isLive: boolean = false; // whether player has a live source attached
+  // Upload analysis state
+  public selectedFile: File | null = null;
+  public uploadingFile: boolean = false;
 
   // Lista de vídeos de simulação (mantida)
   videos: Array<{
@@ -188,6 +191,62 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
       // default: apenas tenta anexar HLS com fonte atual (player local)
       setTimeout(() => this.tryAttachHls(), 500);
     }
+  }
+
+  // Handler when user selects a file for analysis
+  onFileSelected(event: Event) {
+    try {
+      const input = event.target as HTMLInputElement;
+      if (!input.files || input.files.length === 0) {
+        this.selectedFile = null;
+        return;
+      }
+      this.selectedFile = input.files[0];
+      this.cdr.markForCheck();
+    } catch (e) {
+      console.warn('Erro ao selecionar arquivo:', e);
+      this.selectedFile = null;
+    }
+  }
+
+  // Upload the selected file and request analysis
+  uploadAnalysisClicked() {
+    if (!this.selectedFile) return;
+    this.uploadingFile = true;
+    const fps = 1.0; // default fps for file analysis
+    this.ocorrenciaService.uploadAnalysis(this.selectedFile, fps).subscribe({
+      next: (res: any) => {
+        console.log('Upload analysis response:', res);
+        // If backend returned a created occurrence object (sync), process it like a new occurrence
+        if (res && res.id) {
+          this.processarNovaOcorrencia(res as any);
+        } else if (res && res.status === 'queued') {
+          // Inform user that processing is queued
+          this.alertas.unshift({
+            hora: this.datePipe.transform(new Date(), 'HH:mm:ss') || '',
+            mensagem: 'Arquivo enviado. Processamento em segundo plano.',
+            tipo: 'Info (S)',
+            animacao: 'aparecer',
+            origem: 'Análise de Arquivo',
+          });
+        }
+        this.selectedFile = null;
+        this.uploadingFile = false;
+        this.cdr.markForCheck();
+      },
+      error: (err) => {
+        console.error('Erro ao enviar arquivo para análise:', err);
+        this.alertas.unshift({
+          hora: this.datePipe.transform(new Date(), 'HH:mm:ss') || '',
+          mensagem: 'Falha ao enviar arquivo para análise',
+          tipo: 'Erro (E)',
+          animacao: 'aparecer',
+          origem: 'Análise de Arquivo',
+        });
+        this.uploadingFile = false;
+        this.cdr.markForCheck();
+      },
+    });
   }
 
   // Tenta carregar hls.js dinamicamente e anexar ao player (se necessário)

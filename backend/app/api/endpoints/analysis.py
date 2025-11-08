@@ -1,3 +1,133 @@
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, status
+from typing import Optional
+import os
+import uuid
+import shutil
+import subprocess
+from datetime import datetime, timedelta
+
+from app.db.base import get_db
+from sqlalchemy.orm import Session
+from app.db import models, schemas
+from app.ml import inference
+
+router = APIRouter()
+
+print("INFO: analysis router module imported and ready")
+
+# Configuráveis (podem ser movidos para core.config mais tarde)
+UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'uploads'))
+CLIPS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'clips'))
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(CLIPS_DIR, exist_ok=True)
+
+
+def _get_duration_seconds(path: str) -> float:
+    """Tenta obter a duração do arquivo usando ffprobe; retorna 0 em falha."""
+    try:
+        proc = subprocess.run(
+            [
+                'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+                '-of', 'default=noprint_wrappers=1:nokey=1', path
+            ], capture_output=True, text=True, timeout=10
+        )
+        out = proc.stdout.strip()
+        return float(out) if out else 0.0
+    except Exception:
+        return 0.0
+
+
+@router.post('/analysis/upload', summary='Envia um arquivo de vídeo para análise')
+async def upload_analysis(
+    file: UploadFile = File(...),
+    fps: Optional[float] = Form(None),
+    db: Session = Depends(get_db)
+):
+    # Valida tipo
+    if not file.content_type.startswith('video/'):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Arquivo não é um vídeo')
+
+    # Salva temporário
+    ext = os.path.splitext(file.filename)[1] or '.mp4'
+    uid = uuid.uuid4().hex
+    tmp_name = f"upload_{uid}{ext}"
+    tmp_path = os.path.join(UPLOAD_DIR, tmp_name)
+    try:
+        with open(tmp_path, 'wb') as out_f:
+            shutil.copyfileobj(file.file, out_f)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f'Erro ao salvar arquivo: {e}')
+
+    # Tamanho e duração
+    try:
+        size_mb = os.path.getsize(tmp_path) / (1024 * 1024)
+    except Exception:
+        size_mb = 0.0
+    duration_s = _get_duration_seconds(tmp_path)
+
+    # Limites (simples - podem ser configuráveis)
+    HARD_LIMIT_MB = 1024
+    SYNC_LIMIT_MB = 50
+    SYNC_LIMIT_SECONDS = 30
+
+    if size_mb > HARD_LIMIT_MB:
+        os.remove(tmp_path)
+        raise HTTPException(status_code=413, detail='Arquivo maior que o limite permitido (1 GB)')
+
+    # Move para clips para poder servir via /clips
+    clip_name = f"upload_clip_{uid}{ext}"
+    clip_path = os.path.join(CLIPS_DIR, clip_name)
+    try:
+        shutil.copy2(tmp_path, clip_path)
+    except Exception:
+        # fallback: try move
+        try:
+            shutil.move(tmp_path, clip_path)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f'Erro ao preparar clip: {e}')
+
+    # Decide sync vs async (MVP: inline processing if pequeno)
+    process_inline = (size_mb <= SYNC_LIMIT_MB and duration_s <= SYNC_LIMIT_SECONDS)
+
+    if process_inline:
+        # Processa video e grava ocorrência
+        try:
+            pred_class, confidence = inference.analyze_video_frames(clip_path)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f'Erro na inferência: {e}')
+
+        # Monta ocorrência simples
+        now = datetime.utcnow()
+        oc = schemas.OcorrenciaCreate(
+            start_ts=now,
+            end_ts=now + timedelta(seconds=duration_s or 0),
+            duration_s=duration_s,
+            category='video-file',
+            type=pred_class,
+            severity=None,
+            confidence=float(confidence or 0.0),
+            evidence={'clip_path': f'/clips/{clip_name}'}
+        )
+
+        try:
+            db_oc = models.Ocorrencia(**oc.dict())
+            db.add(db_oc)
+            db.commit()
+            db.refresh(db_oc)
+            return db_oc
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f'Erro ao salvar ocorrência: {e}')
+
+    else:
+        # Para MVP apenas retorna queued (sem fila implementada)
+        return {
+            'status': 'queued',
+            'message': 'Arquivo aceito para processamento em segundo plano (MVP).',
+            'clip_url': f'/clips/{clip_name}',
+            'size_mb': round(size_mb, 2),
+            'duration_s': round(duration_s, 2)
+        }
 # backend/app/api/endpoints/analysis.py
 # (Versão TFLite com Upload e Análise Multi-Segmento - CORRIGIDO)
 from fastapi import APIRouter, HTTPException, Depends, status, BackgroundTasks, UploadFile, File, Form
@@ -21,7 +151,10 @@ from app.db.base import get_db
 from app.websocket_manager import manager
 import shutil
 
-router = APIRouter()
+# Reuse the module-level `router` defined above so all routes register on the
+# same APIRouter instance. Avoid reassigning `router` which would orphan
+# previously-declared routes (this caused `/analysis/upload` to disappear).
+# router = APIRouter()
 
 # Função para obter duração e calcular severidade
 # A assinatura agora usa o 'Tuple' importado

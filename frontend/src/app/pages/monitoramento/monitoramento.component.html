@@ -44,6 +44,29 @@
         >
           Stop
         </button>
+        <!-- Upload de vídeo para análise (habilitado somente quando não há ingest) -->
+        <div
+          class="upload-area"
+          style="
+            margin-left: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          "
+        >
+          <input
+            type="file"
+            accept="video/*"
+            (change)="onFileSelected($event)"
+            [disabled]="isStreaming"
+          />
+          <button
+            (click)="uploadAnalysisClicked()"
+            [disabled]="!selectedFile || isStreaming"
+          >
+            Analisar Vídeo
+          </button>
+        </div>
       </div>
 
       <video
