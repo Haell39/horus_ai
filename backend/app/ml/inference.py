@@ -264,12 +264,16 @@ def preprocess_video_single_frame(frame: np.ndarray) -> Optional[np.ndarray]:
         # print(f"ERRO pré-processando frame de vídeo: {e}") # Log menos verboso
         return None
 
-def analyze_video_frames(file_path: str) -> Tuple[str, float]:
-    """ Analisa múltiplos frames de vídeo e retorna a falha mais confiante. """
+def analyze_video_frames(file_path: str) -> Tuple[str, float, Optional[float]]:
+    """ Analisa múltiplos frames de vídeo e retorna a falha mais confiante.
+    Retorna (pred_class, confidence, event_time_s) onde event_time_s é o tempo em
+    segundos do frame com maior confiança para uma classe não-'normal', ou None.
+    """
     if not video_interpreter: raise RuntimeError("Intérprete de vídeo TFLite não carregado.")
 
     best_fault_class = 'normal'
     max_confidence = 0.0
+    event_time_s: Optional[float] = None
     processed_frames = 0
     frames_read = 0
 
@@ -307,21 +311,32 @@ def analyze_video_frames(file_path: str) -> Tuple[str, float]:
             processed_frames += 1
 
             # Estratégia: Guarda a falha (não-normal) com maior confiança
+            # captura também o timestamp do frame quando detectar a melhor falha
             if pred_class != 'normal' and confidence > max_confidence:
                 max_confidence = confidence
                 best_fault_class = pred_class
+                # pega o tempo atual do vídeo em ms
+                try:
+                    ms = cap.get(cv2.CAP_PROP_POS_MSEC)
+                    event_time_s = float(ms) / 1000.0 if ms is not None else None
+                except Exception:
+                    event_time_s = None
             elif best_fault_class == 'normal' and pred_class == 'normal' and confidence > max_confidence:
                 max_confidence = confidence # Guarda a maior confiança do 'normal'
 
         cap.release()
-        print(f"DEBUG: Vídeo - {processed_frames} frames processados ({frames_read} lidos). Resultado: {best_fault_class} ({max_confidence:.4f})")
-        return best_fault_class, max_confidence
+        print(f"DEBUG: Vídeo - {processed_frames} frames processados ({frames_read} lidos). Resultado: {best_fault_class} ({max_confidence:.4f}) time={event_time_s}")
+        return best_fault_class, max_confidence, event_time_s
 
     except Exception as e:
         print(f"ERRO durante análise de frames de vídeo ({file_path}): {e}")
         traceback.print_exc()
-        if 'cap' in locals() and cap.isOpened(): cap.release() # Garante liberar o vídeo
-        return "Erro_Análise_Vídeo", 0.0
+        if 'cap' in locals() and cap.isOpened():
+            try:
+                cap.release()
+            except Exception:
+                pass
+        return "Erro_Análise_Vídeo", 0.0, None
 
 # === Wrappers Antigos (NÃO USADOS DIRETAMENTE PELO ENDPOINT AGORA) ===
 # Mantidos para referência ou testes unitários futuros, se necessário

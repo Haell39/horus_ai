@@ -52,6 +52,7 @@ interface AlertaOcorrencia {
   tipo: string;
   animacao: string;
   origem: string;
+  ts?: string; // ISO timestamp para persistência/ordenacao
 }
 
 @Component({
@@ -110,6 +111,10 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
   // <<< VARIÁVEIS WebSocket >>>
   private wsSubscription: Subscription | null = null;
   public isWsConnected: boolean = false; // Status da conexão WS
+  // Chave localStorage para alertas recentes
+  private ALERTAS_STORAGE_KEY = 'horus_alertas_recentes_v1';
+  // Quantos alertas mostrar no card (mais recente primeiro)
+  private MAX_ALERTAS_NA_TELA = 5;
 
   constructor(
     private ocorrenciaService: OcorrenciaService,
@@ -131,17 +136,19 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
   ngOnInit() {
     console.log('MonitoramentoComponent: ngOnInit');
     this.carregarEstruturaGrafico(); // Inicializa chartOptions
-
-    // Alerta inicial
-    this.alertas = [
-      {
+    // Carrega alertas persistidos (se houver) ou cria um alerta inicial
+    this.alertas = this.loadAlertasFromStorage();
+    if (!this.alertas || this.alertas.length === 0) {
+      const inicial: AlertaOcorrencia = {
         hora: this.datePipe.transform(new Date(), 'HH:mm:ss') || '',
         mensagem: 'Sistema iniciado.',
         tipo: 'Info (S)',
         animacao: 'aparecer',
         origem: 'Sistema',
-      },
-    ];
+        ts: new Date().toISOString(),
+      };
+      this.addAlerta(inicial);
+    }
 
     this.carregarDadosIniciais(); // Carga HTTP
     this.startLoop(); // Loop do gráfico (simulação)
@@ -221,30 +228,19 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
         if (res && res.id) {
           this.processarNovaOcorrencia(res as any);
         } else if (res && res.status === 'ok') {
-          // Mostrar notificação imediata ao usuário (alert) e também empurrar para a lista de alertas
+          // Notificação imediata (não persistir nos "Alertas Recentes" para casos normais)
           try {
-            // Notificação simples (pode ser trocada por um toast futuro)
-            window.alert(res.message || 'Arquivo analisado.');
-          } catch (e) {
-            // fallback silencioso
-          }
-          this.alertas.unshift({
-            hora: this.datePipe.transform(new Date(), 'HH:mm:ss') || '',
-            mensagem:
-              res.message || 'Arquivo analisado — sem falhas detectadas.',
-            tipo: 'Info (S)',
-            animacao: 'aparecer',
-            origem: 'Análise de Arquivo',
-          });
+            window.alert(
+              res.message || 'Arquivo analisado — sem falhas detectadas.'
+            );
+          } catch (e) {}
         } else if (res && res.status === 'queued') {
-          // Inform user that processing is queued
-          this.alertas.unshift({
-            hora: this.datePipe.transform(new Date(), 'HH:mm:ss') || '',
-            mensagem: 'Arquivo enviado. Processamento em segundo plano.',
-            tipo: 'Info (S)',
-            animacao: 'aparecer',
-            origem: 'Análise de Arquivo',
-          });
+          // Inform user that processing is queued (ephemeral notification only)
+          try {
+            window.alert(
+              res.message || 'Arquivo enviado. Processamento em segundo plano.'
+            );
+          } catch (e) {}
         }
         this.selectedFile = null;
         this.uploadingFile = false;
@@ -252,12 +248,13 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         console.error('Erro ao enviar arquivo para análise:', err);
-        this.alertas.unshift({
+        this.addAlerta({
           hora: this.datePipe.transform(new Date(), 'HH:mm:ss') || '',
           mensagem: 'Falha ao enviar arquivo para análise',
           tipo: 'Erro (E)',
           animacao: 'aparecer',
           origem: 'Análise de Arquivo',
+          ts: new Date().toISOString(),
         });
         this.uploadingFile = false;
         this.cdr.markForCheck();
@@ -610,7 +607,19 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
             .reverse(); // Inverte para mostrar mais antigo primeiro na carga inicial
 
           // Adiciona os históricos APÓS o alerta de "Sistema iniciado"
-          this.alertas.push(...alertasDaApi);
+          // Garantir que a lista final respeite o limite e a ordenação por ts (mais recente primeiro)
+          this.alertas = [...this.alertas, ...alertasDaApi];
+          // Ordena por ts desc e limita para MAX_ALERTAS_NA_TELA
+          this.alertas.sort((a, b) => {
+            const ta = a.ts ? Date.parse(a.ts) : 0;
+            const tb = b.ts ? Date.parse(b.ts) : 0;
+            return tb - ta;
+          });
+          if (this.alertas.length > this.MAX_ALERTAS_NA_TELA) {
+            this.alertas = this.alertas.slice(0, this.MAX_ALERTAS_NA_TELA);
+          }
+          // Persiste a versão truncada
+          this.saveAlertasToStorage();
 
           this.cdr.markForCheck(); // Marca para verificação com OnPush
         } else {
@@ -694,13 +703,7 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
     const novoAlerta = this.formatarAlerta(novaOcorrencia, true); // true = com animação
 
     // Adiciona no INÍCIO da lista
-    this.alertas.unshift(novoAlerta);
-
-    // Limita o tamanho da lista
-    const MAX_ALERTAS_NA_TELA = 10;
-    if (this.alertas.length > MAX_ALERTAS_NA_TELA) {
-      this.alertas.pop(); // Remove o mais antigo (do final)
-    }
+    this.addAlerta(novoAlerta);
 
     // Remove a animação após um tempo
     setTimeout(() => {
@@ -774,6 +777,72 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
     }
   }
 
+  // --- Alert persistence helpers ---
+  private loadAlertasFromStorage(): AlertaOcorrencia[] {
+    try {
+      const raw = localStorage.getItem(this.ALERTAS_STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as AlertaOcorrencia[];
+      // Ordena por timestamp (desc)
+      parsed.sort((a, b) => {
+        const ta = a.ts ? Date.parse(a.ts) : 0;
+        const tb = b.ts ? Date.parse(b.ts) : 0;
+        return tb - ta;
+      });
+      // Limitamos para evitar crescimento indefinido ao carregar
+      return parsed.slice(0, this.MAX_ALERTAS_NA_TELA);
+    } catch (e) {
+      console.warn('Falha ao carregar alertas do storage:', e);
+      return [];
+    }
+  }
+
+  private saveAlertasToStorage(): void {
+    try {
+      const MAX = 50; // limite de armazenamento local
+      const toSave = this.alertas.slice(0, MAX);
+      localStorage.setItem(this.ALERTAS_STORAGE_KEY, JSON.stringify(toSave));
+    } catch (e) {
+      console.warn('Falha ao salvar alertas no storage:', e);
+    }
+  }
+
+  private addAlerta(a: AlertaOcorrencia): void {
+    try {
+      if (!a.ts) a.ts = new Date().toISOString();
+      if (!a.hora)
+        a.hora = this.datePipe.transform(new Date(a.ts), 'HH:mm:ss') || '';
+      // adiciona no início
+      this.alertas.unshift(a);
+      // ordena por ts desc
+      this.alertas.sort((x, y) => {
+        const tx = x.ts ? Date.parse(x.ts) : 0;
+        const ty = y.ts ? Date.parse(y.ts) : 0;
+        return ty - tx;
+      });
+      // limita a quantidade exibida em tela
+      if (this.alertas.length > this.MAX_ALERTAS_NA_TELA)
+        this.alertas = this.alertas.slice(0, this.MAX_ALERTAS_NA_TELA);
+      // persiste
+      this.saveAlertasToStorage();
+      // animação temporária
+      if (a.animacao) {
+        setTimeout(() => {
+          const idx = this.alertas.findIndex(
+            (it) => it === a || it.ts === a.ts
+          );
+          if (idx !== -1) {
+            this.alertas[idx].animacao = '';
+            this.cdr.markForCheck();
+          }
+        }, 1500);
+      }
+      this.cdr.markForCheck();
+    } catch (e) {
+      console.warn('addAlerta erro:', e);
+    }
+  }
+
   // === Lógica de Simulação (Manter Apenas a Parte Visual se Desejado) ===
   startLoop() {
     // Loop simples que empurra valores aleatórios para o gráfico para manter a UI "viva"
@@ -829,8 +898,7 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
       animacao: 'aparecer',
       origem: 'Player Local',
     };
-    this.alertas.unshift(alertaSimulado);
-    if (this.alertas.length > 10) this.alertas.pop();
+    this.addAlerta({ ...alertaSimulado, ts: new Date().toISOString() });
     setTimeout(() => {
       const index = this.alertas.findIndex((a) => a === alertaSimulado);
       if (index !== -1) {

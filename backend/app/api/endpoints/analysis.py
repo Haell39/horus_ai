@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, status
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, status, BackgroundTasks
 from typing import Optional
 import os
 import uuid
@@ -6,7 +6,7 @@ import shutil
 import subprocess
 from datetime import datetime, timedelta
 
-from app.db.base import get_db
+from app.db.base import get_db, SessionLocal
 from sqlalchemy.orm import Session
 from app.db import models, schemas
 from app.ml import inference
@@ -41,6 +41,7 @@ def _get_duration_seconds(path: str) -> float:
 async def upload_analysis(
     file: UploadFile = File(...),
     fps: Optional[float] = Form(None),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db)
 ):
     # Valida tipo
@@ -92,7 +93,7 @@ async def upload_analysis(
     if process_inline:
         # Processa video e, somente se detectar falha de interesse, grava ocorrência.
         try:
-            pred_class, confidence = inference.analyze_video_frames(clip_path)
+            pred_class, confidence, event_time = inference.analyze_video_frames(clip_path)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f'Erro na inferência: {e}')
 
@@ -136,10 +137,133 @@ async def upload_analysis(
             raise HTTPException(status_code=500, detail=f'Erro ao salvar ocorrência: {e}')
 
     else:
-        # Para MVP apenas retorna queued (sem fila implementada)
+        # Agenda processamento em background (usando BackgroundTasks do FastAPI).
+        job_id = uuid.uuid4().hex
+
+        def _process_queued(clip_path_local: str, clip_name_local: str, job_id_local: str):
+            """Função síncrona executada em background pelo FastAPI; usa SessionLocal
+            para abrir uma sessão e processar o arquivo, recortar evento e salvar ocorrência.
+            """
+            print(f"Background worker: iniciando job {job_id_local} para {clip_path_local}")
+            db_session = SessionLocal()
+            try:
+                try:
+                    pred_class, confidence, event_time = inference.analyze_video_frames(clip_path_local)
+                except Exception as e:
+                    print(f"Background worker: falha na inferência job {job_id_local}: {e}")
+                    return
+
+                CONFIDENCE_THRESHOLD = 0.60
+                if pred_class == 'normal' or (confidence or 0.0) < CONFIDENCE_THRESHOLD:
+                    print(f"Background worker: job {job_id_local} - sem falhas detectadas (class={pred_class} conf={confidence})")
+                    return
+
+                # Recorta segmento ao redor do evento se tivermos timestamp
+                before_s = 2.0
+                after_s = 2.0
+                if event_time is None:
+                    # fallback: usa o clip inteiro
+                    clip_to_save = clip_path_local
+                else:
+                    start = max(0.0, event_time - before_s)
+                    duration = before_s + after_s
+                    dest_name = f"clip_{job_id_local}{os.path.splitext(clip_name_local)[1]}"
+                    dest_path = os.path.join(CLIPS_DIR, dest_name)
+                    # ffmpeg -ss START -t DURATION -i INPUT -c copy OUTPUT
+                    try:
+                        subprocess.run([
+                            'ffmpeg', '-y', '-ss', f"{start}", '-t', f"{duration}",
+                            '-i', clip_path_local, '-c', 'copy', dest_path
+                        ], check=True, capture_output=True, timeout=60)
+                        clip_to_save = dest_path
+                    except Exception as e:
+                        print(f"Background worker: falha ao recortar com ffmpeg: {e}. Usando clip inteiro.")
+                        clip_to_save = clip_path_local
+
+                # --- Tolerance check: evitar falsos positivos curtos (ex: fade) ---
+                # Re-run inference on the small cut (if available) to confirm event persists
+                try:
+                    if event_time is not None and clip_to_save and clip_to_save != clip_path_local:
+                        try:
+                            pred2, conf2, _ = inference.analyze_video_frames(clip_to_save)
+                        except Exception as e:
+                            print(f"Background worker: falha re-analisar trecho cortado: {e}")
+                            pred2, conf2 = pred_class, confidence
+                        # Se a reanálise não confirmar (mesma classe com confiança suficiente), descarta como transitório
+                        if pred2 != pred_class or (conf2 or 0.0) < CONFIDENCE_THRESHOLD:
+                            print(f"Background worker: job {job_id_local} - evento transitório detectado (pred2={pred2}, conf2={conf2}) - ignorando.")
+                            return
+                except Exception as _:
+                    pass
+
+                # calcula duração do clip salvo
+                clip_dur = _get_duration_seconds(clip_to_save)
+                duration_sec = clip_dur or duration_s
+
+                # calcula severidade com a função existente
+                dur_calc, severity = calcular_severidade_e_duracao(clip_to_save)
+
+                # monta e salva ocorrência
+                try:
+                    now = datetime.utcnow()
+                    start_ts_calc = now - timedelta(seconds=duration_sec)
+                    evidence_dict = {
+                        'clip_path': f'/clips/{os.path.basename(clip_to_save)}',
+                        'model': inference.VIDEO_MODEL_FILENAME if hasattr(inference, 'VIDEO_MODEL_FILENAME') else 'video',
+                        'original_filename': clip_name_local,
+                        'confidence_raw': float(confidence),
+                        'clip_duration_s': float(duration_sec),
+                        'event_window': {'before_margin_s': before_s, 'after_margin_s': after_s}
+                    }
+                    oc_data = db_schemas.OcorrenciaCreate(
+                        start_ts=start_ts_calc, end_ts=now, duration_s=duration_sec,
+                        category='Video Arquivo', type=pred_class, severity=severity,
+                        confidence=confidence, evidence=evidence_dict
+                    )
+                    db_oc = models.Ocorrencia(**oc_data.dict())
+                    db_session.add(db_oc)
+                    db_session.commit()
+                    db_session.refresh(db_oc)
+
+                    # envia via websocket
+                    try:
+                        ocorrencia_read = db_schemas.OcorrenciaRead.from_orm(db_oc)
+                        payload = {'type': 'nova_ocorrencia', 'data': ocorrencia_read.dict()}
+                        # manager.broadcast_json is async; use asyncio.run to ensure it runs
+                        try:
+                            import asyncio
+                            asyncio.run(manager.broadcast_json(payload))
+                        except Exception as e:
+                            print(f"Background worker: falha ao enviar WS (async): {e}")
+                    except Exception as e:
+                        print(f"Background worker: falha ao preparar/enviar WS: {e}")
+
+                except Exception as e:
+                    db_session.rollback()
+                    print(f"Background worker: falha ao salvar ocorrência job {job_id_local}: {e}")
+            finally:
+                try:
+                    db_session.close()
+                except Exception:
+                    pass
+
+        # agenda execução em background
+        try:
+            background_tasks.add_task(_process_queued, clip_path, clip_name, job_id)
+        except Exception:
+            # se BackgroundTasks falhar por algum motivo, avisamos o usuário
+            return {
+                'status': 'queued',
+                'message': 'Arquivo aceito, mas falha ao agendar processamento em background.',
+                'clip_url': f'/clips/{clip_name}',
+                'size_mb': round(size_mb, 2),
+                'duration_s': round(duration_s, 2)
+            }
+
         return {
             'status': 'queued',
-            'message': 'Arquivo aceito para processamento em segundo plano (MVP).',
+            'job_id': job_id,
+            'message': 'Arquivo aceito para processamento em segundo plano.',
             'clip_url': f'/clips/{clip_name}',
             'size_mb': round(size_mb, 2),
             'duration_s': round(duration_s, 2)
@@ -295,8 +419,9 @@ async def analyze_media(
         if media_type == 'audio':
             pred_class, confidence = inference.analyze_audio_segments(temp_file_path)
             model_name = inference.AUDIO_MODEL_FILENAME
+            event_time = None
         elif media_type == 'video':
-            pred_class, confidence = inference.analyze_video_frames(temp_file_path)
+            pred_class, confidence, event_time = inference.analyze_video_frames(temp_file_path)
             model_name = inference.VIDEO_MODEL_FILENAME
 
         results.append(ml_schemas.PredictionResult(
@@ -324,22 +449,59 @@ async def analyze_media(
                 try:
                     clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'clips'))
                     os.makedirs(clips_dir, exist_ok=True)
-                    dest_name = f"clip_{int(time.time())}_{os.path.basename(temp_file_path)}"
-                    dest_path = os.path.join(clips_dir, dest_name)
-                    shutil.move(temp_file_path, dest_path)
-                    # Marca que o temp já foi movido para não ser removido no finally
-                    temp_file_path = None
+                    # Se tiver event_time, recorta trecho curto ao redor do evento
+                    before_s = 2.0
+                    after_s = 2.0
+                    if media_type == 'video' and event_time:
+                        dest_name = f"clip_{int(time.time())}_{os.path.basename(temp_file_path)}"
+                        dest_path = os.path.join(clips_dir, dest_name)
+                        start = max(0.0, event_time - before_s)
+                        duration_cut = before_s + after_s
+                        try:
+                            subprocess.run([
+                                'ffmpeg', '-y', '-ss', f"{start}", '-t', f"{duration_cut}",
+                                '-i', temp_file_path, '-c', 'copy', dest_path
+                            ], check=True, capture_output=True, timeout=60)
+                            clip_saved_path = dest_path
+                        except Exception as ff_err:
+                            print(f"AVISO: Falha recortar evento via ffmpeg: {ff_err}. Salvando arquivo inteiro.")
+                            dest_name = f"clip_{int(time.time())}_{os.path.basename(temp_file_path)}"
+                            clip_saved_path = os.path.join(clips_dir, dest_name)
+                            shutil.move(temp_file_path, clip_saved_path)
+                            temp_file_path = None
+                        # Tolerance: re-analisar recorte para evitar falsos positivos curtos
+                        try:
+                            pred2, conf2, _ = inference.analyze_video_frames(clip_saved_path)
+                            if pred2 != pred_class or (conf2 or 0.0) < 0.60:
+                                print(f"ANALYZE: recorte não confirmou evento (pred2={pred2} conf2={conf2}) -> não salva ocorrência.")
+                                # remove recorte para não poluir clips
+                                try:
+                                    if os.path.exists(clip_saved_path): os.remove(clip_saved_path)
+                                except Exception:
+                                    pass
+                                raise ValueError('Evento transitório - não confirmado')
+                        except Exception as e:
+                            # Se a verificação não passar, consideramos que não houve evento
+                            print(f"ANALYZE: verificação de tolerância falhou/descartou evento: {e}")
+                            raise
+                    else:
+                        dest_name = f"clip_{int(time.time())}_{os.path.basename(temp_file_path)}"
+                        clip_saved_path = os.path.join(clips_dir, dest_name)
+                        shutil.move(temp_file_path, clip_saved_path)
+                        temp_file_path = None
+
+                    # monta evidence dict
+                    clip_dur_calc = _get_duration_seconds(clip_saved_path)
                     evidence_dict = {
-                        "path": f"/clips/{dest_name}",
+                        "path": f"/clips/{os.path.basename(clip_saved_path)}",
                         "model": model_name,
                         "original_filename": file.filename,
                         "confidence_raw": float(confidence),
-                        # Como este fluxo não adiciona margens, clip_duration_s ≈ duration_s
-                        "clip_duration_s": float(duration_s),
-                        "event_window": {"before_margin_s": 0.0, "after_margin_s": 0.0},
+                        "clip_duration_s": float(clip_dur_calc or duration_s),
+                        "event_window": {"before_margin_s": (before_s if media_type == 'video' else 0.0), "after_margin_s": (after_s if media_type == 'video' else 0.0)},
                     }
                 except Exception as mv_err:
-                    print(f"AVISO: Falha mover arquivo temp para clips: {mv_err}")
+                    print(f"AVISO: Falha mover/recortar arquivo temp para clips: {mv_err}")
                     # Fallback: mantém o caminho temporário (pode não existir após finally)
                     evidence_dict = {
                         "clip_path_temp": temp_file_path,

@@ -33,7 +33,7 @@ def test_analyze_audio_monkeypatched(monkeypatch, tmp_path):
 def test_analyze_video_monkeypatched(monkeypatch, tmp_path):
     # monkeypatch high-level analyzer to make test deterministic
     def fake_analyze_video_frames(path: str):
-        return ("normal", 0.88)
+        return ("normal", 0.88, None)
 
     monkeypatch.setattr(ml.inference, "analyze_video_frames", fake_analyze_video_frames)
 
