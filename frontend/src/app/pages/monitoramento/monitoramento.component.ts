@@ -85,6 +85,12 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
   // Upload analysis state
   public selectedFile: File | null = null;
   public uploadingFile: boolean = false;
+  // Simple toast notifications (ephemeral, non-blocking)
+  public toasts: Array<{
+    id: number;
+    message: string;
+    type?: 'info' | 'success' | 'error';
+  }> = [];
 
   // Lista de vídeos de simulação (mantida)
   videos: Array<{
@@ -229,18 +235,16 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
           this.processarNovaOcorrencia(res as any);
         } else if (res && res.status === 'ok') {
           // Notificação imediata (não persistir nos "Alertas Recentes" para casos normais)
-          try {
-            window.alert(
-              res.message || 'Arquivo analisado — sem falhas detectadas.'
-            );
-          } catch (e) {}
+          this.showToast(
+            res.message || 'Arquivo analisado — sem falhas detectadas.',
+            'success'
+          );
         } else if (res && res.status === 'queued') {
           // Inform user that processing is queued (ephemeral notification only)
-          try {
-            window.alert(
-              res.message || 'Arquivo enviado. Processamento em segundo plano.'
-            );
-          } catch (e) {}
+          this.showToast(
+            res.message || 'Arquivo enviado. Processamento em segundo plano.',
+            'info'
+          );
         }
         this.selectedFile = null;
         this.uploadingFile = false;
@@ -260,6 +264,23 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
         this.cdr.markForCheck();
       },
     });
+  }
+
+  // Toast helpers
+  showToast(
+    message: string,
+    type: 'info' | 'success' | 'error' = 'info',
+    timeout = 3500
+  ) {
+    try {
+      const id = Date.now() + Math.floor(Math.random() * 1000);
+      this.toasts.push({ id, message, type });
+      this.cdr.markForCheck();
+      setTimeout(() => {
+        this.toasts = this.toasts.filter((t) => t.id !== id);
+        this.cdr.markForCheck();
+      }, timeout);
+    } catch (e) {}
   }
 
   // Tenta carregar hls.js dinamicamente e anexar ao player (se necessário)
