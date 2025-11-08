@@ -220,6 +220,22 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
         // If backend returned a created occurrence object (sync), process it like a new occurrence
         if (res && res.id) {
           this.processarNovaOcorrencia(res as any);
+        } else if (res && res.status === 'ok') {
+          // Mostrar notificação imediata ao usuário (alert) e também empurrar para a lista de alertas
+          try {
+            // Notificação simples (pode ser trocada por um toast futuro)
+            window.alert(res.message || 'Arquivo analisado.');
+          } catch (e) {
+            // fallback silencioso
+          }
+          this.alertas.unshift({
+            hora: this.datePipe.transform(new Date(), 'HH:mm:ss') || '',
+            mensagem:
+              res.message || 'Arquivo analisado — sem falhas detectadas.',
+            tipo: 'Info (S)',
+            animacao: 'aparecer',
+            origem: 'Análise de Arquivo',
+          });
         } else if (res && res.status === 'queued') {
           // Inform user that processing is queued
           this.alertas.unshift({
