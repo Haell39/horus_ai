@@ -90,13 +90,29 @@ async def upload_analysis(
     process_inline = (size_mb <= SYNC_LIMIT_MB and duration_s <= SYNC_LIMIT_SECONDS)
 
     if process_inline:
-        # Processa video e grava ocorrência
+        # Processa video e, somente se detectar falha de interesse, grava ocorrência.
         try:
             pred_class, confidence = inference.analyze_video_frames(clip_path)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f'Erro na inferência: {e}')
 
-        # Monta ocorrência simples
+        # Limiar síncrono (alinha com lógica do endpoint /analyze)
+        CONFIDENCE_THRESHOLD = 0.60
+
+        # Se for 'normal' ou confiança abaixo do limiar, não criamos ocorrência
+        if pred_class == 'normal' or (confidence or 0.0) < CONFIDENCE_THRESHOLD:
+            # Opcional: remove o clip público salvo, pois não gerou ocorrência
+            try:
+                if os.path.exists(clip_path):
+                    os.remove(clip_path)
+            except Exception:
+                pass
+            return {
+                'status': 'ok',
+                'message': f'Arquivo analisado — sem falhas detectadas (classe={pred_class}, conf={confidence:.3f}).'
+            }
+
+        # Caso haja falha com confiança suficiente, grava ocorrência completa (MVP grava o clip inteiro)
         now = datetime.utcnow()
         oc = schemas.OcorrenciaCreate(
             start_ts=now,
