@@ -473,10 +473,11 @@ export class DadosComponent implements AfterViewInit, OnInit {
     this.kpiSparklineOptions = {
       series: [],
       chart: { type: 'area', height: 60, sparkline: { enabled: true } },
-      stroke: { curve: 'smooth', width: 2 },
-      fill: { opacity: 0.3, colors: ['#43A047'] },
-      tooltip: { enabled: false },
-      colors: ['#43A047'],
+      stroke: { curve: 'smooth', width: 2, colors: ['#FF4B4B'] },
+      markers: { size: 4, colors: ['#FF4B4B'], strokeColors: '#ffffff' },
+      fill: { opacity: 0.28, colors: ['#FFCDD2'] },
+      tooltip: { enabled: true, theme: 'dark' },
+      colors: ['#FF4B4B'],
     };
 
     // KPI total sparkline (counts)

@@ -400,6 +400,23 @@ apx-chart {
   stroke: rgba(255, 255, 255, 0.12) !important;
 }
 
+/* Extra forced overrides to ensure all ApexCharts tooltip inner elements use dark theme */
+.apexcharts-tooltip,
+.apexcharts-tooltip *,
+.apexcharts-tooltip .apexcharts-tooltip-series-group,
+.apexcharts-tooltip .apexcharts-tooltip-title,
+.apexcharts-tooltip .apexcharts-tooltip-text,
+.apexcharts-tooltip .apexcharts-tooltip-y-value,
+.apexcharts-tooltip .apexcharts-tooltip-label,
+.apexcharts-tooltip .apexcharts-tooltip-marker {
+  background: rgba(18, 20, 24, 0.98) !important;
+  color: #ffffff !important;
+  border: none !important;
+}
+.apexcharts-tooltip .apexcharts-tooltip-marker {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.03) inset !important;
+}
+
 .alertas ul {
   list-style: none;
   padding: 0;

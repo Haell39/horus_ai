@@ -1,59 +1,57 @@
 :root {
   --cor-1: #fff;
   --cor-2: #f1f1f1;
-  --cor-3: #8E8E8E;
+  --cor-3: #8e8e8e;
   --cor-4: #1b1e25;
-  --cor-5: #2A2B2E;
+  --cor-5: #2a2b2e;
   --cor-6: #058a00;
   --cor-7: #d80505;
-  --cor-8: #F47922;
+  --cor-8: #f47922;
   --cor-9: #484848;
   --cor-10: #d1d1d1;
-  --cor-11: #9CB8F6;
-  --cor-12: #F47922;
-  --cor-13: #F8AF7A;
-  --cor-14: #F5F4F8;
-  --cor-15: #DEDEDE;
-  --cor-16: #AEAEAE;
+  --cor-11: #9cb8f6;
+  --cor-12: #f47922;
+  --cor-13: #f8af7a;
+  --cor-14: #f5f4f8;
+  --cor-15: #dedede;
+  --cor-16: #aeaeae;
   --cor-17: #626262;
-  --cor-18: #B0ADAD;
+  --cor-18: #b0adad;
   --cor-19: #000000;
-  --cor-20: #D9D9D9;
+  --cor-20: #d9d9d9;
   --cor-21: #323232;
-  --cor-22: #DADADA;
-  --cor-23: #D7141B;
-  --cor-24: #3C3C3C;
-  --cor-25: #C52127;
+  --cor-22: #dadada;
+  --cor-23: #d7141b;
+  --cor-24: #3c3c3c;
+  --cor-25: #c52127;
   --cor-26: #606060;
-  --cor-27: #BDE6FF;
-  --cor-28: #F4F6FF;
-  --cor-29: #1B69DC;
-  --cor-30: #FFAE00;
-  --cor-31: #E69D00;
+  --cor-27: #bde6ff;
+  --cor-28: #f4f6ff;
+  --cor-29: #1b69dc;
+  --cor-30: #ffae00;
+  --cor-31: #e69d00;
   --cor-32: #428013;
   --cor-33: #333333;
-  --cor-34:#133B76;
-  --cor-35:#9A151A;
-  --cor-36:#7E7E7E;
-  --cor-37:#BCBCBC;
-  --cor-38:#2D7523;
-  --cor-39:#26C012;
-  --cor-40:#CFBB37;
-  --cor-41:#F3DC43;
-  --cor-42:#72157B;
-  --cor-43:#B613C5;
-  --cor-44:#1551A9;
-  --cor-45:#170C58;
-  --cor-46:#ff5e00;
-  --cor-47:#d84f00;
-
-
+  --cor-34: #133b76;
+  --cor-35: #9a151a;
+  --cor-36: #7e7e7e;
+  --cor-37: #bcbcbc;
+  --cor-38: #2d7523;
+  --cor-39: #26c012;
+  --cor-40: #cfbb37;
+  --cor-41: #f3dc43;
+  --cor-42: #72157b;
+  --cor-43: #b613c5;
+  --cor-44: #1551a9;
+  --cor-45: #170c58;
+  --cor-46: #ff5e00;
+  --cor-47: #d84f00;
 }
 
 body {
   padding: 0;
   margin: 0;
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   background-color: var(--bg-principal);
   color: var(--texto-cor);
   scroll-behavior: smooth;
@@ -87,4 +85,31 @@ body.dark-theme {
 #coteudo-geral {
   transition: all 0.5s ease-in-out;
   margin-left: 195px;
+}
+
+/* Global ApexCharts tooltip overrides
+   Tooltips are often injected into <body> (outside component scope), so we must
+   place the styling in a global stylesheet to guarantee it applies.
+*/
+.apexcharts-tooltip,
+.apexcharts-tooltip *,
+.apexcharts-tooltip .apexcharts-tooltip-title,
+.apexcharts-tooltip .apexcharts-tooltip-text,
+.apexcharts-tooltip .apexcharts-tooltip-y-value,
+.apexcharts-tooltip .apexcharts-tooltip-label,
+.apexcharts-tooltip .apexcharts-tooltip-marker {
+  background: rgba(18, 20, 24, 0.98) !important;
+  color: #ffffff !important;
+  border: none !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6) !important;
+  border-radius: 8px !important;
+}
+.apexcharts-tooltip .apexcharts-tooltip-marker {
+  stroke: #ffffff !important;
+  stroke-width: 1px !important;
+}
+
+/* Make sure the small marker dot has visible fill color for our KPI sparkline */
+.apexcharts-tooltip .apexcharts-tooltip-marker .apexcharts-marker-circle {
+  fill: currentColor !important;
 }
