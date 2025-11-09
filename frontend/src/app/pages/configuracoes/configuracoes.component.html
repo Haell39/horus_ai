@@ -63,19 +63,13 @@
             [(ngModel)]="configuracoes.localPath"
             placeholder="Ex: C:\\ ou /mnt/data"
           />
-          <button class="btn-analise" (click)="selectLocalFolder()">
-            Selecionar pasta
-          </button>
-          <button class="btn-analise" (click)="checkDiskUsage()">
+          <button
+            class="btn-analise verificar-disco"
+            (click)="checkDiskUsage()"
+          >
             Verificar Disco
           </button>
         </div>
-        <p class="descricao" style="margin-top: 6px">
-          Observação: por segurança, navegadores podem não devolver o caminho
-          absoluto da pasta. Se <strong>Não</strong> aparecer o caminho completo
-          (ex: <code>D:\\Documents</code>), cole-o manualmente no campo acima
-          antes de clicar em "Verificar Disco".
-        </p>
 
         <p class="descricao">
           Uso do disco para

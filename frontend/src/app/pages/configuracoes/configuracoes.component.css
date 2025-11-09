@@ -164,3 +164,88 @@ input:checked + .slider:before {
 .exportar-btn:hover {
   background-color: var(--btn-hover-bg);
 }
+
+/* Estilo específico para o botão Verificar Disco na página de Configurações */
+.verificar-disco {
+  background: linear-gradient(90deg, var(--btn-bg), var(--btn-hover));
+  color: #fff;
+  padding: 0.6rem 0.9rem;
+  border-radius: 8px;
+  border: none;
+  font-weight: 700;
+  box-shadow: 0 6px 18px rgba(25, 118, 210, 0.18);
+  cursor: pointer;
+  margin-left: 8px;
+}
+.verificar-disco:hover {
+  opacity: 0.95;
+}
+
+/* Layout tweaks for armazenamento row: make the text input grow and keep the button to the right */
+
+.card-armazenamento .linha {
+  align-items: center;
+  justify-content: flex-start; /* keep items together and let input grow */
+  gap: 12px;
+}
+
+.card-armazenamento .linha label {
+  min-width: 120px; /* reserve space for the label so elements don't crowd */
+  margin-right: 6px;
+}
+
+.card-armazenamento .linha input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 220px;
+  margin-right: 0; /* spacing handled by gap */
+}
+
+/* Reorder so the verificar button is shown right after the label
+   (label -> button -> input) while keeping responsive behavior */
+.card-armazenamento .linha label {
+  order: 1;
+}
+.verificar-disco {
+  order: 2;
+  margin-left: 6px;
+}
+.card-armazenamento .linha input[type="text"] {
+  order: 3;
+}
+
+/* Make the verificar-disco button match other primary buttons (blue, white text)
+   and sit to the right without being cramped */
+.verificar-disco {
+  background-color: var(--btn-bg) !important;
+  color: #ffffff !important;
+  padding: 0.55rem 0.9rem;
+  border-radius: 8px;
+  border: none;
+  font-weight: 700;
+  box-shadow: 0 6px 18px rgba(25, 118, 210, 0.18);
+  cursor: pointer;
+  margin-left: 12px;
+  align-self: center;
+}
+
+.verificar-disco:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.12);
+}
+
+/* Responsive: on small screens stack the input and button vertically */
+@media (max-width: 520px) {
+  .card-armazenamento .linha {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .card-armazenamento .linha label {
+    min-width: auto;
+    margin-bottom: 6px;
+  }
+  .verificar-disco {
+    margin-left: 0;
+    margin-top: 8px;
+    width: 100%;
+  }
+}
