@@ -61,6 +61,71 @@
       </div>
 
       <div class="coluna-direita">
+        <div class="kpi-stack">
+          <div class="card-grafico kpi" style="margin-bottom: 12px">
+            <div class="kpi-inner">
+              <div class="kpi-text">
+                <div class="kpi-title">Total de Ocorrências</div>
+                <div class="kpi-value">{{ kpiTotalCount }}</div>
+                <div class="kpi-delta">
+                  <span
+                    *ngIf="kpiTotalDelta !== null"
+                    [ngClass]="{
+                      positive: kpiTotalDelta > 0,
+                      negative: kpiTotalDelta < 0
+                    }"
+                  >
+                    {{ kpiTotalDelta | number : "1.0-0" }}
+                  </span>
+                  <span *ngIf="kpiTotalDelta === null">—</span>
+                </div>
+              </div>
+              <div class="kpi-sparkline">
+                <apx-chart
+                  #kpiTotalSparkline
+                  [series]="kpiTotalSparklineSeries"
+                  [chart]="kpiTotalSparklineOptions.chart"
+                  [stroke]="kpiTotalSparklineOptions.stroke"
+                  [fill]="kpiTotalSparklineOptions.fill"
+                  [colors]="kpiTotalSparklineOptions.colors"
+                ></apx-chart>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-grafico kpi" style="margin-bottom: 14px">
+            <div class="kpi-inner">
+              <div class="kpi-text">
+                <div class="kpi-title">% Ocorrências Graves</div>
+                <div class="kpi-value">
+                  {{ kpiPercentGraves | number : "1.1-1" }}%
+                </div>
+                <div class="kpi-delta">
+                  <span
+                    *ngIf="kpiDeltaPercent !== null"
+                    [ngClass]="{
+                      positive: kpiDeltaPercent > 0,
+                      negative: kpiDeltaPercent < 0
+                    }"
+                  >
+                    {{ kpiDeltaPercent | number : "1.1-1" }}%
+                  </span>
+                  <span *ngIf="kpiDeltaPercent === null">—</span>
+                </div>
+              </div>
+              <div class="kpi-sparkline">
+                <apx-chart
+                  #kpiSparkline
+                  [series]="kpiSparklineSeries"
+                  [chart]="kpiSparklineOptions.chart"
+                  [stroke]="kpiSparklineOptions.stroke"
+                  [fill]="kpiSparklineOptions.fill"
+                  [colors]="kpiSparklineOptions.colors"
+                ></apx-chart>
+              </div>
+            </div>
+          </div>
+        </div>
         <div class="card-grafico combinado">
           <div class="parte-superior">
             <h3 class="titulo-grafico">Distribuição de Tipos de Erro</h3>

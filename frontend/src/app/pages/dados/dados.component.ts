@@ -73,6 +73,8 @@ export class DadosComponent implements AfterViewInit, OnInit {
   @ViewChild('donutChart') donutChart!: ChartComponent;
   @ViewChild('horizontalChart') horizontalChart!: ChartComponent;
   @ViewChild('hourChart') hourChart!: ChartComponent;
+  @ViewChild('kpiSparkline') kpiSparkline!: ChartComponent;
+  @ViewChild('kpiTotalSparkline') kpiTotalSparkline!: ChartComponent;
 
   // === CORREÇÃO DE TIPO (1/3) ===
   // Removemos o 'Partial' e usamos '!' para dizer ao TS que vamos inicializar
@@ -80,6 +82,16 @@ export class DadosComponent implements AfterViewInit, OnInit {
   public donutChartOptions!: DonutChartOptions;
   public horizontalChartOptions!: HorizontalBarOptions;
   public hourChartOptions!: BarChartOptions;
+  // KPI card state (percent graves + sparkline)
+  public kpiPercentGraves: number = 0;
+  public kpiDeltaPercent: number | null = null;
+  public kpiSparklineOptions: any;
+  public kpiSparklineSeries: any[] = [];
+  // KPI Total
+  public kpiTotalCount: number = 0;
+  public kpiTotalDelta: number | null = null;
+  public kpiTotalSparklineOptions: any;
+  public kpiTotalSparklineSeries: any[] = [];
 
   periodoSelecionado = '7d';
   tipoErroSelecionado = 'todos';
@@ -456,6 +468,26 @@ export class DadosComponent implements AfterViewInit, OnInit {
       tooltip: { y: { formatter: (val: number) => `${val} ocorrências` } },
       legend: { show: false },
     };
+
+    // KPI sparkline (compact)
+    this.kpiSparklineOptions = {
+      series: [],
+      chart: { type: 'area', height: 60, sparkline: { enabled: true } },
+      stroke: { curve: 'smooth', width: 2 },
+      fill: { opacity: 0.3, colors: ['#43A047'] },
+      tooltip: { enabled: false },
+      colors: ['#43A047'],
+    };
+
+    // KPI total sparkline (counts)
+    this.kpiTotalSparklineOptions = {
+      series: [],
+      chart: { type: 'area', height: 60, sparkline: { enabled: true } },
+      stroke: { curve: 'smooth', width: 2 },
+      fill: { opacity: 0.25, colors: ['#1E88E5'] },
+      tooltip: { enabled: false },
+      colors: ['#1E88E5'],
+    };
   }
 
   // ===========================
@@ -549,9 +581,173 @@ export class DadosComponent implements AfterViewInit, OnInit {
 
     // --- 4. Atualiza o Gráfico de Ocorrências por Hora ---
     this.atualizarGraficoHoras(dadosFiltradosPorTipo);
+    // --- 4.5 Atualiza o cartão KPI (Percent % Ocorrências Graves) ---
+    this.atualizarKpiCard(
+      dadosFiltradosPorTipo,
+      dataLimite,
+      this.periodoSelecionado
+    );
 
     // --- 5. Atualiza os Gráficos Agrupados (Donut e Horizontal) ---
     this.atualizarGraficosAgrupados(dadosFiltradosPorTipo);
+  }
+
+  /** Atualiza o cartão KPI: principal = % Ocorrências Graves
+   *  - dados: já filtrados por período e tipo (tipo usado to compute sparkline buckets)
+   *  - dataLimite: início do período (exclusive) -> usado para calcular período anterior
+   */
+  private atualizarKpiCard(
+    dados: Ocorrencia[],
+    dataLimite: Date,
+    periodo: string
+  ) {
+    try {
+      // Current period counts
+      const totalAtual = dados.length;
+      const gravesAtual = dados.filter((oc) => this.isGrave(oc)).length;
+      const percentAtual =
+        totalAtual === 0 ? 0 : (gravesAtual / totalAtual) * 100;
+
+      // Determine window length in ms for previous period calculation
+      const agora = new Date();
+      let windowMs = 7 * 24 * 3600 * 1000; // default 7d
+      if (periodo === '7d') windowMs = 7 * 24 * 3600 * 1000;
+      else if (periodo === '30d') windowMs = 30 * 24 * 3600 * 1000;
+      else if (periodo === '2m') windowMs = 60 * 24 * 3600 * 1000;
+
+      const periodoInicio = dataLimite.getTime();
+      const periodoFim = agora.getTime();
+      const prevInicio = periodoInicio - (periodoFim - periodoInicio);
+      const prevFim = periodoInicio;
+
+      // Previous period filtered using same tipo selection on full dadosCarregados
+      const prevWindow = this.dadosCarregados.filter((oc) => {
+        const t = new Date(oc.start_ts).getTime();
+        return (
+          t >= prevStartBoundary(prevInicio) && t < prevEndBoundary(prevFim)
+        );
+      });
+
+      // Apply same tipo filter to prevWindow
+      let prevFiltered = prevWindow;
+      if (this.tipoErroSelecionado === 'grave')
+        prevFiltered = prevWindow.filter((oc) => this.isGrave(oc));
+      else if (this.tipoErroSelecionado === 'simples')
+        prevFiltered = prevWindow.filter((oc) => !this.isGrave(oc));
+
+      const totalPrev = prevFiltered.length;
+      const gravesPrev = prevFiltered.filter((oc) => this.isGrave(oc)).length;
+      const percentPrev = totalPrev === 0 ? 0 : (gravesPrev / totalPrev) * 100;
+
+      // Delta (percentage points change)
+      let delta = null;
+      if (totalPrev === 0) delta = null;
+      else delta = percentAtual - percentPrev;
+
+      this.kpiPercentGraves = Number(percentAtual.toFixed(1));
+      this.kpiDeltaPercent = delta === null ? null : Number(delta.toFixed(1));
+
+      // Build sparkline series: compute percent graves per bucket (day/week)
+      let buckets: number[] = [];
+      if (periodo === '7d') {
+        const [g, s] = this.agruparDadosPorDia(
+          this.dadosCarregados.filter((oc) => {
+            return new Date(oc.start_ts) >= dataLimite;
+          }),
+          new Date(),
+          7
+        );
+        buckets = g.map((gv, i) => {
+          const total = gv + s[i];
+          return total === 0 ? 0 : (gv / total) * 100;
+        });
+      } else {
+        // for 30d and 2m use weekly buckets
+        const weeks = periodo === '30d' ? 5 : 9;
+        const [g, s] = this.agruparDadosPorSemana(
+          this.dadosCarregados.filter((oc) => {
+            return new Date(oc.start_ts) >= dataLimite;
+          }),
+          new Date(),
+          weeks
+        );
+        buckets = g.map((gv, i) => {
+          const total = gv + s[i];
+          return total === 0 ? 0 : (gv / total) * 100;
+        });
+      }
+
+      this.kpiSparklineSeries = [
+        { name: '% Graves', data: buckets.map((v) => Number(v.toFixed(1))) },
+      ];
+      // update chart if exists
+      if (this.kpiSparkline) {
+        try {
+          this.kpiSparkline.updateOptions({ series: this.kpiSparklineSeries });
+        } catch (e) {
+          // ignore if chart not ready
+        }
+      }
+      // Also update Total KPI sparkline and values
+      // Build total buckets (counts) matching the same buckets used above
+      if (periodo === '7d') {
+        const [, totals] = this.agruparDadosPorDia(
+          this.dadosCarregados.filter((oc) => {
+            return new Date(oc.start_ts) >= dataLimite;
+          }),
+          new Date(),
+          7
+        );
+        this.kpiTotalSparklineSeries = [
+          { name: 'Total', data: totals.map((v) => v) },
+        ];
+      } else {
+        const weeks = periodo === '30d' ? 5 : 9;
+        const [, totals] = this.agruparDadosPorSemana(
+          this.dadosCarregados.filter((oc) => {
+            return new Date(oc.start_ts) >= dataLimite;
+          }),
+          new Date(),
+          weeks
+        );
+        this.kpiTotalSparklineSeries = [
+          { name: 'Total', data: totals.map((v) => v) },
+        ];
+      }
+
+      // compute totals for current period
+      this.kpiTotalCount = dados.length;
+      // previous period total
+      const prevTotal = this.dadosCarregados.filter((oc) => {
+        const t = new Date(oc.start_ts).getTime();
+        return (
+          t >= dataLimite.getTime() - (Date.now() - dataLimite.getTime()) &&
+          t < dataLimite.getTime()
+        );
+      }).length;
+      this.kpiTotalDelta =
+        prevTotal === 0 ? null : this.kpiTotalCount - prevTotal;
+
+      if (this.kpiTotalSparkline) {
+        try {
+          this.kpiTotalSparkline.updateOptions({
+            series: this.kpiTotalSparklineSeries,
+          });
+        } catch (e) {
+          // ignore
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao atualizar KPI card', e);
+    }
+
+    // helper closures to guard invalid epoch boundaries
+    function prevStartBoundary(v: number) {
+      return isFinite(v) ? v : 0;
+    }
+    function prevEndBoundary(v: number) {
+      return isFinite(v) ? v : Date.now();
+    }
   }
 
   /** Atualiza o gráfico de Ocorrências por Hora do Dia (0-23) */

@@ -110,7 +110,58 @@
   flex-direction: column;
   gap: 30px;
   padding: 25px 20px;
- color: #000;
+  color: #000;
+}
+
+.card-grafico.kpi {
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 22px;
+}
+
+.card-grafico.kpi .kpi-inner {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.card-grafico.kpi .kpi-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.card-grafico.kpi .kpi-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--texto-cor, #ffffff);
+}
+
+.card-grafico.kpi .kpi-value {
+  font-size: 2.4rem;
+  font-weight: 800;
+  color: var(--btn-bg, #ffb300);
+  line-height: 1;
+}
+
+.card-grafico.kpi .kpi-delta {
+  font-size: 1rem;
+  color: var(--cor-10, #cfcfcf);
+}
+
+.card-grafico.kpi .kpi-sparkline {
+  max-width: 220px;
+  width: 40%;
+}
+
+.kpi-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .card-grafico:hover {
@@ -130,6 +181,20 @@
 
 .parte-superior apx-chart {
   margin: 10px 0;
+}
+
+.kpi-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.kpi-card .positive {
+  color: #4caf50;
+}
+
+.kpi-card .negative {
+  color: #ff5252;
 }
 
 .parte-inferior apx-chart {
