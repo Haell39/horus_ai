@@ -178,6 +178,7 @@ export class CortesComponent implements OnInit {
   }
 
   private reloadDetailVideo() {
+    // Reloads the video element when the selection changes
     try {
       if (!this.detailVideo) return;
       const v = this.detailVideo.nativeElement;
@@ -291,8 +292,9 @@ export class CortesComponent implements OnInit {
   }
 
   private mapOcorrenciaToFalha(oc: Ocorrencia): Falha {
-    const start = new Date(oc.start_ts);
-    const end = new Date(oc.end_ts);
+    // Parse server timestamps into local Date objects
+    const start = this.parseServerTimestamp(oc.start_ts);
+    const end = this.parseServerTimestamp(oc.end_ts);
     const data = start.toLocaleDateString();
     const horario = start.toLocaleTimeString([], {
       hour: '2-digit',
@@ -333,7 +335,8 @@ export class CortesComponent implements OnInit {
       titulo,
       descricao,
       data: `Dia ${data}, ${horario}`,
-      dataCompleta: start.toISOString().slice(0, 10),
+      // human readable local date
+      dataCompleta: data,
       horario,
       programa: evidence['program'] || evidence['programa'] || '',
       duracao: dur,
@@ -347,7 +350,8 @@ export class CortesComponent implements OnInit {
       severidade: oc.severity || '',
       // marca como visto se estiver salvo no localStorage
       seen: this.isSeen(oc.id),
-      dataISO: start.toISOString().slice(0, 10),
+      // date used for the <input type="date"> filter should reflect the user's local date
+      dataISO: this.formatLocalISODate(start),
     };
   }
 
@@ -412,6 +416,34 @@ export class CortesComponent implements OnInit {
         .padStart(2, '0')}`;
     }
     return `00:${s.toString().padStart(2, '0')}`;
+  }
+
+  /**
+   * Parse timestamps received from the server.
+   * - If the timestamp contains a timezone (Z or +/-HH:MM) we parse as-is.
+   * - If it is a bare ISO string (e.g. "2025-11-09T03:59:00"), treat it as UTC
+   *   by appending a 'Z' so the browser will convert to the user's local timezone.
+   */
+  private parseServerTimestamp(ts?: string): Date {
+    if (!ts) return new Date();
+    try {
+      // If already contains timezone info, use as-is
+      if (/[zZ]$|[+\-]\d{2}:?\d{2}$/.test(ts)) return new Date(ts);
+      // Otherwise assume server sent UTC without offset and append 'Z'
+      return new Date(ts + 'Z');
+    } catch (e) {
+      return new Date(ts);
+    }
+  }
+
+  /**
+   * Produce a local YYYY-MM-DD string from a Date (used for the date filter input).
+   */
+  private formatLocalISODate(d: Date): string {
+    const y = d.getFullYear();
+    const m = (d.getMonth() + 1).toString().padStart(2, '0');
+    const day = d.getDate().toString().padStart(2, '0');
+    return `${y}-${m}-${day}`;
   }
 
   /** Alterna para o modo de edição no painel de detalhes */

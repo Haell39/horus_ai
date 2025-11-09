@@ -4,7 +4,7 @@ import os
 import uuid
 import shutil
 import subprocess
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.db.base import get_db, SessionLocal
 from sqlalchemy.orm import Session
@@ -103,6 +103,8 @@ async def upload_analysis(
 
         # Limiar síncrono (alinha com lógica do endpoint /analyze)
         CONFIDENCE_THRESHOLD = 0.60
+        # Timestamp UTC para registrar início/fim da ocorrência quando necessário
+        now = datetime.now(timezone.utc)
 
         # Se for 'normal' ou confiança abaixo do limiar, não criamos ocorrência
         if pred_class == 'normal' or (confidence or 0.0) < CONFIDENCE_THRESHOLD:
@@ -117,10 +119,9 @@ async def upload_analysis(
                 'message': f'Arquivo analisado — sem falhas detectadas (classe={pred_class}, conf={confidence:.3f}).'
             }
 
-        # Caso haja falha com confiança suficiente, grava ocorrência.
-        # Preferimos recortar um trecho curto ao redor do evento (2s antes/2s depois)
-        # se tivermos timestamp, para não salvar o arquivo inteiro por padrão.
-        now = datetime.utcnow()
+            # Caso haja falha com confiança suficiente, grava ocorrência.
+            # Preferimos recortar um trecho curto ao redor do evento (2s antes/2s depois)
+            # se tivermos timestamp, para não salvar o arquivo inteiro por padrão.
         clip_to_save = clip_path
         before_s = 2.0
         after_s = 2.0
@@ -262,7 +263,7 @@ async def upload_analysis(
 
                 # monta e salva ocorrência
                 try:
-                    now = datetime.utcnow()
+                    now = datetime.now(timezone.utc)
                     start_ts_calc = now - timedelta(seconds=duration_sec)
 
                     # garante que o clipe esteja disponível na pasta pública /clips
@@ -518,7 +519,7 @@ async def analyze_media(
                  message += f". Duração inválida, ocorrência não salva."
             else:
                 # (Código para criar ocorrencia_data e agendar background_tasks mantido)
-                end_ts_now = datetime.now()
+                end_ts_now = datetime.now(timezone.utc)
                 start_ts_calc = end_ts_now - timedelta(seconds=duration_s)
 
                 # Move o arquivo temporário para a pasta pública de clipes

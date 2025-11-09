@@ -6,7 +6,7 @@ import time
 import glob
 import shutil
 from typing import Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.ml import inference
 from app.api.endpoints import ws as ws_router
@@ -292,7 +292,7 @@ class SRTIngestor:
                             # Save occurrence to DB
                             db = SessionLocal()
                             try:
-                                end_ts_now = datetime.now()
+                                end_ts_now = datetime.now(timezone.utc)
                                 # event duration ~ streak/fps min 1 frame
                                 event_duration = max(1.0 / max(1.0, float(self.fps)), float(self._streak_count) / max(1.0, float(self.fps)))
                                 start_ts_calc = end_ts_now - timedelta(seconds=event_duration)
