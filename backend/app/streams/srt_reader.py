@@ -12,6 +12,7 @@ from app.ml import inference
 from app.api.endpoints import ws as ws_router
 from app.db.base import SessionLocal
 from app.db import models
+from app.core import storage as storage_core
 
 
 class SRTIngestor:
@@ -321,8 +322,8 @@ class SRTIngestor:
                                     ]
                                     try:
                                         subprocess.run(ffmpeg_cmd, check=False)
-                                        # move para pasta pública de clipes
-                                        clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'clips'))
+                                        # move para pasta pública de clipes (pode ser customizada)
+                                        clips_dir = storage_core.get_clips_dir()
                                         os.makedirs(clips_dir, exist_ok=True)
                                         dest_path = os.path.join(clips_dir, out_name)
                                         shutil.move(out_tmp, dest_path)

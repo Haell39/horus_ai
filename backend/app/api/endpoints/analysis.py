@@ -10,6 +10,7 @@ from app.db.base import get_db, SessionLocal
 from sqlalchemy.orm import Session
 from app.db import models, schemas
 from app.ml import inference
+from app.core import storage as storage_core
 
 router = APIRouter()
 
@@ -17,12 +18,9 @@ print("INFO: analysis router module imported and ready")
 
 # Configuráveis (podem ser movidos para core.config mais tarde)
 # NOTE: main.py monta /clips a partir de backend/static/clips (um nível acima de 'app').
-# Use a mesma pasta que o main para garantir que arquivos salvos sejam servidos.
+# Use a mesma pasta que o main por padrão, mas permita override via storage config.
 UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'uploads'))
-# Ajuste: salvar em backend/static/clips (três níveis acima de 'app/api/endpoints') para corresponder ao mount em main.py
-CLIPS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'static', 'clips'))
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-os.makedirs(CLIPS_DIR, exist_ok=True)
 
 
 def _get_duration_seconds(path: str) -> float:
@@ -78,9 +76,10 @@ async def upload_analysis(
         os.remove(tmp_path)
         raise HTTPException(status_code=413, detail='Arquivo maior que o limite permitido (1 GB)')
 
-    # Move para clips para poder servir via /clips
+    # Move para clips para poder servir via /clips (clips_dir pode ser configurado)
     clip_name = f"upload_clip_{uid}{ext}"
-    clip_path = os.path.join(CLIPS_DIR, clip_name)
+    clips_dir = storage_core.get_clips_dir()
+    clip_path = os.path.join(clips_dir, clip_name)
     try:
         shutil.copy2(tmp_path, clip_path)
         print(f"DEBUG: upload_analysis -> clip copiado para: {clip_path}")
@@ -130,7 +129,7 @@ async def upload_analysis(
                 start = max(0.0, event_time - before_s)
                 duration_cut = before_s + after_s
                 dest_name = f"clip_{uid}_cut{ext}"
-                dest_path = os.path.join(CLIPS_DIR, dest_name)
+                dest_path = os.path.join(storage_core.get_clips_dir(), dest_name)
                 try:
                     subprocess.run([
                         'ffmpeg', '-y', '-ss', f"{start}", '-t', f"{duration_cut}",
@@ -142,9 +141,24 @@ async def upload_analysis(
                     print(f"DEBUG: upload_analysis -> falha ao recortar inline via ffmpeg: {e} — usando clip inteiro")
                     clip_to_save = clip_path
 
-            # monta ocorrência usando clip_to_save
-            clip_basename = os.path.basename(clip_to_save)
-            clip_dur_saved = _get_duration_seconds(clip_to_save)
+            # Garante que o clipe também esteja disponível na pasta pública montada em /clips
+            try:
+                public_clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'clips'))
+                os.makedirs(public_clips_dir, exist_ok=True)
+                public_path = os.path.join(public_clips_dir, os.path.basename(clip_to_save))
+                if os.path.abspath(clip_to_save) != os.path.abspath(public_path):
+                    try:
+                        shutil.copy2(clip_to_save, public_path)
+                        clip_to_serve = public_path
+                    except Exception:
+                        clip_to_serve = clip_to_save
+                else:
+                    clip_to_serve = clip_to_save
+            except Exception:
+                clip_to_serve = clip_to_save
+
+            clip_basename = os.path.basename(clip_to_serve)
+            clip_dur_saved = _get_duration_seconds(clip_to_serve)
             # calcula severidade e duração (mesma lógica usada pelo background worker)
             try:
                 dur_calc, severity = calcular_severidade_e_duracao(clip_to_save)
@@ -208,7 +222,7 @@ async def upload_analysis(
                     start = max(0.0, event_time - before_s)
                     duration = before_s + after_s
                     dest_name = f"clip_{job_id_local}{os.path.splitext(clip_name_local)[1]}"
-                    dest_path = os.path.join(CLIPS_DIR, dest_name)
+                    dest_path = os.path.join(storage_core.get_clips_dir(), dest_name)
                     # ffmpeg -ss START -t DURATION -i INPUT -c copy OUTPUT
                     try:
                         subprocess.run([
@@ -250,14 +264,32 @@ async def upload_analysis(
                 try:
                     now = datetime.utcnow()
                     start_ts_calc = now - timedelta(seconds=duration_sec)
+
+                    # garante que o clipe esteja disponível na pasta pública /clips
+                    try:
+                        public_clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'clips'))
+                        os.makedirs(public_clips_dir, exist_ok=True)
+                        public_path = os.path.join(public_clips_dir, os.path.basename(clip_to_save))
+                        if os.path.abspath(clip_to_save) != os.path.abspath(public_path):
+                            try:
+                                shutil.copy2(clip_to_save, public_path)
+                                clip_to_serve = public_path
+                            except Exception:
+                                clip_to_serve = clip_to_save
+                        else:
+                            clip_to_serve = clip_to_save
+                    except Exception:
+                        clip_to_serve = clip_to_save
+
                     evidence_dict = {
-                        'clip_path': f'/clips/{os.path.basename(clip_to_save)}',
+                        'clip_path': f'/clips/{os.path.basename(clip_to_serve)}',
                         'model': inference.VIDEO_MODEL_FILENAME if hasattr(inference, 'VIDEO_MODEL_FILENAME') else 'video',
                         'original_filename': clip_name_local,
                         'confidence_raw': float(confidence),
                         'clip_duration_s': float(duration_sec),
                         'event_window': {'before_margin_s': before_s, 'after_margin_s': after_s}
                     }
+
                     oc_data = db_schemas.OcorrenciaCreate(
                         start_ts=start_ts_calc, end_ts=now, duration_s=duration_sec,
                         category='Video Arquivo', type=pred_class, severity=severity,
@@ -488,11 +520,13 @@ async def analyze_media(
                 # (Código para criar ocorrencia_data e agendar background_tasks mantido)
                 end_ts_now = datetime.now()
                 start_ts_calc = end_ts_now - timedelta(seconds=duration_s)
+
                 # Move o arquivo temporário para a pasta pública de clipes
                 try:
-                    # Ensure we use the same clips folder mounted by main.py (/clips)
-                    clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'static', 'clips'))
+                    # Ensure we use the configured clips folder (falling back to static/clips)
+                    clips_dir = storage_core.get_clips_dir()
                     os.makedirs(clips_dir, exist_ok=True)
+
                     # Se tiver event_time, recorta trecho curto ao redor do evento
                     before_s = 2.0
                     after_s = 2.0
@@ -513,6 +547,7 @@ async def analyze_media(
                             clip_saved_path = os.path.join(clips_dir, dest_name)
                             shutil.move(temp_file_path, clip_saved_path)
                             temp_file_path = None
+
                         # Tolerance: re-analisar recorte para evitar falsos positivos curtos
                         try:
                             pred2, conf2, _ = inference.analyze_video_frames(clip_saved_path)
@@ -520,7 +555,8 @@ async def analyze_media(
                                 print(f"ANALYZE: recorte não confirmou evento (pred2={pred2} conf2={conf2}) -> não salva ocorrência.")
                                 # remove recorte para não poluir clips
                                 try:
-                                    if os.path.exists(clip_saved_path): os.remove(clip_saved_path)
+                                    if os.path.exists(clip_saved_path):
+                                        os.remove(clip_saved_path)
                                 except Exception:
                                     pass
                                 raise ValueError('Evento transitório - não confirmado')
@@ -575,9 +611,12 @@ async def analyze_media(
 
     finally:
         # (Limpeza do arquivo temporário mantida)
-         if temp_file_path and os.path.exists(temp_file_path):
-             try: os.unlink(temp_file_path); print(f"DEBUG: Temp removido: {temp_file_path}")
-             except Exception as unlink_err: print(f"AVISO: Falha remover temp {temp_file_path}: {unlink_err}")
+        if temp_file_path and os.path.exists(temp_file_path):
+            try:
+                os.unlink(temp_file_path)
+                print(f"DEBUG: Temp removido: {temp_file_path}")
+            except Exception as unlink_err:
+                print(f"AVISO: Falha remover temp {temp_file_path}: {unlink_err}")
 
     # Retorna o resultado
     return ml_schemas.AnalysisOutput(

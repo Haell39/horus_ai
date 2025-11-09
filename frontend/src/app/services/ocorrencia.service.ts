@@ -81,6 +81,17 @@ export class OcorrenciaService {
 
   /** Get disk usage for a given path (GB) */
   getDiskUsage(path: string) {
-    return this.http.get(`${this.apiUrl}/admin/disk-usage`, { params: { path } });
+    return this.http.get(`${this.apiUrl}/admin/disk-usage`, {
+      params: { path },
+    });
+  }
+
+  /** Persist storage configuration on the backend (admin only) */
+  setStorageConfig(payload: {
+    mode: string;
+    local_path?: string;
+    oneDriveLink?: string;
+  }) {
+    return this.http.post(`${this.apiUrl}/admin/storage-config`, payload);
   }
 }

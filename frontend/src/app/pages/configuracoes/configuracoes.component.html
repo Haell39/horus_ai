@@ -26,39 +26,106 @@
     <!-- Armazenamento -->
     <div class="card card-armazenamento">
       <h3>Armazenamento</h3>
+
       <div class="linha">
         <label>Destino</label>
-        <div style="display:flex; gap:12px; align-items:center;">
-          <label><input type="radio" name="storage" [(ngModel)]="configuracoes.storageMode" value="local" /> Local</label>
-          <label><input type="radio" name="storage" [(ngModel)]="configuracoes.storageMode" value="onedrive" /> OneDrive</label>
+        <div style="display: flex; gap: 12px; align-items: center">
+          <label
+            ><input
+              type="radio"
+              name="storage"
+              [(ngModel)]="configuracoes.storageMode"
+              value="local"
+            />
+            Local</label
+          >
+          <label
+            ><input
+              type="radio"
+              name="storage"
+              [(ngModel)]="configuracoes.storageMode"
+              value="onedrive"
+            />
+            OneDrive</label
+          >
         </div>
       </div>
-      <div *ngIf="configuracoes.storageMode === 'local'" style="margin-top:8px">
+
+      <!-- Local -->
+      <div
+        *ngIf="configuracoes.storageMode === 'local'"
+        style="margin-top: 8px"
+      >
         <div class="linha">
           <label>Caminho Local</label>
-          <input type="text" [(ngModel)]="configuracoes.localPath" placeholder="Ex: C:\\ ou /mnt/data" />
-          <button class="btn-analise" (click)="checkDiskUsage()">Verificar Disco</button>
+          <input
+            type="text"
+            [(ngModel)]="configuracoes.localPath"
+            placeholder="Ex: C:\\ ou /mnt/data"
+          />
+          <button class="btn-analise" (click)="selectLocalFolder()">
+            Selecionar pasta
+          </button>
+          <button class="btn-analise" (click)="checkDiskUsage()">
+            Verificar Disco
+          </button>
         </div>
-        <p class="descricao">
-          Uso do disco para <strong>{{ detectedPath || configuracoes.localPath || '(não verificado)' }}</strong>
+        <p class="descricao" style="margin-top: 6px">
+          Observação: por segurança, navegadores podem não devolver o caminho
+          absoluto da pasta. Se <strong>Não</strong> aparecer o caminho completo
+          (ex: <code>D:\\Documents</code>), cole-o manualmente no campo acima
+          antes de clicar em "Verificar Disco".
         </p>
-        <div style="display:flex; gap:12px; align-items:center;">
-          <div>Usado: <strong>{{ storageUsed | number:'1.1-1' }} GB</strong></div>
-          <div>Total: <strong>{{ storageTotal | number:'1.1-1' }} GB</strong></div>
-          <div>Percent: <strong>{{ (storageTotal ? ((storageUsed / storageTotal) * 100) : 0) | number:'1.0-0' }}%</strong></div>
+
+        <p class="descricao">
+          Uso do disco para
+          <strong>{{
+            detectedPath || configuracoes.localPath || "(não verificado)"
+          }}</strong>
+        </p>
+
+        <div style="display: flex; gap: 12px; align-items: center">
+          <div>
+            Usado: <strong>{{ storageUsed | number : "1.1-1" }} GB</strong>
+          </div>
+          <div>
+            Total: <strong>{{ storageTotal | number : "1.1-1" }} GB</strong>
+          </div>
+          <div>
+            Percent:
+            <strong
+              >{{
+                (storageTotal ? (storageUsed / storageTotal) * 100 : 0)
+                  | number : "1.0-0"
+              }}%</strong
+            >
+          </div>
         </div>
       </div>
-      <div *ngIf="configuracoes.storageMode === 'onedrive'" style="margin-top:8px">
+
+      <!-- OneDrive -->
+      <div
+        *ngIf="configuracoes.storageMode === 'onedrive'"
+        style="margin-top: 8px"
+      >
         <div class="linha">
           <label>OneDrive - Pasta / Link</label>
-          <input type="text" [(ngModel)]="configuracoes.oneDriveLink" placeholder="https://onedrive.live.com/.." />
-          <button class="btn-analise" (click)="copiarOneDriveLink()">Abrir OneDrive</button>
+          <input
+            type="text"
+            [(ngModel)]="configuracoes.oneDriveLink"
+            placeholder="https://onedrive.live.com/..."
+          />
+          <button class="btn-analise" (click)="copiarOneDriveLink()">
+            Abrir OneDrive
+          </button>
         </div>
-        <p class="descricao">Os clipes continuarão sendo salvos localmente até que a integração com OneDrive seja configurada no backend.</p>
+        <p class="descricao">
+          Os clipes continuarão sendo salvos localmente até que a integração com
+          OneDrive seja configurada no backend.
+        </p>
       </div>
-      <div style="margin-top: 8px; display: flex; gap: 8px">
-        <button class="btn-analise" (click)="abrirGerenciarClipes()">Gerenciar Clipes</button>
-      </div>
+
+      <!-- Gerenciar Clipes temporarily removed; this card now only manages storage settings -->
     </div>
 
     <!-- Notificações -->
@@ -93,6 +160,4 @@
   <button class="salvar-tudo" (click)="salvarTudo()">Salvar Alterações</button>
 </div>
 
-<!-- Modal Gerenciar Clipes -->
-<app-gerenciar-clipes *ngIf="mostrarModal" (fechar)="fecharGerenciarClipes()">
-</app-gerenciar-clipes>
+<!-- Modal Gerenciar Clipes removed -->

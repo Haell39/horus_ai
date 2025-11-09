@@ -112,6 +112,7 @@ def read_root():
 print("INFO: Aplicação FastAPI iniciada e rotas configuradas.")
 
 # --- Monta rota para servir clipes estáticos (ex: /clips/clip_123.mp4) ---
+# Monta a pasta pública padrão para clipes
 clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'static', 'clips'))
 os.makedirs(clips_dir, exist_ok=True)
 app.mount("/clips", StaticFiles(directory=clips_dir), name="clips")

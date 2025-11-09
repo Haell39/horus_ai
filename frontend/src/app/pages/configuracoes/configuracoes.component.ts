@@ -4,7 +4,6 @@ import autoTable from 'jspdf-autotable';
 import { SidebarComponent } from '../../shared/sidebar/sidebar.component';
 import { FormsModule } from '@angular/forms';
 import { TemaService } from '../../services/preloaderService/tema.service';
-import { GerenciarClipesComponent } from '../../components/gerenciar-clipes/gerenciar-clipes.component';
 import { CommonModule } from '@angular/common';
 import { OcorrenciaService } from '../../services/ocorrencia.service';
 
@@ -19,12 +18,7 @@ interface Configuracoes {
 @Component({
   selector: 'app-configuracoes',
   standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    SidebarComponent,
-    GerenciarClipesComponent,
-  ],
+  imports: [CommonModule, FormsModule, SidebarComponent],
   templateUrl: './configuracoes.component.html',
   styleUrls: ['./configuracoes.component.css'],
 })
@@ -34,15 +28,13 @@ export class ConfiguracoesComponent implements OnInit {
     formatoRelatorio: 'json',
     storageMode: 'local',
     localPath: '',
-    oneDriveLink: ''
+    oneDriveLink: '',
   };
 
   storageUsed = 4.2; // GB usados
   storageTotal = 10; // GB totais
   // details filled after probe
   detectedPath: string | null = null;
-
-  mostrarModal = false; // Modal de Gerenciar Clipes
   oneDriveFolder: string | null = null;
 
   constructor(
@@ -57,10 +49,15 @@ export class ConfiguracoesComponent implements OnInit {
     }
     // load oneDrive link/folder if configured by ops
     try {
-      const od = localStorage.getItem('oneDrive_link') || this.configuracoes.oneDriveLink;
+      const od =
+        localStorage.getItem('oneDrive_link') ||
+        this.configuracoes.oneDriveLink;
       this.oneDriveFolder = od || null;
       // if localPath configured, try to probe disk usage
-      if (this.configuracoes.storageMode === 'local' && this.configuracoes.localPath) {
+      if (
+        this.configuracoes.storageMode === 'local' &&
+        this.configuracoes.localPath
+      ) {
         this.checkDiskUsage(this.configuracoes.localPath);
       }
     } catch (e) {
@@ -89,6 +86,24 @@ export class ConfiguracoesComponent implements OnInit {
       // small alert for admin in config panel
       alert('Configurações salvas com sucesso!');
     } catch (e) {}
+    // Também tentamos persistir a configuração no backend (admin endpoint)
+    try {
+      const payload: any = {
+        mode: this.configuracoes.storageMode || 'local',
+        local_path: this.configuracoes.localPath || undefined,
+        oneDriveLink: this.configuracoes.oneDriveLink || undefined,
+      };
+      this.ocorrenciaService.setStorageConfig(payload).subscribe({
+        next: (res) => {
+          console.log('Storage config persisted on server:', res);
+        },
+        error: (err) => {
+          console.warn('Falha ao persistir storage config no servidor:', err);
+        },
+      });
+    } catch (e) {
+      console.warn('Erro ao chamar setStorageConfig:', e);
+    }
   }
 
   get storagePercent(): number {
@@ -130,14 +145,7 @@ export class ConfiguracoesComponent implements OnInit {
     }
   }
 
-  /** 🔹 Modal de Gerenciar Clipes */
-  abrirGerenciarClipes(): void {
-    this.mostrarModal = true;
-  }
-
-  fecharGerenciarClipes(): void {
-    this.mostrarModal = false;
-  }
+  // Gerenciar Clipes UI temporarily removed
 
   /** Exportação */
   exportar(): void {
@@ -268,6 +276,67 @@ export class ConfiguracoesComponent implements OnInit {
     }
   }
 
+  // Tenta abrir um seletor de pasta no navegador (File System Access API)
+  async selectLocalFolder(): Promise<void> {
+    try {
+      // feature detect
+      const anyWin: any = window as any;
+      if (anyWin.showDirectoryPicker) {
+        const handle = await anyWin.showDirectoryPicker();
+        // O handle.name normalmente é o nome da pasta; navegadores NÃO expõem
+        // o caminho absoluto por motivos de segurança.
+        const folderName = handle.name || '';
+        // Atualiza o campo com o nome (pode não ser um caminho absoluto)
+        this.configuracoes.localPath = folderName;
+        // Se o nome parecer um caminho absoluto (Windows 'C:\' ou '/'), tenta verificar
+        if (folderName.includes(':') || folderName.startsWith('/')) {
+          this.checkDiskUsage(folderName);
+        } else {
+          // mostra instrução para o usuário colar o caminho completo, se necessário
+          alert(
+            'Seleção concluída. ATENÇÃO: o navegador pode fornecer apenas o nome da pasta (ex: "Documents"), não o caminho absoluto. Cole o caminho completo (ex: D:\\Documents) no campo antes de clicar em Verificar Disco, ou execute o helper PowerShell tools\\set-storage-config.ps1 para aplicar o caminho no servidor.'
+          );
+        }
+        return;
+      }
+
+      // Fallback: cria um input file com webkitdirectory para permitir selecionar uma pasta
+      const input = document.createElement('input');
+      input.type = 'file';
+      (input as any).webkitdirectory = true;
+      input.style.display = 'none';
+      document.body.appendChild(input);
+      input.addEventListener('change', (ev: any) => {
+        try {
+          const files: FileList = input.files as FileList;
+          if (files && files.length > 0) {
+            // inferir nome raiz a partir do primeiro arquivo
+            const first = files[0] as any;
+            // webkitRelativePath existe quando webkitdirectory é usado
+            const rel = (first as any).webkitRelativePath || '';
+            const parts = rel.split('/');
+            const root = parts.length > 1 ? parts[0] : first.name;
+            // Atualiza o campo (não é caminho absoluto)
+            this.configuracoes.localPath = root;
+            alert(
+              'Pasta selecionada: ' +
+                root +
+                "\nNota: o navegador pode não fornecer o caminho completo. Cole o caminho absoluto (ex: D:\\Documents) no campo antes de clicar em Verificar Disco. Ou rode tools\\set-storage-config.ps1 para gravar o caminho diretamente no backend.'"
+            );
+          }
+        } finally {
+          document.body.removeChild(input);
+        }
+      });
+      input.click();
+    } catch (e) {
+      console.warn('selectLocalFolder failed:', e);
+      alert(
+        'Não foi possível abrir o seletor de pasta no navegador. Cole o caminho manualmente no campo de Caminho Local.'
+      );
+    }
+  }
+
   // Verifica uso do disco para um caminho local usando o backend
   checkDiskUsage(path?: string): void {
     const p = path || this.configuracoes.localPath || '';
@@ -278,13 +347,16 @@ export class ConfiguracoesComponent implements OnInit {
     this.ocorrenciaService.getDiskUsage(p).subscribe({
       next: (res: any) => {
         this.detectedPath = res.path || p;
-  this.storageTotal = res.total_gb || 0;
-  this.storageUsed = res.used_gb || 0;
-  // update oneDriveFolder for UI if relevant
+        this.storageTotal = res.total_gb || 0;
+        this.storageUsed = res.used_gb || 0;
+        // update oneDriveFolder for UI if relevant
       },
       error: (err) => {
         console.error('Falha ao verificar disco:', err);
-        alert('Falha ao verificar disco: ' + (err?.error?.detail || err?.message || 'erro'));
+        alert(
+          'Falha ao verificar disco: ' +
+            (err?.error?.detail || err?.message || 'erro')
+        );
       },
     });
   }
