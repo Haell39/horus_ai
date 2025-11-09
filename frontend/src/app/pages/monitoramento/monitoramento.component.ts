@@ -30,7 +30,8 @@ import { FormsModule } from '@angular/forms';
 import { OcorrenciaService } from '../../services/ocorrencia.service';
 import { Ocorrencia } from '../../models/ocorrencia';
 import { WebsocketService } from '../../services/websocket.service'; // <<< IMPORT WebSocketService
-import { Subscription } from 'rxjs'; // <<< IMPORT Subscription
+import { Subscription, Subject } from 'rxjs'; // <<< IMPORT Subscription, Subject
+import { auditTime } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 
 export type ChartOptions = {
@@ -43,6 +44,7 @@ export type ChartOptions = {
   tooltip: ApexTooltip;
   labels: string[];
   legend: ApexLegend;
+  colors?: string[];
 };
 
 // Interface interna para Alertas (mantida)
@@ -114,6 +116,15 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
   private loopInterval: any;
   public chartOptions!: ChartOptions; // Inicializado em carregarEstruturaGrafico
 
+  // --- Time-series buckets (Option A) ---
+  private bucketSizeMs = 1000; // 1s buckets by default
+  private bucketCount = 300; // last 5 minutes (300 * 1s)
+  private buckets: Array<{ ts: number; counts: number[] }> = [];
+  private incomingEvents$ = new Subject<Ocorrencia>();
+  private incomingSubscription: Subscription | null = null;
+  // Set to deduplicate occurrences (prevents double counting from upload + ws)
+  private seenOccurrenceKeys = new Set<string>();
+
   // <<< VARIÁVEIS WebSocket >>>
   private wsSubscription: Subscription | null = null;
   public isWsConnected: boolean = false; // Status da conexão WS
@@ -156,8 +167,17 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
       this.addAlerta(inicial);
     }
 
+    // initialize live buffer and bucketed chart BEFORE backfill
+    this.initBuckets(Date.now());
     this.carregarDadosIniciais(); // Carga HTTP
-    this.startLoop(); // Loop do gráfico (simulação)
+    // subscribe to buffered incoming events (batch updates)
+    this.incomingSubscription = this.incomingEvents$
+      .pipe(auditTime(500))
+      .subscribe(() => {
+        this.processBufferedEvents();
+        this.updateChartFromBuckets();
+        this.cdr.markForCheck();
+      });
     this.conectarWebSocket(); // Conecta e escuta o WebSocket
     // Se environment.liveStreamUrl for um SRT, pede ao backend para iniciar SRT->HLS
     const live = environment.liveStreamUrl || '';
@@ -470,6 +490,10 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
     if (this.wsSubscription) {
       this.wsSubscription.unsubscribe();
     }
+    if (this.incomingSubscription) {
+      this.incomingSubscription.unsubscribe();
+      this.incomingSubscription = null;
+    }
     // Limpa intervalo do gráfico
     if (this.loopInterval) {
       clearInterval(this.loopInterval);
@@ -637,7 +661,14 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
       yaxis: { show: false, min: 0, max: 3 },
       labels: [],
       legend: { show: false },
-      tooltip: { enabled: false },
+      // Start disabled; we enable it when we have series data.
+      tooltip: {
+        enabled: false,
+        theme: 'dark',
+        style: { fontSize: '12px', fontFamily: 'Segoe UI' },
+      },
+      // Series colors (top-level Apex option) - match severity ordering: X, A, B, C
+      colors: ['#e53935', '#FFC107', '#1E88E5', '#43A047'],
     };
   }
 
@@ -676,6 +707,23 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
           this.saveAlertasToStorage();
 
           this.cdr.markForCheck(); // Marca para verificação com OnPush
+
+          // --- Backfill into buckets for Option A charting ---
+          try {
+            // API may return newest-first; apply oldest -> newest so counts accumulate
+            for (let i = data.length - 1; i >= 0; i--) {
+              const oc = data[i];
+              const key = this.getOccurrenceKey(oc);
+              if (!this.seenOccurrenceKeys.has(key)) {
+                this.applyOccurrenceToBuckets(oc);
+                this.seenOccurrenceKeys.add(key);
+              }
+            }
+            this.updateChartFromBuckets();
+            this.cdr.markForCheck();
+          } catch (e) {
+            console.warn('Erro ao popular histórico no gráfico:', e);
+          }
         } else {
           console.log('HTTP: Nenhuma ocorrência inicial encontrada.');
         }
@@ -740,57 +788,66 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
 
   // Processa uma nova ocorrência recebida via WebSocket
   processarNovaOcorrencia(novaOcorrencia: Ocorrencia): void {
-    console.log(
-      'Processando nova ocorrência WS:',
-      novaOcorrencia.id,
-      novaOcorrencia.type
-    );
-
-    // ATENÇÃO: Se a API retornar o total, usar ele. Senão, incrementamos.
-    // Assumindo que incrementamos por enquanto.
-    this.totalOcorrencias++;
-    if (this.isGrave(novaOcorrencia)) {
-      this.falhasGraves++;
-    }
-    this.ultimaFalha = novaOcorrencia.type || 'N/A';
-
-    const novoAlerta = this.formatarAlerta(novaOcorrencia, true); // true = com animação
-
-    // Adiciona no INÍCIO da lista
-    this.addAlerta(novoAlerta);
-
-    // Remove a animação após um tempo
-    setTimeout(() => {
-      const index = this.alertas.findIndex((a) => a === novoAlerta);
-      if (index !== -1) {
-        this.alertas[index].animacao = '';
-        this.cdr.markForCheck(); // Marca para verificação
-      }
-    }, 1500); // Duração da animação + pequeno buffer
-
-    // Marca o componente para ser verificado pelo Angular
-    this.cdr.markForCheck();
-
-    // Opcional: Pulsar o gráfico real aqui
-    // this.pulsarGraficoReal(novaOcorrencia.severity);
-    // Se for gravíssimo (X) ou grave (A) tocamos um som de alerta mais chamativo
     try {
+      console.log(
+        'Processando nova ocorrência WS:',
+        novaOcorrencia?.id,
+        novaOcorrencia?.type
+      );
+
+      // Deduplicação local: se já vimos essa ocorrência (backfill ou upload),
+      // evitamos re-contar/duplicar no gráfico e nos totais.
+      const ocKey = this.getOccurrenceKey(novaOcorrencia);
+      const alreadySeen = this.seenOccurrenceKeys.has(ocKey);
+      if (!alreadySeen) {
+        this.seenOccurrenceKeys.add(ocKey);
+        // Atualiza contadores simples
+        this.totalOcorrencias = (this.totalOcorrencias || 0) + 1;
+        if (this.isGrave(novaOcorrencia))
+          this.falhasGraves = (this.falhasGraves || 0) + 1;
+      }
+      this.ultimaFalha = novaOcorrencia.type || 'N/A';
+
+      // Formata e adiciona alerta com animação
+      const novoAlerta = this.formatarAlerta(novaOcorrencia, true);
+      this.addAlerta(novoAlerta);
+      setTimeout(() => {
+        const index = this.alertas.findIndex(
+          (a) => a === novoAlerta || a.ts === novoAlerta.ts
+        );
+        if (index !== -1) {
+          this.alertas[index].animacao = '';
+          this.cdr.markForCheck();
+        }
+      }, 1500);
+
+      // Atualiza buckets e notifica o buffer para re-render do gráfico em lote
+      if (!alreadySeen) {
+        this.applyOccurrenceToBuckets(novaOcorrencia);
+        this.incomingEvents$.next(novaOcorrencia);
+      } else {
+        console.log(
+          'Ocorrência já vista localmente, ignorando incremento de buckets:',
+          ocKey
+        );
+      }
+
+      // Opção: tocar som para severidades altas (placeholder)
       const sev = (novaOcorrencia.severity || '').toString();
       if (
-        sev.includes('X') ||
-        sev.includes('Gravíssima') ||
-        /\(X\)/.test(sev)
+        sev.match(/X|Gravíssim|Gravíssima|\(X\)/i) ||
+        sev.match(/\(A\)|\bA\b|Grave/i)
       ) {
-        // force error-style sound
-        this.playSoundForToast('error');
-      } else if (sev.includes('A') || /\(A\)/.test(sev)) {
-        // grave — play normal configured sound but louder
-        this.playSoundForToast('error');
+        // Som simples: usar API de áudio se houver arquivo, aqui apenas log
+        console.log('Alerta severo recebido, severidade:', sev);
       }
-    } catch (e) {}
+
+      this.cdr.markForCheck();
+    } catch (e) {
+      console.warn('Erro ao processar nova ocorrência:', e);
+    }
   }
 
-  // Formata Ocorrencia -> Alerta (Reutilizável)
   formatarAlerta(
     oc: Ocorrencia,
     comAnimacao: boolean = false
@@ -802,6 +859,114 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
       animacao: comAnimacao ? 'aparecer' : '',
       origem: oc.category || 'API Detect',
     };
+  }
+
+  // ---- Bucket helpers for Option A (time-series counts) ----
+  private initBuckets(nowMs: number) {
+    this.buckets = [];
+    const start = nowMs - this.bucketSizeMs * (this.bucketCount - 1);
+    for (let i = 0; i < this.bucketCount; i++) {
+      this.buckets.push({
+        ts: start + i * this.bucketSizeMs,
+        counts: [0, 0, 0, 0],
+      });
+    }
+  }
+
+  private processBufferedEvents() {
+    // Placeholder: events are applied when they arrive via incomingEvents$.next
+    // We use auditTime to batch UI updates and call updateChartFromBuckets()
+  }
+
+  private applyOccurrenceToBuckets(oc: Ocorrencia) {
+    try {
+      const t = Date.parse(oc.start_ts as any);
+      if (isNaN(t)) return;
+      const now = Date.now();
+      // If occurrence is older than window start, ignore
+      const windowStart = now - this.bucketSizeMs * (this.bucketCount - 1);
+      if (t < windowStart) {
+        return;
+      }
+      // ensure bucket range
+      this.ensureBucketsCover(now);
+      const idx = Math.floor((t - this.buckets[0].ts) / this.bucketSizeMs);
+      if (idx < 0 || idx >= this.buckets.length) return;
+      const sevIdx = this.mapSeverityToIndex(oc.severity || '');
+      this.buckets[idx].counts[sevIdx] += 1;
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  private ensureBucketsCover(nowMs: number) {
+    const expectedStart = nowMs - this.bucketSizeMs * (this.bucketCount - 1);
+    const delta = expectedStart - this.buckets[0].ts;
+    if (delta <= 0) return;
+    const shiftBuckets = Math.floor(delta / this.bucketSizeMs);
+    if (shiftBuckets >= this.bucketCount) {
+      this.initBuckets(nowMs);
+      return;
+    }
+    for (let s = 0; s < shiftBuckets; s++) {
+      this.buckets.shift();
+      const lastTs = this.buckets[this.buckets.length - 1].ts;
+      this.buckets.push({
+        ts: lastTs + this.bucketSizeMs,
+        counts: [0, 0, 0, 0],
+      });
+    }
+  }
+
+  private mapSeverityToIndex(sev: string): number {
+    const s = (sev || '').toString();
+    if (/X|Gravíssim|Gravíssima|Gravissimo/i.test(s)) return 0;
+    if (/\(A\)|\bA\b|Grave/i.test(s)) return 1;
+    if (/\(B\)|\bB\b|Médio|Medio/i.test(s)) return 2;
+    if (/\(C\)|\bC\b|Leve/i.test(s)) return 3;
+    return 3;
+  }
+
+  private updateChartFromBuckets() {
+    try {
+      const labels = this.buckets.map((b) =>
+        new Date(b.ts).toLocaleTimeString()
+      );
+      const series = [
+        { name: 'Gravíssimo (X)', data: this.buckets.map((b) => b.counts[0]) },
+        { name: 'Grave (A)', data: this.buckets.map((b) => b.counts[1]) },
+        { name: 'Médio (B)', data: this.buckets.map((b) => b.counts[2]) },
+        { name: 'Leve (C)', data: this.buckets.map((b) => b.counts[3]) },
+      ];
+      this.chartOptions = {
+        ...this.chartOptions,
+        series: series as any,
+        labels: labels,
+        xaxis: { ...(this.chartOptions.xaxis as any), categories: labels },
+        tooltip: {
+          ...((this.chartOptions && this.chartOptions.tooltip) as any),
+          enabled: true,
+        },
+        legend: { show: true },
+      };
+    } catch (e) {
+      console.warn('Erro ao atualizar gráfico a partir dos buckets:', e);
+    }
+  }
+
+  // Gera uma chave estável para uma ocorrência para deduplicação local
+  private getOccurrenceKey(oc: Ocorrencia): string {
+    try {
+      if (!oc) return 'unknown';
+      if ((oc as any).id) return `id:${(oc as any).id}`;
+      const ts = oc.start_ts || oc.created_at || '';
+      const type = oc.type || '';
+      const sev = oc.severity || '';
+      const clip = (oc.evidence && (oc.evidence as any).clip_path) || '';
+      return `${ts}|${type}|${sev}|${clip}`;
+    } catch (e) {
+      return 'unknown';
+    }
   }
 
   // === Funções Helper (Mantidas) ===

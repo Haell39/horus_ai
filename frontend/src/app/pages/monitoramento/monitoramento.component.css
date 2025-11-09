@@ -377,6 +377,29 @@ apx-chart {
   color: var(--texto-cor);
 }
 
+/* ApexCharts tooltip high-contrast overrides to ensure readability on hover */
+.apexcharts-tooltip {
+  background: rgba(26, 26, 26, 0.96) !important;
+  color: #fff !important;
+  border-radius: 8px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6) !important;
+}
+.apexcharts-tooltip * {
+  color: #fff !important;
+}
+.apexcharts-tooltip-title {
+  color: #fff !important;
+  font-weight: 700 !important;
+}
+.apexcharts-tooltip span.apexcharts-tooltip-text {
+  color: #fff !important;
+}
+
+/* Ensure tooltip markers are visible on dark background */
+.apexcharts-tooltip .apexcharts-marker {
+  stroke: rgba(255, 255, 255, 0.12) !important;
+}
+
 .alertas ul {
   list-style: none;
   padding: 0;
