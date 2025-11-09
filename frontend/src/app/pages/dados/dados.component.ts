@@ -48,6 +48,7 @@ export type DonutChartOptions = {
   dataLabels?: ApexDataLabels;
   legend?: ApexLegend;
   colors?: string[];
+  tooltip?: ApexTooltip;
 };
 export type HorizontalBarOptions = {
   series: ApexAxisChartSeries;
@@ -58,6 +59,7 @@ export type HorizontalBarOptions = {
   yaxis: ApexYAxis;
   fill?: ApexFill;
   legend?: ApexLegend;
+  tooltip?: ApexTooltip;
 };
 
 @Component({
@@ -393,7 +395,10 @@ export class DadosComponent implements AfterViewInit, OnInit {
       },
       yaxis: { labels: { style: { colors: [corTexto], fontSize: '14px' } } },
       fill: { opacity: 1, colors: ['#FF4B4B', '#4B79FF'] },
-      tooltip: { y: { formatter: (val: number) => val + ' erros' } },
+      tooltip: {
+        y: { formatter: (val: number) => val + ' erros' },
+        theme: 'dark' as any,
+      },
       legend: { position: 'bottom', labels: { colors: corTexto } },
     };
 
@@ -414,13 +419,14 @@ export class DadosComponent implements AfterViewInit, OnInit {
         labels: { colors: corTexto },
         markers: { fillColors: [] },
       },
+      tooltip: { theme: 'dark' as any },
       responsive: [
         {
           breakpoint: 480,
           options: { chart: { width: 400 }, legend: { position: 'bottom' } },
         },
       ],
-    };
+    } as any;
 
     // 🟢 Gráfico Horizontal (Estrutura VAZIA)
     this.horizontalChartOptions = {
@@ -444,7 +450,8 @@ export class DadosComponent implements AfterViewInit, OnInit {
         labels: { colors: corTexto },
         markers: { width: 12, height: 12, fillColors: ['#4B79FF'] },
       },
-    };
+      tooltip: { theme: 'dark' as any },
+    } as any;
 
     // 🕒 Gráfico: Ocorrências por Hora do Dia (Estrutura VAZIA)
     this.hourChartOptions = {
@@ -486,7 +493,7 @@ export class DadosComponent implements AfterViewInit, OnInit {
       chart: { type: 'area', height: 60, sparkline: { enabled: true } },
       stroke: { curve: 'smooth', width: 2 },
       fill: { opacity: 0.25, colors: ['#1E88E5'] },
-      tooltip: { enabled: false },
+      tooltip: { enabled: false, theme: 'dark' },
       colors: ['#1E88E5'],
     };
   }

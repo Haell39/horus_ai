@@ -91,25 +91,62 @@ body.dark-theme {
    Tooltips are often injected into <body> (outside component scope), so we must
    place the styling in a global stylesheet to guarantee it applies.
 */
-.apexcharts-tooltip,
-.apexcharts-tooltip *,
-.apexcharts-tooltip .apexcharts-tooltip-title,
-.apexcharts-tooltip .apexcharts-tooltip-text,
-.apexcharts-tooltip .apexcharts-tooltip-y-value,
-.apexcharts-tooltip .apexcharts-tooltip-label,
-.apexcharts-tooltip .apexcharts-tooltip-marker {
+.apexcharts-tooltip {
   background: rgba(18, 20, 24, 0.98) !important;
   color: #ffffff !important;
-  border: none !important;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6) !important;
   border-radius: 8px !important;
 }
+/* keep children text white but avoid forcing background on all children (so markers keep their colors) */
+.apexcharts-tooltip,
+.apexcharts-tooltip .apexcharts-tooltip-title,
+.apexcharts-tooltip .apexcharts-tooltip-text,
+.apexcharts-tooltip .apexcharts-tooltip-y-value,
+.apexcharts-tooltip .apexcharts-tooltip-label {
+  color: #ffffff !important;
+}
 .apexcharts-tooltip .apexcharts-tooltip-marker {
-  stroke: #ffffff !important;
-  stroke-width: 1px !important;
+  /* let ApexCharts inline background-color or SVG fill determine the dot color
+     and add a subtle border for contrast against the dark tooltip background */
+  width: 12px !important;
+  height: 12px !important;
+  display: inline-block !important;
+  border-radius: 50% !important;
+  margin-right: 8px !important;
+  vertical-align: middle !important;
+  box-sizing: border-box !important;
+  border: 2px solid rgba(255, 255, 255, 0.08) !important;
+  background-clip: padding-box !important;
 }
 
-/* Make sure the small marker dot has visible fill color for our KPI sparkline */
-.apexcharts-tooltip .apexcharts-tooltip-marker .apexcharts-marker-circle {
-  fill: currentColor !important;
+/* Make title and series rows visually unified and remove any light background blocks */
+.apexcharts-tooltip .apexcharts-tooltip-title {
+  background: transparent !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  padding: 8px 10px !important;
+  margin: 0 !important;
+}
+.apexcharts-tooltip .apexcharts-tooltip-series-group,
+.apexcharts-tooltip .apexcharts-tooltip-box,
+.apexcharts-tooltip .apexcharts-tooltip-text {
+  background: transparent !important;
+  color: #ffffff !important;
+  padding: 6px 10px !important;
+}
+
+/* Slight spacing and min-width for neatness */
+.apexcharts-tooltip {
+  padding: 0 !important;
+  min-width: 120px !important;
+}
+
+/* Ensure marker (dot) picks up series color and remains visible */
+.apexcharts-tooltip .apexcharts-tooltip-marker {
+  width: 12px !important;
+  height: 12px !important;
+  display: inline-block !important;
+  vertical-align: middle !important;
+  margin-right: 8px !important;
+  border-radius: 50% !important;
 }
