@@ -5,6 +5,7 @@ import { SidebarComponent } from '../../shared/sidebar/sidebar.component';
 import { FormsModule } from '@angular/forms';
 import { TemaService } from '../../services/preloaderService/tema.service';
 import { CommonModule } from '@angular/common';
+import { DocumentationCardComponent } from './documentation-card/documentation-card.component';
 import { OcorrenciaService } from '../../services/ocorrencia.service';
 
 interface Configuracoes {
@@ -18,7 +19,12 @@ interface Configuracoes {
 @Component({
   selector: 'app-configuracoes',
   standalone: true,
-  imports: [CommonModule, FormsModule, SidebarComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    SidebarComponent,
+    DocumentationCardComponent,
+  ],
   templateUrl: './configuracoes.component.html',
   styleUrls: ['./configuracoes.component.css'],
 })

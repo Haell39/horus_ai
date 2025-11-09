@@ -1,0 +1,65 @@
+<div class="doc-card">
+  <h3>Documentação</h3>
+  <p class="descricao">
+    Arquivos de referência das pastas <strong>docs</strong>,
+    <strong>tools</strong> e <strong>configs</strong>.
+  </p>
+
+  <div class="doc-sections">
+    <div class="doc-section">
+      <h4>Docs ({{ lists.docs?.length || 0 }})</h4>
+      <ul>
+        <li *ngFor="let f of lists.docs">
+          <button class="link-like" (click)="openFile('docs', f.name)">
+            {{ f.name }}
+          </button>
+        </li>
+      </ul>
+    </div>
+
+    <div class="doc-section">
+      <h4>Tools ({{ lists.tools?.length || 0 }})</h4>
+      <ul>
+        <li *ngFor="let f of lists.tools">
+          <button class="link-like" (click)="openFile('tools', f.name)">
+            {{ f.name }}
+          </button>
+        </li>
+      </ul>
+    </div>
+
+    <div class="doc-section">
+      <h4>Configs ({{ lists.configs?.length || 0 }})</h4>
+      <ul>
+        <li *ngFor="let f of lists.configs">
+          <button class="link-like" (click)="openFile('configs', f.name)">
+            {{ f.name }}
+          </button>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <div style="margin-top: 12px; display: flex; gap: 8px; align-items: center">
+    <button class="btn-analise" (click)="refresh()" [disabled]="loading">
+      Atualizar
+    </button>
+    <span *ngIf="loading">Carregando...</span>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-backdrop" *ngIf="showModal">
+    <div class="modal">
+      <div class="modal-header">
+        <strong>{{ modalTitle }}</strong>
+        <button class="close" (click)="close()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="md-content" [innerHTML]="modalHtml"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-analise" (click)="close()">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>

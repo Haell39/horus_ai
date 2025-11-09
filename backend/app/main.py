@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # Importa NOSSOS routers
 from app.api.endpoints import ocorrencias
 from app.api.endpoints import analysis # <<< ESSA LINHA É CRUCIAL
+from app.api.endpoints import docs
 from app.api.endpoints import ws
 from app.api.endpoints import streams
 from app.api.endpoints import admin
@@ -81,6 +82,13 @@ app.include_router(
     analysis.router,
     prefix="/api/v1",       # Mesmo prefixo da API
     tags=["Análise ML"]     # Tag separada na documentação
+)
+
+# Docs viewer endpoints (lists markdown files under repo folders)
+app.include_router(
+    docs.router,
+    prefix="/api/v1",
+    tags=["Docs"]
 )
 # <<< FIM DO BLOCO ADICIONADO >>>
 
