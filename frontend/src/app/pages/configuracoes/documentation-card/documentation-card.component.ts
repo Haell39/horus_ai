@@ -91,7 +91,10 @@ export class DocumentationCardComponent implements OnInit {
     // inline code
     md = md.replace(/`([^`]+)`/gim, '<code>$1</code>');
     // links
-    md = md.replace(/\[([^\]]+)\]\(([^)]+)\)/gim, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    md = md.replace(
+      /\[([^\]]+)\]\(([^)]+)\)/gim,
+      '<a href="$2" target="_blank" rel="noopener">$1</a>'
+    );
     // unordered lists -> li
     md = md.replace(/^\s*[-\*] (.*)$/gim, '<li>$1</li>');
     // wrap consecutive li into ul
@@ -102,7 +105,10 @@ export class DocumentationCardComponent implements OnInit {
       return m;
     });
     // paragraphs for remaining lines
-    md = md.replace(/^(?!<h\d|<ul|<pre|<li|<blockquote|<code)(.+)$/gim, '<p>$1</p>');
+    md = md.replace(
+      /^(?!<h\d|<ul|<pre|<li|<blockquote|<code)(.+)$/gim,
+      '<p>$1</p>'
+    );
     return md;
   }
 }
