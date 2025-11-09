@@ -8,6 +8,43 @@ from app.core import storage as storage_core
 router = APIRouter()
 
 
+@router.post('/admin/sync-clips')
+def sync_clips():
+    """Copia todos os arquivos do diretório de storage configurado para a pasta pública `backend/static/clips`.
+
+    Retorna lista de arquivos copiados e erros. Útil para sincronizar clipes salvos em um diretório local externo.
+    NOTA: endpoint administrativo — proteger em produção.
+    """
+    try:
+        src = storage_core.get_clips_dir()
+        if not os.path.exists(src):
+            raise HTTPException(status_code=404, detail=f"Storage clips dir not found: {src}")
+
+        public_clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'clips'))
+        os.makedirs(public_clips_dir, exist_ok=True)
+
+        results = {'copied': [], 'skipped': [], 'errors': []}
+        for name in os.listdir(src):
+            src_path = os.path.join(src, name)
+            if not os.path.isfile(src_path):
+                continue
+            dest_path = os.path.join(public_clips_dir, name)
+            try:
+                if os.path.exists(dest_path):
+                    results['skipped'].append(name)
+                    continue
+                shutil.copy2(src_path, dest_path)
+                results['copied'].append(name)
+            except Exception as e:
+                results['errors'].append({'file': name, 'error': str(e)})
+
+        return results
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get('/admin/disk-usage')
 def disk_usage(path: str = Query(..., description='Path to check disk usage')):
     """Return disk usage stats (GB) for a given path. Used by frontend to display local disk usage."""

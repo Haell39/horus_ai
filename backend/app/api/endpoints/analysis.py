@@ -144,18 +144,29 @@ async def upload_analysis(
 
             # Garante que o clipe também esteja disponível na pasta pública montada em /clips
             try:
-                public_clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'clips'))
+                # public clips are served from backend/static/clips (one level above app/)
+                public_clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'static', 'clips'))
                 os.makedirs(public_clips_dir, exist_ok=True)
                 public_path = os.path.join(public_clips_dir, os.path.basename(clip_to_save))
                 if os.path.abspath(clip_to_save) != os.path.abspath(public_path):
                     try:
                         shutil.copy2(clip_to_save, public_path)
                         clip_to_serve = public_path
-                    except Exception:
-                        clip_to_serve = clip_to_save
+                    except Exception as e:
+                        # Log full error and attempt a second copy attempt to help diagnose transient issues
+                        print(f"DEBUG: upload_analysis -> falha ao copiar para pasta pública: {e}")
+                        try:
+                            # second attempt
+                            shutil.copy(clip_to_save, public_path)
+                            clip_to_serve = public_path
+                        except Exception as e2:
+                            print(f"DEBUG: upload_analysis -> segunda tentativa de cópia falhou: {e2}")
+                            # fallback: serve the original saved clip (may be outside static mount)
+                            clip_to_serve = clip_to_save
                 else:
                     clip_to_serve = clip_to_save
-            except Exception:
+            except Exception as e:
+                print(f"DEBUG: upload_analysis -> erro preparando public_path: {e}")
                 clip_to_serve = clip_to_save
 
             clip_basename = os.path.basename(clip_to_serve)
@@ -268,18 +279,26 @@ async def upload_analysis(
 
                     # garante que o clipe esteja disponível na pasta pública /clips
                     try:
-                        public_clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'clips'))
+                        # same public path as main.py mounts (/clips -> backend/static/clips)
+                        public_clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'static', 'clips'))
                         os.makedirs(public_clips_dir, exist_ok=True)
                         public_path = os.path.join(public_clips_dir, os.path.basename(clip_to_save))
                         if os.path.abspath(clip_to_save) != os.path.abspath(public_path):
                             try:
                                 shutil.copy2(clip_to_save, public_path)
                                 clip_to_serve = public_path
-                            except Exception:
-                                clip_to_serve = clip_to_save
+                            except Exception as e:
+                                print(f"DEBUG: Background worker -> falha ao copiar para pasta pública: {e}")
+                                try:
+                                    shutil.copy(clip_to_save, public_path)
+                                    clip_to_serve = public_path
+                                except Exception as e2:
+                                    print(f"DEBUG: Background worker -> segunda tentativa de cópia falhou: {e2}")
+                                    clip_to_serve = clip_to_save
                         else:
                             clip_to_serve = clip_to_save
-                    except Exception:
+                    except Exception as e:
+                        print(f"DEBUG: Background worker -> erro preparando public_path: {e}")
                         clip_to_serve = clip_to_save
 
                     evidence_dict = {
