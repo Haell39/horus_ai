@@ -72,12 +72,14 @@ export class DadosComponent implements AfterViewInit, OnInit {
   @ViewChild('barChart') barChart!: ChartComponent;
   @ViewChild('donutChart') donutChart!: ChartComponent;
   @ViewChild('horizontalChart') horizontalChart!: ChartComponent;
+  @ViewChild('hourChart') hourChart!: ChartComponent;
 
   // === CORREÇÃO DE TIPO (1/3) ===
   // Removemos o 'Partial' e usamos '!' para dizer ao TS que vamos inicializar
   public barChartOptions!: BarChartOptions;
   public donutChartOptions!: DonutChartOptions;
   public horizontalChartOptions!: HorizontalBarOptions;
+  public hourChartOptions!: BarChartOptions;
 
   periodoSelecionado = '7d';
   tipoErroSelecionado = 'todos';
@@ -431,6 +433,29 @@ export class DadosComponent implements AfterViewInit, OnInit {
         markers: { width: 12, height: 12, fillColors: ['#4B79FF'] },
       },
     };
+
+    // 🕒 Gráfico: Ocorrências por Hora do Dia (Estrutura VAZIA)
+    this.hourChartOptions = {
+      series: [{ name: 'Ocorrências', data: [] }],
+      chart: {
+        type: 'bar',
+        height: 260,
+        width: 830,
+        animations: { enabled: true },
+      },
+      plotOptions: {
+        bar: { horizontal: false, columnWidth: '60%', borderRadius: 4 },
+      },
+      dataLabels: { enabled: false },
+      stroke: { show: true, width: 1, colors: ['transparent'] },
+      xaxis: { categories: Array.from({ length: 24 }, (_, i) => `${i}h`) },
+      yaxis: {
+        labels: { style: { colors: [this.getCorTexto()], fontSize: '13px' } },
+      },
+      fill: { opacity: 1, colors: ['#1E88E5'] },
+      tooltip: { y: { formatter: (val: number) => `${val} ocorrências` } },
+      legend: { show: false },
+    };
   }
 
   // ===========================
@@ -503,6 +528,7 @@ export class DadosComponent implements AfterViewInit, OnInit {
       this.periodoSelecionado
     );
 
+    // (hour chart update call will be executed after tipo filtering)
     // --- 3. Filtra por TIPO (Grave/Simples) ---
     let dadosFiltradosPorTipo = dadosFiltradosPorPeriodo;
     switch (this.tipoErroSelecionado) {
@@ -521,7 +547,42 @@ export class DadosComponent implements AfterViewInit, OnInit {
         break;
     }
 
-    // --- 4. Atualiza os Gráficos Agrupados (Donut e Horizontal) ---
+    // --- 4. Atualiza o Gráfico de Ocorrências por Hora ---
+    this.atualizarGraficoHoras(dadosFiltradosPorTipo);
+
+    // --- 5. Atualiza os Gráficos Agrupados (Donut e Horizontal) ---
     this.atualizarGraficosAgrupados(dadosFiltradosPorTipo);
+  }
+
+  /** Atualiza o gráfico de Ocorrências por Hora do Dia (0-23) */
+  private atualizarGraficoHoras(dados: Ocorrencia[]) {
+    const counts = new Array(24).fill(0);
+    for (const oc of dados) {
+      try {
+        const d = new Date(oc.start_ts);
+        if (isNaN(d.getTime())) continue;
+        const h = d.getHours();
+        counts[h] = (counts[h] || 0) + 1;
+      } catch (e) {
+        // ignore malformed dates
+      }
+    }
+
+    this.hourChartOptions.series = [{ name: 'Ocorrências', data: counts }];
+    this.hourChartOptions.xaxis = {
+      ...(this.hourChartOptions.xaxis as any),
+      categories: Array.from({ length: 24 }, (_, i) => `${i}h`),
+    };
+
+    if (this.hourChart) {
+      try {
+        this.hourChart.updateOptions({
+          series: this.hourChartOptions.series,
+          xaxis: this.hourChartOptions.xaxis,
+        });
+      } catch (e) {
+        // updateOptions may fail if chart not yet initialized; ignore
+      }
+    }
   }
 }

@@ -42,6 +42,22 @@
             [legend]="$any(barChartOptions).legend"
           ></apx-chart>
         </div>
+        <div class="card-grafico grande" style="margin-top: 18px">
+          <h3 class="titulo-grafico">Ocorrências por Hora do Dia</h3>
+          <apx-chart
+            #hourChart
+            [series]="$any(hourChartOptions).series"
+            [chart]="$any(hourChartOptions).chart"
+            [plotOptions]="$any(hourChartOptions).plotOptions"
+            [dataLabels]="$any(hourChartOptions).dataLabels"
+            [stroke]="$any(hourChartOptions).stroke"
+            [xaxis]="$any(hourChartOptions).xaxis"
+            [yaxis]="$any(hourChartOptions).yaxis"
+            [fill]="$any(hourChartOptions).fill"
+            [tooltip]="$any(hourChartOptions).tooltip"
+            [legend]="$any(hourChartOptions).legend"
+          ></apx-chart>
+        </div>
       </div>
 
       <div class="coluna-direita">
