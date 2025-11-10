@@ -2,20 +2,30 @@
 
 ## Resumo
 
-Horus AI é uma aplicação de monitoramento em tempo real para ingestão de streams SRT, geração de HLS para visualização no navegador, execução de inferência leve com modelos TFLite e persistência de ocorrências em banco de dados. O projeto contém backend (FastAPI) e frontend (Angular).
+Horus AI é uma aplicação de monitoramento em tempo real para ingestão de streams SRT, geração de HLS para visualização no navegador, execução de inferência leve com modelos TFLite e persistência de ocorrências em banco de dados. O projeto contém um backend (FastAPI) responsável pela ingestão, inferência e APIs, e um frontend (Angular) para visualização e monitoramento.
+
+## O que há de novo / estado atual
+
+- Frontend: dashboard com páginas `Monitoramento` e `Dados`.
+
+  - `Monitoramento`: gráfico de séries temporais (backfilled + live via WebSocket) com deduplicação local para evitar double-counting de ocorrências reemitidas.
+  - `Dados`: gráficos adicionais (donut, top horizontal, "Ocorrências por Hora do Dia") e dois cartões KPI ("Total de Ocorrências" e "% Ocorrências Graves") com sparklines e delta comparativo.
+  - Tooltip do ApexCharts ajustado globalmente para tema escuro e marcadores (bolinhas) preservando as cores por severidade (X=Vermelho, A=Amarelo, B=Azul, C=Verde).
+
+- Backend: FastAPI com endpoints para controlar ingest (start/stop/status), upload/analysis e WebSocket para broadcast de ocorrências. O backend também gera HLS e clips via ffmpeg.
 
 ## Estrutura principal
 
 - `backend/` — FastAPI app, ML (TFLite), ingest de stream (ffmpeg), APIs e mount de arquivos estáticos.
 
   - `backend/app/streams/srt_reader.py` — controladora de ingest SRT → HLS + extractor de frames para inferência.
-  - `backend/app/api/endpoints/streams.py` — endpoints start/stop/status para ingest.
+  - `backend/app/api/endpoints/streams.py` — endpoints `start`/`stop`/`status` para ingest.
   - `backend/app/api/endpoints/ws.py` — WebSocket para broadcast de ocorrências.
   - `backend/app/ml/` — wrappers para carregar e executar modelos TFLite.
   - `backend/static/hls/` — playlist e segmentos HLS gerados (ignorado pelo git).
   - `backend/static/clips/` — clips gerados a partir de frames.
 
-- `frontend/` — Angular app, contém a página `Monitoramento` que se conecta ao HLS servido pelo backend e ao WebSocket.
+- `frontend/` — Angular app (NG v19), página `Monitoramento` que se conecta ao HLS e ao WebSocket; páginas adicionais em `frontend/src/app/pages`.
 
 ## Requisitos
 
@@ -34,16 +44,16 @@ cd backend
 # criar e ativar venv (PowerShell)
 python -m venv .venv; .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-# inicie o servidor sem --reload durante testes de streaming (evita reinícios que fecham ffmpeg/WS)
+# NOTA: NÃO use --reload ao testar ingest/ffmpeg/WS — o reload reinicia o processo Python e fecha subprocessos ffmpeg e sockets.
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-2. Frontend
+2. Frontend (dev server)
 
 ```powershell
 cd frontend
 npm install
-npm start   # roda o ng serve (dev server)
+npm start   # roda o ng serve (dev server, http://localhost:4200)
 ```
 
 3. Testar endpoints
@@ -113,6 +123,11 @@ Get-Process -Name ffmpeg -ErrorAction SilentlyContinue | Select-Object Id,Proces
 Get-Process -Name ffmpeg -ErrorAction SilentlyContinue | Stop-Process -Force
 ```
 
+## Observações sobre o frontend (UI)
+
+- Os tooltips do ApexCharts são estilizados globalmente em `frontend/src/styles.css` (porque o Apex injetaa nodes no `body`), configurados para tema escuro e marcadores preservando cores por severidade.
+- O frontend usa RxJS para buffering de eventos e atualizações dos gráficos para manter a UI responsiva durante bursts de eventos.
+
 ## Segurança e produção
 
 - Em produção mova credenciais e passphrases SRT para variáveis de ambiente seguras / Vault e NÃO as exponha no frontend.
@@ -123,6 +138,7 @@ Get-Process -Name ffmpeg -ErrorAction SilentlyContinue | Stop-Process -Force
 
 - Adicionar endpoint `/api/v1/streams/cleanup` para kill + cleanup remoto (útil para recuperação manual).
 - Implementar retry/backoff no `SRTIngestor.start()` para lidar com rejeições SRT transientes.
+- Adicionar um endpoint de agregação (por exemplo, contagens por hora/dia) para facilitar backfills do frontend sem transferir todo o histórico.
 - Adicionar testes de integração leve que simulam um SRT/HLS small stream e validam o fluxo `/streams/start` -> `stream.m3u8` disponível.
 - Adicionar documentação de runbook (DevOps) com checks e comandos de recuperação rápida.
 
