@@ -114,9 +114,17 @@ async def upload_analysis(
                     os.remove(clip_path)
             except Exception:
                 pass
+            # Mensagem mais informativa: sinaliza que houve uma predição
+            # mas sua confiança ficou abaixo do limiar de acionamento.
+            if pred_class == 'normal':
+                msg = f'Arquivo analisado — sem falhas detectadas (classe={pred_class}, conf={confidence:.3f}).'
+            else:
+                msg = (f'Arquivo analisado — detecção fraca abaixo do limiar ({CONFIDENCE_THRESHOLD:.2f}). '
+                       f'Classe detectada: {pred_class}, confiança={confidence:.3f}. Sem ocorrência criada.')
             return {
                 'status': 'ok',
-                'message': f'Arquivo analisado — sem falhas detectadas (classe={pred_class}, conf={confidence:.3f}).'
+                'message': msg,
+                'prediction': {'class': pred_class, 'confidence': float(confidence or 0.0)}
             }
 
             # Caso haja falha com confiança suficiente, grava ocorrência.
