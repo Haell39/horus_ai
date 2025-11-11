@@ -14,16 +14,23 @@ import math
 
 # === Definições (Mantidas) ===
 MODEL_DIR = os.path.join(os.path.dirname(__file__), 'models')
-AUDIO_MODEL_FILENAME = 'audio_model_quant.tflite'
-VIDEO_MODEL_FILENAME = 'video_model_quant.tflite'
-AUDIO_MODEL_PATH = os.path.join(MODEL_DIR, AUDIO_MODEL_FILENAME)
+# Prefer models under mobilenetv2/ to keep versions organized; fallback to root filenames
+MOBILENET_DIR = os.path.join(MODEL_DIR, 'mobilenetv2')
+
+# New model filenames (user supplied INT8 quantized models)
+VIDEO_MODEL_FILENAME = os.path.join('mobilenetv2', 'video_model_int8.tflite')
+AUDIO_MODEL_FILENAME = os.path.join('mobilenetv2', 'audio_model_int8.tflite')
+
 VIDEO_MODEL_PATH = os.path.join(MODEL_DIR, VIDEO_MODEL_FILENAME)
+AUDIO_MODEL_PATH = os.path.join(MODEL_DIR, AUDIO_MODEL_FILENAME)
 
-AUDIO_CLASSES = ['baixo', 'eco', 'normal', 'ruido']
-VIDEO_CLASSES = ['bloco', 'borrado', 'normal']
+# Classes for the new models (as provided)
+AUDIO_CLASSES = ['ausencia_audio', 'volume_baixo', 'eco', 'ruido', 'sinal_1khz']
+VIDEO_CLASSES = ['freeze', 'fade', 'fora_foco']
 
-INPUT_HEIGHT = 224
-INPUT_WIDTH = 224
+# Input size as specified by the user (160x160x3)
+INPUT_HEIGHT = 160
+INPUT_WIDTH = 160
 
 # === Carregamento dos Intérpretes (Mantido) ===
 audio_interpreter = None
@@ -42,25 +49,40 @@ def load_all_models():
     print("INFO: Carregando modelos TFLite via TensorFlow...")
     loaded_any = False
     try:
-        if os.path.exists(AUDIO_MODEL_PATH):
-            audio_interpreter = tf.lite.Interpreter(model_path=AUDIO_MODEL_PATH)
+        # Prefer new mobilenetv2 models; if missing, keep previous filenames (backwards compat)
+        audio_path_to_try = AUDIO_MODEL_PATH
+        video_path_to_try = VIDEO_MODEL_PATH
+
+        # Backwards-compatible fallbacks (older filenames present in repo)
+        if not os.path.exists(audio_path_to_try):
+            alt = os.path.join(MODEL_DIR, 'audio_model_quant.tflite')
+            if os.path.exists(alt):
+                audio_path_to_try = alt
+
+        if not os.path.exists(video_path_to_try):
+            alt = os.path.join(MODEL_DIR, 'video_model_quant.tflite')
+            if os.path.exists(alt):
+                video_path_to_try = alt
+
+        if os.path.exists(audio_path_to_try):
+            audio_interpreter = tf.lite.Interpreter(model_path=audio_path_to_try)
             audio_interpreter.allocate_tensors()
             audio_input_details = audio_interpreter.get_input_details()[0]
             audio_output_details = audio_interpreter.get_output_details()[0]
-            print(f"INFO: Modelo de Áudio TFLite carregado. Input: {audio_input_details['shape']}, dtype: {audio_input_details['dtype']}")
+            print(f"INFO: Modelo de Áudio TFLite carregado. Path={audio_path_to_try} Input: {audio_input_details['shape']}, dtype: {audio_input_details['dtype']}")
             loaded_any = True
         else:
-            print(f"AVISO: Modelo de Áudio TFLite não encontrado em {AUDIO_MODEL_PATH}")
+            print(f"AVISO: Modelo de Áudio TFLite não encontrado (tentadas: {AUDIO_MODEL_PATH}, audio_model_quant.tflite)")
 
-        if os.path.exists(VIDEO_MODEL_PATH):
-            video_interpreter = tf.lite.Interpreter(model_path=VIDEO_MODEL_PATH)
+        if os.path.exists(video_path_to_try):
+            video_interpreter = tf.lite.Interpreter(model_path=video_path_to_try)
             video_interpreter.allocate_tensors()
             video_input_details = video_interpreter.get_input_details()[0]
             video_output_details = video_interpreter.get_output_details()[0]
-            print(f"INFO: Modelo de Vídeo TFLite carregado. Input: {video_input_details['shape']}, dtype: {video_input_details['dtype']}")
+            print(f"INFO: Modelo de Vídeo TFLite carregado. Path={video_path_to_try} Input: {video_input_details['shape']}, dtype: {video_input_details['dtype']}")
             loaded_any = True
         else:
-            print(f"AVISO: Modelo de Vídeo TFLite não encontrado em {VIDEO_MODEL_PATH}")
+            print(f"AVISO: Modelo de Vídeo TFLite não encontrado (tentadas: {VIDEO_MODEL_PATH}, video_model_quant.tflite)")
 
         models_loaded = loaded_any
         if models_loaded:
@@ -80,21 +102,25 @@ def run_tflite_inference(interpreter: tf.lite.Interpreter, input_details: dict, 
     # (Código idêntico ao da resposta anterior)
     if not interpreter: raise RuntimeError("Intérprete TFLite não está disponível.")
     try:
+        # Prepare input according to interpreter quantization parameters.
         input_dtype = input_details['dtype']
-        if input_dtype == np.uint8 or input_dtype == np.int8:
-            scale, zero_point = input_details['quantization']
-            input_data_quant = (input_data * 255.0 / scale + zero_point).astype(input_dtype)
+        # Ensure input_data is float32 preprocessed according to model (e.g. MobileNetV2: (x-127.5)/127.5)
+        input_float = input_data.astype(np.float32)
+        if input_dtype in (np.uint8, np.int8):
+            scale, zero_point = input_details.get('quantization', (1.0, 0))
+            # Quantize: q = round(input_float / scale + zero_point)
+            input_data_quant = np.round(input_float / scale + zero_point).astype(input_dtype)
             interpreter.set_tensor(input_details['index'], input_data_quant)
         else:
-            input_data = input_data.astype(np.float32)
-            interpreter.set_tensor(input_details['index'], input_data)
+            interpreter.set_tensor(input_details['index'], input_float)
 
         interpreter.invoke()
         output_data = interpreter.get_tensor(output_details['index'])[0]
 
+        # Dequantize outputs if needed
         output_dtype = output_details['dtype']
-        if output_dtype == np.uint8 or output_dtype == np.int8:
-            scale, zero_point = output_details['quantization']
+        if output_dtype in (np.uint8, np.int8):
+            scale, zero_point = output_details.get('quantization', (1.0, 0))
             output_data = scale * (output_data.astype(np.float32) - zero_point)
 
         # --- Softmax Opcional ---
@@ -129,19 +155,19 @@ def run_tflite_inference_topk(
         return []
     try:
         input_dtype = input_details['dtype']
-        if input_dtype == np.uint8 or input_dtype == np.int8:
-            scale, zero_point = input_details['quantization']
-            input_data_quant = (input_data * 255.0 / scale + zero_point).astype(input_dtype)
+        input_float = input_data.astype(np.float32)
+        if input_dtype in (np.uint8, np.int8):
+            scale, zero_point = input_details.get('quantization', (1.0, 0))
+            input_data_quant = np.round(input_float / scale + zero_point).astype(input_dtype)
             interpreter.set_tensor(input_details['index'], input_data_quant)
         else:
-            input_data = input_data.astype(np.float32)
-            interpreter.set_tensor(input_details['index'], input_data)
+            interpreter.set_tensor(input_details['index'], input_float)
 
         interpreter.invoke()
         scores = interpreter.get_tensor(output_details['index'])[0]
         out_dtype = output_details['dtype']
-        if out_dtype == np.uint8 or out_dtype == np.int8:
-            scale, zero_point = output_details['quantization']
+        if out_dtype in (np.uint8, np.int8):
+            scale, zero_point = output_details.get('quantization', (1.0, 0))
             scores = scale * (scores.astype(np.float32) - zero_point)
 
         indices = np.argsort(scores)[::-1]
@@ -177,14 +203,17 @@ def preprocess_audio_segment(y_segment: np.ndarray, sr: int) -> Optional[np.ndar
         if max_db > min_db: # Evita divisão por zero
              img_gray = (mel_spec_db - min_db) / (max_db - min_db)
 
-        img_rgb = np.stack([img_gray]*3, axis=-1)
-        img_tf = tf.convert_to_tensor(img_rgb, dtype=tf.float32)
-        img_resized_tf = tf.image.resize(img_tf, [INPUT_HEIGHT, INPUT_WIDTH], method=tf.image.ResizeMethod.BILINEAR)
-        img_resized = img_resized_tf.numpy()
-        img_normalized = img_resized.astype(np.float32) # Assume [0, 1]
-        input_data = np.expand_dims(img_normalized, axis=0)
+    img_rgb = np.stack([img_gray]*3, axis=-1)
+    # Convert to 0-255 uint8 image then resize
+    img_uint8 = (np.clip(img_rgb, 0.0, 1.0) * 255.0).astype(np.uint8)
+    img_tf = tf.convert_to_tensor(img_uint8, dtype=tf.float32)
+    img_resized_tf = tf.image.resize(img_tf, [INPUT_HEIGHT, INPUT_WIDTH], method=tf.image.ResizeMethod.BILINEAR)
+    img_resized = img_resized_tf.numpy().astype(np.float32)
+    # Apply MobileNetV2 preprocessing per user: (x - 127.5) / 127.5
+    img_preproc = (img_resized - 127.5) / 127.5
+    input_data = np.expand_dims(img_preproc, axis=0)
 
-        return input_data if input_data.shape == (1, INPUT_HEIGHT, INPUT_WIDTH, 3) else None
+    return input_data if input_data.shape == (1, INPUT_HEIGHT, INPUT_WIDTH, 3) else None
     except Exception as e:
         # print(f"ERRO pré-processando segmento de áudio: {e}") # Log menos verboso
         return None
@@ -255,11 +284,13 @@ def preprocess_video_single_frame(frame: np.ndarray) -> Optional[np.ndarray]:
     """ Pré-processa UM frame de vídeo (já lido). """
     try:
         if frame is None: return None
-        img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        img_resized = cv2.resize(img_rgb, (INPUT_WIDTH, INPUT_HEIGHT))
-        img_normalized = img_resized.astype(np.float32) / 255.0 # Normaliza [0, 1]
-        input_data = np.expand_dims(img_normalized, axis=0)
-        return input_data if input_data.shape == (1, INPUT_HEIGHT, INPUT_WIDTH, 3) else None
+    img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    img_resized = cv2.resize(img_rgb, (INPUT_WIDTH, INPUT_HEIGHT))
+    img_resized_f = img_resized.astype(np.float32)
+    # Apply MobileNetV2 preprocessing per user: (x - 127.5) / 127.5
+    img_preproc = (img_resized_f - 127.5) / 127.5
+    input_data = np.expand_dims(img_preproc, axis=0)
+    return input_data if input_data.shape == (1, INPUT_HEIGHT, INPUT_WIDTH, 3) else None
     except Exception as e:
         # print(f"ERRO pré-processando frame de vídeo: {e}") # Log menos verboso
         return None
