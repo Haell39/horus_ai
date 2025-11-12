@@ -1,0 +1,104 @@
+{
+  "clip": "upload_clip_d238731b019f444cacf7a83229c13ac1.mp4",
+  "diagnostic": [
+    {
+      "time_s": 0.4666666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5565535426139832
+        },
+        {
+          "class": "eco",
+          "score": 0.151938334107399
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.09407850354909897
+        }
+      ],
+      "output_len": 6
+    },
+    {
+      "time_s": 0.9666666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5548850297927856
+        },
+        {
+          "class": "eco",
+          "score": 0.152190700173378
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.09400720149278641
+        }
+      ],
+      "output_len": 6
+    },
+    {
+      "time_s": 1.4666666666666668,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5554173588752747
+        },
+        {
+          "class": "eco",
+          "score": 0.15190908312797546
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.0937933400273323
+        }
+      ],
+      "output_len": 6
+    },
+    {
+      "time_s": 1.9666666666666668,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5552522540092468
+        },
+        {
+          "class": "eco",
+          "score": 0.15197977423667908
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.0937844067811966
+        }
+      ],
+      "output_len": 6
+    },
+    {
+      "time_s": 2.466666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5743659734725952
+        },
+        {
+          "class": "eco",
+          "score": 0.15036606788635254
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.09167367964982986
+        }
+      ],
+      "output_len": 6
+    }
+  ],
+  "audio": {
+    "class": "freeze",
+    "confidence": 0.6098822951316833
+  },
+  "aggregated": {
+    "class": "ruido",
+    "confidence": 0.559294831752777,
+    "samples": 5
+  }
+}

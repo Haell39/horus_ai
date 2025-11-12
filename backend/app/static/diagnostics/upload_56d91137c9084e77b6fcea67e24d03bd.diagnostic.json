@@ -1,0 +1,230 @@
+{
+  "clip": "upload_clip_56d91137c9084e77b6fcea67e24d03bd.mp4",
+  "diagnostic": [
+    {
+      "time_s": 0.52644,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4221.021406097413,
+        "brightness": 102.212265625,
+        "edge_density": 0.0855859375,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 1.02644,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4391.911817491149,
+        "brightness": 102.449921875,
+        "edge_density": 0.0894140625,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 1.52644,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4252.1597216049195,
+        "brightness": 105.8921875,
+        "edge_density": 0.086640625,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 2.02644,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 81.29214275970459,
+        "brightness": 105.496796875,
+        "edge_density": 0.0376953125,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 2.52644,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 80.95758373413086,
+        "brightness": 105.8183984375,
+        "edge_density": 0.038359375,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 3.02644,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 79.67066599121094,
+        "brightness": 105.2746875,
+        "edge_density": 0.0365234375,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 3.52644,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 79.77704942474365,
+        "brightness": 105.4091796875,
+        "edge_density": 0.038984375,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 4.02644,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 81.3129546875,
+        "brightness": 105.3872265625,
+        "edge_density": 0.040546875,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 4.52644,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4134.316323217774,
+        "brightness": 104.8475,
+        "edge_density": 0.0846484375,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 5.02644,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4125.980675970459,
+        "brightness": 105.009921875,
+        "edge_density": 0.0837890625,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 5.52644,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4147.152918748474,
+        "brightness": 105.21953125,
+        "edge_density": 0.086171875,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 6.02644,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4157.326307983399,
+        "brightness": 104.8938671875,
+        "edge_density": 0.085703125,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 6.52644,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4197.897047601318,
+        "brightness": 105.389375,
+        "edge_density": 0.0836328125,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 7.02644,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4199.3660108398435,
+        "brightness": 105.5724609375,
+        "edge_density": 0.0840234375,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 7.52644,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4110.988324609375,
+        "brightness": 105.08265625,
+        "edge_density": 0.086015625,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 8.02644,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4203.585095384216,
+        "brightness": 105.3719140625,
+        "edge_density": 0.0837109375,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 8.52644,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4216.030699975586,
+        "brightness": 105.4093359375,
+        "edge_density": 0.0846875,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 9.02644,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4156.598939195252,
+        "brightness": 105.29546875,
+        "edge_density": 0.0830859375,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 9.52644,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 9515.556361656189,
+        "brightness": 124.623828125,
+        "edge_density": 0.22109375,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 10.02644,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 8557.577326927187,
+        "brightness": 135.5326171875,
+        "edge_density": 0.21625,
+        "motion": null
+      }
+    }
+  ],
+  "audio": {
+    "class": "normal",
+    "confidence": 0.0
+  },
+  "aggregated": null
+}

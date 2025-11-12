@@ -3,3 +3,7 @@ venv/
 # Ignore HLS generated files (segments, playlist, logs)
 static/hls/
 static/clips/
+static/diagnostics/
+
+__pycache__/
+*.pyc

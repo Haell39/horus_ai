@@ -1,0 +1,466 @@
+{
+  "clip": "upload_clip_6b1fd2b0a1784096be3ff36e59bcedf3.mp4",
+  "diagnostic": [
+    {
+      "time_s": 0.4666666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5905120968818665
+        },
+        {
+          "class": "eco",
+          "score": 0.16218893229961395
+        },
+        {
+          "class": "freeze",
+          "score": 0.07663248479366302
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 3729.797083959962,
+        "brightness": 98.9311328125,
+        "edge_density": 0.1908984375,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 0.9666666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5837235450744629
+        },
+        {
+          "class": "eco",
+          "score": 0.17235681414604187
+        },
+        {
+          "class": "freeze",
+          "score": 0.07701091468334198
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 3892.9556147933963,
+        "brightness": 104.5972265625,
+        "edge_density": 0.1929296875,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 1.4666666666666668,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5713512897491455
+        },
+        {
+          "class": "eco",
+          "score": 0.17613455653190613
+        },
+        {
+          "class": "freeze",
+          "score": 0.078671395778656
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 3565.5371746810915,
+        "brightness": 105.9401171875,
+        "edge_density": 0.1928515625,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 1.9666666666666668,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5587523579597473
+        },
+        {
+          "class": "eco",
+          "score": 0.18201836943626404
+        },
+        {
+          "class": "freeze",
+          "score": 0.07820048183202744
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 3695.078087103271,
+        "brightness": 107.7734765625,
+        "edge_density": 0.198203125,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 2.466666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5750172138214111
+        },
+        {
+          "class": "eco",
+          "score": 0.17270587384700775
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.08001652359962463
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 3985.3865155014037,
+        "brightness": 110.1763671875,
+        "edge_density": 0.1973828125,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 2.966666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5811638236045837
+        },
+        {
+          "class": "eco",
+          "score": 0.16371621191501617
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.08253969252109528
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 2509.5772884750368,
+        "brightness": 108.4127734375,
+        "edge_density": 0.1903125,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 3.466666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5729259848594666
+        },
+        {
+          "class": "eco",
+          "score": 0.17702986299991608
+        },
+        {
+          "class": "freeze",
+          "score": 0.07840514928102493
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 2857.925402337647,
+        "brightness": 111.53015625,
+        "edge_density": 0.2303125,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 3.966666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5613763928413391
+        },
+        {
+          "class": "eco",
+          "score": 0.18504345417022705
+        },
+        {
+          "class": "freeze",
+          "score": 0.08224538713693619
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 4348.235589624024,
+        "brightness": 117.0427734375,
+        "edge_density": 0.2603515625,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 4.466666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5819990038871765
+        },
+        {
+          "class": "eco",
+          "score": 0.17047707736492157
+        },
+        {
+          "class": "freeze",
+          "score": 0.08071514219045639
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 4111.5886209960945,
+        "brightness": 116.691640625,
+        "edge_density": 0.2590234375,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 4.966666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5826576352119446
+        },
+        {
+          "class": "eco",
+          "score": 0.16672250628471375
+        },
+        {
+          "class": "freeze",
+          "score": 0.08237335830926895
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 5330.782304437256,
+        "brightness": 119.6053125,
+        "edge_density": 0.269375,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 5.466666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5792548060417175
+        },
+        {
+          "class": "eco",
+          "score": 0.16917797923088074
+        },
+        {
+          "class": "freeze",
+          "score": 0.08382219076156616
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 6124.265637632751,
+        "brightness": 119.592734375,
+        "edge_density": 0.2790625,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 5.966666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5776879787445068
+        },
+        {
+          "class": "eco",
+          "score": 0.1704484522342682
+        },
+        {
+          "class": "freeze",
+          "score": 0.08457379043102264
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 6525.039167747497,
+        "brightness": 119.481171875,
+        "edge_density": 0.2809765625,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 6.466666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5765960216522217
+        },
+        {
+          "class": "eco",
+          "score": 0.17168205976486206
+        },
+        {
+          "class": "freeze",
+          "score": 0.08501408994197845
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 7057.71037543335,
+        "brightness": 119.4962109375,
+        "edge_density": 0.2851953125,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 6.966666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5760661959648132
+        },
+        {
+          "class": "eco",
+          "score": 0.17205791175365448
+        },
+        {
+          "class": "freeze",
+          "score": 0.08521318435668945
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 7211.793915472412,
+        "brightness": 119.5439453125,
+        "edge_density": 0.2878125,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 7.466666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5761775970458984
+        },
+        {
+          "class": "eco",
+          "score": 0.17195534706115723
+        },
+        {
+          "class": "freeze",
+          "score": 0.08525411784648895
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 7147.877897325135,
+        "brightness": 119.5491796875,
+        "edge_density": 0.290390625,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 7.966666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5814946293830872
+        },
+        {
+          "class": "eco",
+          "score": 0.15672335028648376
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.08506833016872406
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 1411.1749229431152,
+        "brightness": 112.241796875,
+        "edge_density": 0.143984375,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 8.466666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5738544464111328
+        },
+        {
+          "class": "eco",
+          "score": 0.1625426709651947
+        },
+        {
+          "class": "freeze",
+          "score": 0.0848427340388298
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 1986.3799310974123,
+        "brightness": 112.5840234375,
+        "edge_density": 0.17296875,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 8.966666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5691285133361816
+        },
+        {
+          "class": "eco",
+          "score": 0.16533765196800232
+        },
+        {
+          "class": "freeze",
+          "score": 0.08496797829866409
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 2126.208046556091,
+        "brightness": 113.8456640625,
+        "edge_density": 0.17171875,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 9.466666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5740208625793457
+        },
+        {
+          "class": "eco",
+          "score": 0.1628502905368805
+        },
+        {
+          "class": "freeze",
+          "score": 0.08534938097000122
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 2409.4269161605835,
+        "brightness": 114.1584375,
+        "edge_density": 0.183203125,
+        "motion": null
+      }
+    }
+  ],
+  "audio": {
+    "class": "freeze",
+    "confidence": 0.6128667593002319
+  },
+  "aggregated": null
+}

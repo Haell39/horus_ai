@@ -1,0 +1,265 @@
+{
+  "clip": "upload_clip_ee84d4edd169495ca77c846981b46241.mp4",
+  "diagnostic": [
+    {
+      "time_s": 0.9666666666666667,
+      "topk": [
+        {
+          "class": "idx_7",
+          "score": 0.125
+        },
+        {
+          "class": "idx_6",
+          "score": 0.125
+        },
+        {
+          "class": "idx_5",
+          "score": 0.125
+        }
+      ]
+    },
+    {
+      "time_s": 1.9666666666666668,
+      "topk": [
+        {
+          "class": "idx_7",
+          "score": 0.125
+        },
+        {
+          "class": "idx_6",
+          "score": 0.125
+        },
+        {
+          "class": "idx_5",
+          "score": 0.125
+        }
+      ]
+    },
+    {
+      "time_s": 2.966666666666667,
+      "topk": [
+        {
+          "class": "idx_7",
+          "score": 0.125
+        },
+        {
+          "class": "idx_6",
+          "score": 0.125
+        },
+        {
+          "class": "idx_5",
+          "score": 0.125
+        }
+      ]
+    },
+    {
+      "time_s": 3.966666666666667,
+      "topk": [
+        {
+          "class": "idx_7",
+          "score": 0.125
+        },
+        {
+          "class": "idx_6",
+          "score": 0.125
+        },
+        {
+          "class": "idx_5",
+          "score": 0.125
+        }
+      ]
+    },
+    {
+      "time_s": 4.966666666666667,
+      "topk": [
+        {
+          "class": "idx_7",
+          "score": 0.125
+        },
+        {
+          "class": "idx_6",
+          "score": 0.125
+        },
+        {
+          "class": "idx_5",
+          "score": 0.125
+        }
+      ]
+    },
+    {
+      "time_s": 5.966666666666667,
+      "topk": [
+        {
+          "class": "idx_7",
+          "score": 0.125
+        },
+        {
+          "class": "idx_6",
+          "score": 0.125
+        },
+        {
+          "class": "idx_5",
+          "score": 0.125
+        }
+      ]
+    },
+    {
+      "time_s": 6.966666666666667,
+      "topk": [
+        {
+          "class": "idx_7",
+          "score": 0.125
+        },
+        {
+          "class": "idx_6",
+          "score": 0.125
+        },
+        {
+          "class": "idx_5",
+          "score": 0.125
+        }
+      ]
+    },
+    {
+      "time_s": 7.966666666666667,
+      "topk": [
+        {
+          "class": "idx_7",
+          "score": 0.125
+        },
+        {
+          "class": "idx_6",
+          "score": 0.125
+        },
+        {
+          "class": "idx_5",
+          "score": 0.125
+        }
+      ]
+    },
+    {
+      "time_s": 8.966666666666667,
+      "topk": [
+        {
+          "class": "idx_7",
+          "score": 0.125
+        },
+        {
+          "class": "idx_6",
+          "score": 0.125
+        },
+        {
+          "class": "idx_5",
+          "score": 0.125
+        }
+      ]
+    },
+    {
+      "time_s": 9.966666666666667,
+      "topk": [
+        {
+          "class": "idx_7",
+          "score": 0.125
+        },
+        {
+          "class": "idx_6",
+          "score": 0.125
+        },
+        {
+          "class": "idx_5",
+          "score": 0.125
+        }
+      ]
+    },
+    {
+      "time_s": 10.966666666666667,
+      "topk": [
+        {
+          "class": "idx_7",
+          "score": 0.125
+        },
+        {
+          "class": "idx_6",
+          "score": 0.125
+        },
+        {
+          "class": "idx_5",
+          "score": 0.125
+        }
+      ]
+    },
+    {
+      "time_s": 11.966666666666667,
+      "topk": [
+        {
+          "class": "idx_7",
+          "score": 0.125
+        },
+        {
+          "class": "idx_6",
+          "score": 0.125
+        },
+        {
+          "class": "idx_5",
+          "score": 0.125
+        }
+      ]
+    },
+    {
+      "time_s": 12.966666666666667,
+      "topk": [
+        {
+          "class": "idx_7",
+          "score": 0.125
+        },
+        {
+          "class": "idx_6",
+          "score": 0.125
+        },
+        {
+          "class": "idx_5",
+          "score": 0.125
+        }
+      ]
+    },
+    {
+      "time_s": 13.966666666666667,
+      "topk": [
+        {
+          "class": "idx_7",
+          "score": 0.125
+        },
+        {
+          "class": "idx_6",
+          "score": 0.125
+        },
+        {
+          "class": "idx_5",
+          "score": 0.125
+        }
+      ]
+    },
+    {
+      "time_s": 14.966666666666667,
+      "topk": [
+        {
+          "class": "idx_7",
+          "score": 0.125
+        },
+        {
+          "class": "idx_6",
+          "score": 0.125
+        },
+        {
+          "class": "idx_5",
+          "score": 0.125
+        }
+      ]
+    }
+  ],
+  "aggregated": {
+    "class": "idx_7",
+    "confidence": 0.125,
+    "samples": 15
+  }
+}
