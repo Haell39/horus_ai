@@ -1,0 +1,730 @@
+{
+  "clip": "upload_clip_4c13c01fc1bd4074aaa243cc5b3f0009.mp4",
+  "diagnostic": [
+    {
+      "time_s": 0.4666666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5250032544136047
+        },
+        {
+          "class": "eco",
+          "score": 0.18273811042308807
+        },
+        {
+          "class": "freeze",
+          "score": 0.08861508220434189
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 1888.488201751709,
+        "brightness": 121.151953125,
+        "edge_density": 0.0878515625,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 0.9666666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5273891091346741
+        },
+        {
+          "class": "eco",
+          "score": 0.18066954612731934
+        },
+        {
+          "class": "freeze",
+          "score": 0.09097225219011307
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 1434.7836020370482,
+        "brightness": 120.030234375,
+        "edge_density": 0.0671875,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 1.4666666666666668,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.49459657073020935
+        },
+        {
+          "class": "eco",
+          "score": 0.19915981590747833
+        },
+        {
+          "class": "freeze",
+          "score": 0.10390300303697586
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 1956.7121655273438,
+        "brightness": 130.329609375,
+        "edge_density": 0.0792578125,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 1.9666666666666668,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.49459773302078247
+        },
+        {
+          "class": "eco",
+          "score": 0.20263659954071045
+        },
+        {
+          "class": "freeze",
+          "score": 0.1030237078666687
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 2020.1917217773437,
+        "brightness": 133.6557421875,
+        "edge_density": 0.08015625,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 2.466666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5924557447433472
+        },
+        {
+          "class": "eco",
+          "score": 0.14837022125720978
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.08397451788187027
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 2278.0119433349605,
+        "brightness": 102.6696484375,
+        "edge_density": 0.143515625,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 2.966666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.6044619679450989
+        },
+        {
+          "class": "eco",
+          "score": 0.14180539548397064
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.0832459032535553
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 2862.7763091659544,
+        "brightness": 103.8394921875,
+        "edge_density": 0.1513671875,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 3.466666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.6130050420761108
+        },
+        {
+          "class": "eco",
+          "score": 0.13820447027683258
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.07837491482496262
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 3325.291053314209,
+        "brightness": 103.691953125,
+        "edge_density": 0.1449609375,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 3.966666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.6024696826934814
+        },
+        {
+          "class": "eco",
+          "score": 0.13808980584144592
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.08456691354513168
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 2396.2126113037107,
+        "brightness": 102.8129296875,
+        "edge_density": 0.1459375,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 4.466666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.6080448031425476
+        },
+        {
+          "class": "eco",
+          "score": 0.14065080881118774
+        },
+        {
+          "class": "freeze",
+          "score": 0.08013901859521866
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 2778.249213523865,
+        "brightness": 104.529296875,
+        "edge_density": 0.146796875,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 4.966666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.6031537652015686
+        },
+        {
+          "class": "eco",
+          "score": 0.14771051704883575
+        },
+        {
+          "class": "freeze",
+          "score": 0.07822582870721817
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 3070.49451403656,
+        "brightness": 105.1907421875,
+        "edge_density": 0.147578125,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 5.466666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.6001627445220947
+        },
+        {
+          "class": "eco",
+          "score": 0.14586332440376282
+        },
+        {
+          "class": "freeze",
+          "score": 0.08212089538574219
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 3156.2332252181995,
+        "brightness": 105.3467578125,
+        "edge_density": 0.1428515625,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 5.966666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5552120208740234
+        },
+        {
+          "class": "eco",
+          "score": 0.14279863238334656
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.10977083444595337
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 0.05097654876708983,
+        "brightness": 0.0083984375,
+        "edge_density": 0.0,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 6.466666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5552428960800171
+        },
+        {
+          "class": "eco",
+          "score": 0.14280463755130768
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.10973047465085983
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 0.004921875,
+        "brightness": 0.0002734375,
+        "edge_density": 0.0,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 6.966666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5552429556846619
+        },
+        {
+          "class": "eco",
+          "score": 0.14280453324317932
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.1097305491566658
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 0.004921875,
+        "brightness": 0.0002734375,
+        "edge_density": 0.0,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 7.466666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5552429556846619
+        },
+        {
+          "class": "eco",
+          "score": 0.14280453324317932
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.1097305491566658
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 0.004921875,
+        "brightness": 0.0002734375,
+        "edge_density": 0.0,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 7.966666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5552428960800171
+        },
+        {
+          "class": "eco",
+          "score": 0.14280463755130768
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.10973047465085983
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 0.004921875,
+        "brightness": 0.0002734375,
+        "edge_density": 0.0,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 8.466666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5552428960800171
+        },
+        {
+          "class": "eco",
+          "score": 0.14280463755130768
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.10973047465085983
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 0.004921875,
+        "brightness": 0.0002734375,
+        "edge_density": 0.0,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 8.966666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5552425384521484
+        },
+        {
+          "class": "eco",
+          "score": 0.1428040862083435
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.10973113775253296
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 0.0,
+        "brightness": 0.0,
+        "edge_density": 0.0,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 9.466666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5552424788475037
+        },
+        {
+          "class": "eco",
+          "score": 0.1428041011095047
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.10973119735717773
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 0.0,
+        "brightness": 0.0,
+        "edge_density": 0.0,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 9.966666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5552424788475037
+        },
+        {
+          "class": "eco",
+          "score": 0.1428041011095047
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.10973119735717773
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 0.0,
+        "brightness": 0.0,
+        "edge_density": 0.0,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 10.466666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5552424788475037
+        },
+        {
+          "class": "eco",
+          "score": 0.1428041011095047
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.10973119735717773
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 0.0,
+        "brightness": 0.0,
+        "edge_density": 0.0,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 10.966666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5552424788475037
+        },
+        {
+          "class": "eco",
+          "score": 0.1428041011095047
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.10973119735717773
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 0.0,
+        "brightness": 0.0,
+        "edge_density": 0.0,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 11.466666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5552424788475037
+        },
+        {
+          "class": "eco",
+          "score": 0.1428041011095047
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.10973119735717773
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 0.0,
+        "brightness": 0.0,
+        "edge_density": 0.0,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 11.966666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5552424788475037
+        },
+        {
+          "class": "eco",
+          "score": 0.1428041011095047
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.10973119735717773
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 0.0,
+        "brightness": 0.0,
+        "edge_density": 0.0,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 12.466666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5971840023994446
+        },
+        {
+          "class": "eco",
+          "score": 0.148478701710701
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.0819762721657753
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 5355.620235289001,
+        "brightness": 163.0003515625,
+        "edge_density": 0.159140625,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 12.966666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5852355360984802
+        },
+        {
+          "class": "eco",
+          "score": 0.1501288264989853
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.08835271000862122
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 3197.3902143005375,
+        "brightness": 107.3521484375,
+        "edge_density": 0.101328125,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 13.466666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5607190132141113
+        },
+        {
+          "class": "eco",
+          "score": 0.13686786592006683
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.11460878700017929
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 143.37544590911867,
+        "brightness": 53.2859375,
+        "edge_density": 0.0046875,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 13.966666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5589386224746704
+        },
+        {
+          "class": "eco",
+          "score": 0.1371789127588272
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.11526751518249512
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 14.085162156677246,
+        "brightness": 51.8910546875,
+        "edge_density": 0.0,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 14.466666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5643064975738525
+        },
+        {
+          "class": "eco",
+          "score": 0.13600067794322968
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.11269668489694595
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 27.485170111083985,
+        "brightness": 50.993984375,
+        "edge_density": 0.00953125,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 14.966666666666667,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5628480911254883
+        },
+        {
+          "class": "eco",
+          "score": 0.139394149184227
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.1106310710310936
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 159.70524130859374,
+        "brightness": 88.522109375,
+        "edge_density": 0.0233203125,
+        "motion": null
+      }
+    }
+  ],
+  "audio": {
+    "class": "freeze",
+    "confidence": 0.6066036224365234
+  },
+  "aggregated": null
+}

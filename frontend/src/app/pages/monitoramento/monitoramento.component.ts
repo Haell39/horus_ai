@@ -86,6 +86,7 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
   public isLive: boolean = false; // whether player has a live source attached
   // Upload analysis state
   public selectedFile: File | null = null;
+  public debugAnalysis: boolean = false;
   public uploadingFile: boolean = false;
   // Simple toast notifications (ephemeral, non-blocking)
   public toasts: Array<{
@@ -247,43 +248,54 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
     if (!this.selectedFile) return;
     this.uploadingFile = true;
     const fps = 1.0; // default fps for file analysis
-    this.ocorrenciaService.uploadAnalysis(this.selectedFile, fps).subscribe({
-      next: (res: any) => {
-        console.log('Upload analysis response:', res);
-        // If backend returned a created occurrence object (sync), process it like a new occurrence
-        if (res && res.id) {
-          this.processarNovaOcorrencia(res as any);
-        } else if (res && res.status === 'ok') {
-          // Notificação imediata (não persistir nos "Alertas Recentes" para casos normais)
-          this.showToast(
-            res.message || 'Arquivo analisado — sem falhas detectadas.',
-            'success'
-          );
-        } else if (res && res.status === 'queued') {
-          // Inform user that processing is queued (ephemeral notification only)
-          this.showToast(
-            res.message || 'Arquivo enviado. Processamento em segundo plano.',
-            'info'
-          );
-        }
-        this.selectedFile = null;
-        this.uploadingFile = false;
-        this.cdr.markForCheck();
-      },
-      error: (err) => {
-        console.error('Erro ao enviar arquivo para análise:', err);
-        this.addAlerta({
-          hora: this.datePipe.transform(new Date(), 'HH:mm:ss') || '',
-          mensagem: 'Falha ao enviar arquivo para análise',
-          tipo: 'Erro (E)',
-          animacao: 'aparecer',
-          origem: 'Análise de Arquivo',
-          ts: new Date().toISOString(),
-        });
-        this.uploadingFile = false;
-        this.cdr.markForCheck();
-      },
-    });
+    this.ocorrenciaService
+      .uploadAnalysis(this.selectedFile, fps, this.debugAnalysis)
+      .subscribe({
+        next: (res: any) => {
+          console.log('Upload analysis response:', res);
+          if (res && res.diagnostic) {
+            console.log('Diagnostic data (per-frame top-k):', res.diagnostic);
+            this.showToast(
+              'Diagnóstico gerado — ver console do navegador para detalhes.',
+              'info',
+              6000
+            );
+          }
+          // If backend returned a created occurrence object (sync), process it like a new occurrence
+          if (res && res.id) {
+            this.processarNovaOcorrencia(res as any);
+          } else if (res && res.status === 'ok') {
+            // Notificação imediata (não persistir nos "Alertas Recentes" para casos normais)
+            this.showToast(
+              res.message || 'Arquivo analisado — sem falhas detectadas.',
+              'success'
+            );
+          } else if (res && res.status === 'queued') {
+            // Inform user that processing is queued (ephemeral notification only)
+            this.showToast(
+              res.message || 'Arquivo enviado. Processamento em segundo plano.',
+              'info'
+            );
+          }
+          this.selectedFile = null;
+          this.uploadingFile = false;
+          this.debugAnalysis = false;
+          this.cdr.markForCheck();
+        },
+        error: (err) => {
+          console.error('Erro ao enviar arquivo para análise:', err);
+          this.addAlerta({
+            hora: this.datePipe.transform(new Date(), 'HH:mm:ss') || '',
+            mensagem: 'Falha ao enviar arquivo para análise',
+            tipo: 'Erro (E)',
+            animacao: 'aparecer',
+            origem: 'Análise de Arquivo',
+            ts: new Date().toISOString(),
+          });
+          this.uploadingFile = false;
+          this.cdr.markForCheck();
+        },
+      });
   }
 
   // Toast helpers

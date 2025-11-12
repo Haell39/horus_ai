@@ -68,6 +68,14 @@
             (change)="onFileSelected($event)"
             [disabled]="isStreaming"
           />
+          <label style="display: flex; align-items: center; gap: 6px">
+            <input
+              type="checkbox"
+              [(ngModel)]="debugAnalysis"
+              [disabled]="isStreaming"
+            />
+            <span style="font-size: 0.9rem">Debug</span>
+          </label>
           <button
             class="btn-analise"
             (click)="uploadAnalysisClicked()"

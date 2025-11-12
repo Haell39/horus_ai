@@ -22,9 +22,24 @@ class Settings(BaseSettings):
     """
     DATABASE_URL: str | None = os.getenv("DATABASE_URL")
     # Video detection tuning
-    VIDEO_VOTE_K: int = 3  # K frames consecutivos para voto temporal
+    VIDEO_VOTE_K: int = 2  # K frames consecutivos para voto temporal (reduzido para maior sensibilidade)
     VIDEO_MOVING_AVG_M: int = 5  # janela M para média móvel de confiança
-    VIDEO_THRESH_DEFAULT: float = 0.7  # default para thresholds por classe
+    VIDEO_THRESH_DEFAULT: float = 0.65  # default para thresholds por classe (ajustado)
+    # Audio thresholds (separados) - permitem escolher audio vs video com regras distintas
+    AUDIO_THRESH_DEFAULT: float = 0.60
+    # Heurísticas suplementares para visão (blur/freeze/fade)
+    # NOTE: many test clips show variance-of-Laplacian values in the 150-300
+    # range for out-of-focus frames. The original value (80) was too low and
+    # missed those cases. Increase to 300 to be more permissive in detecting
+    # blur/fora_foco. You can override per-deployment via env AUDIO/VIDEO vars.
+    VIDEO_BLUR_VAR_THRESHOLD: float = 518.0  # variance of Laplacian below this indicates blur (calibrated from diagnostics)
+    VIDEO_MOTION_THRESHOLD: float = 2.0  # mean absolute pixel diff below this indicates freeze
+    VIDEO_BRIGHTNESS_LOW: float = 50.0  # mean brightness below this indicates dark/fade
+    VIDEO_BRIGHTNESS_DROP_RATIO: float = 0.5  # drop ratio between windows that indicates fade
+    VIDEO_SAMPLE_RATE_HZ: float = 2.0  # default sampling rate in Hz for frame analysis
+    # Edge density threshold: proportion of edge pixels (Canny) below which image
+    # is considered low-detail / likely out-of-focus. Tweakable via env.
+    VIDEO_EDGE_DENSITY_THRESHOLD: float = 0.015
 
     def video_thresholds(self) -> Dict[str, float]:
         """Retorna um dicionário com thresholds por classe extraídos das
@@ -46,6 +61,21 @@ class Settings(BaseSettings):
                 continue
         if not thresh:
             thresh["DEFAULT"] = float(self.VIDEO_THRESH_DEFAULT)
+        return thresh
+
+    def audio_thresholds(self) -> Dict[str, float]:
+        """Similar to video_thresholds but reads AUDIO_THRESH_<CLASS> from env."""
+        thresh: Dict[str, float] = {}
+        for k, v in os.environ.items():
+            if not k.startswith("AUDIO_THRESH_"):
+                continue
+            name = k[len("AUDIO_THRESH_"):]
+            try:
+                thresh[name] = float(v)
+            except Exception:
+                continue
+        if not thresh:
+            thresh["DEFAULT"] = float(self.AUDIO_THRESH_DEFAULT)
         return thresh
 
     class Config:

@@ -1,0 +1,148 @@
+{
+  "clip": "upload_clip_43eeef2770e74a218e4208c8b4007073.mp4",
+  "diagnostic": [
+    {
+      "time_s": 0.9676333333333333,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5652559399604797
+        },
+        {
+          "class": "eco",
+          "score": 0.17298726737499237
+        },
+        {
+          "class": "freeze",
+          "score": 0.09691672772169113
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 13307.582582397461,
+        "brightness": 76.299765625,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 1.9686333333333335,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5736771821975708
+        },
+        {
+          "class": "eco",
+          "score": 0.17242053151130676
+        },
+        {
+          "class": "freeze",
+          "score": 0.08743694424629211
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 10226.24080223999,
+        "brightness": 68.730859375,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 2.9696333333333333,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5578517913818359
+        },
+        {
+          "class": "eco",
+          "score": 0.1838705688714981
+        },
+        {
+          "class": "freeze",
+          "score": 0.07913476973772049
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 5193.52607177124,
+        "brightness": 75.0707421875,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 3.9706333333333337,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5716899037361145
+        },
+        {
+          "class": "eco",
+          "score": 0.14293773472309113
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.0987420603632927
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 4554.402659300232,
+        "brightness": 98.0975390625,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 4.971633333333334,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.5813531279563904
+        },
+        {
+          "class": "eco",
+          "score": 0.14906953275203705
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.08746885508298874
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 3408.4585236267094,
+        "brightness": 119.851875,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 5.9726333333333335,
+      "topk": [
+        {
+          "class": "ruido",
+          "score": 0.579750657081604
+        },
+        {
+          "class": "eco",
+          "score": 0.14301490783691406
+        },
+        {
+          "class": "ausencia_audio",
+          "score": 0.09266594052314758
+        }
+      ],
+      "output_len": 6,
+      "heuristics": {
+        "blur_var": 4051.367257371521,
+        "brightness": 103.7045703125,
+        "motion": null
+      }
+    }
+  ],
+  "audio": {
+    "class": "freeze",
+    "confidence": 0.6227433085441589
+  },
+  "aggregated": null
+}

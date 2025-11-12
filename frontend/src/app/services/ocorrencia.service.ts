@@ -36,10 +36,11 @@ export class OcorrenciaService {
   }
 
   /** Upload de vídeo para análise (multipart/form-data) */
-  uploadAnalysis(file: File, fps?: number) {
+  uploadAnalysis(file: File, fps?: number, debug?: boolean) {
     const fd = new FormData();
     fd.append('file', file, file.name);
     if (fps) fd.append('fps', String(fps));
+    if (debug) fd.append('debug', 'true');
     return this.http.post(`${this.apiUrl}/analysis/upload`, fd);
   }
 

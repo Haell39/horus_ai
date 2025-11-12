@@ -1,0 +1,373 @@
+{
+  "clip": "upload_clip_ba501360d8f84d55bd6318afe159e191.mp4",
+  "diagnostic": [
+    {
+      "time_s": 0.4666666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4111.98233348999,
+        "brightness": 148.7062109375,
+        "edge_density": 0.18125,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 0.9666666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 495.5820158630371,
+        "brightness": 202.1819921875,
+        "edge_density": 0.0155859375,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 1.4666666666666666,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 1246.864875730896,
+        "brightness": 172.526875,
+        "edge_density": 0.0860546875,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 1.9666666666666666,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 2635.916448431397,
+        "brightness": 159.2412109375,
+        "edge_density": 0.127890625,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 2.466666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 3490.521844476318,
+        "brightness": 153.184140625,
+        "edge_density": 0.1445703125,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 2.966666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 3994.278825498962,
+        "brightness": 149.947578125,
+        "edge_density": 0.15765625,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 3.466666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4275.430105249023,
+        "brightness": 148.154375,
+        "edge_density": 0.1596484375,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 3.966666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4308.781252989197,
+        "brightness": 146.62015625,
+        "edge_density": 0.165546875,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 4.466666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4259.096052598572,
+        "brightness": 146.3154296875,
+        "edge_density": 0.1631640625,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 4.966666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 2015.9829217773438,
+        "brightness": 163.5458984375,
+        "edge_density": 0.1569921875,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 5.466666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 1371.6710037704468,
+        "brightness": 176.3441796875,
+        "edge_density": 0.084921875,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 5.966666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 1370.2920840072632,
+        "brightness": 176.3441796875,
+        "edge_density": 0.085,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 6.466666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 1370.3434444335937,
+        "brightness": 176.3436328125,
+        "edge_density": 0.085,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 6.966666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 1362.8385163513185,
+        "brightness": 176.3475390625,
+        "edge_density": 0.0858203125,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 7.466666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 1362.5889069763184,
+        "brightness": 176.3473828125,
+        "edge_density": 0.08578125,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 7.966666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 1362.581673753357,
+        "brightness": 176.3469140625,
+        "edge_density": 0.08578125,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 8.466666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 1353.2367575927733,
+        "brightness": 176.352578125,
+        "edge_density": 0.08578125,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 8.966666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4402.19178161621,
+        "brightness": 155.4565234375,
+        "edge_density": 0.16125,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 9.466666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4452.988667089844,
+        "brightness": 155.5096484375,
+        "edge_density": 0.168203125,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 9.966666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4418.027694029236,
+        "brightness": 156.1943359375,
+        "edge_density": 0.171328125,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 10.466666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 475.5295102478027,
+        "brightness": 189.0515625,
+        "edge_density": 0.03734375,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 10.966666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 1569.1535919860837,
+        "brightness": 196.7471484375,
+        "edge_density": 0.0812890625,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 11.466666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 3348.0481615829467,
+        "brightness": 194.1262109375,
+        "edge_density": 0.113984375,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 11.966666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4052.1759814437864,
+        "brightness": 183.717890625,
+        "edge_density": 0.1421484375,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 12.466666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4137.416757659912,
+        "brightness": 182.2934375,
+        "edge_density": 0.1403125,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 12.966666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4465.764626145935,
+        "brightness": 180.912578125,
+        "edge_density": 0.1462890625,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 13.466666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4148.51175433197,
+        "brightness": 179.4616015625,
+        "edge_density": 0.1465234375,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 13.966666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4299.43634418335,
+        "brightness": 178.982421875,
+        "edge_density": 0.1509765625,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 14.466666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4352.867562852478,
+        "brightness": 176.641484375,
+        "edge_density": 0.1519921875,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 14.966666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4546.752754808045,
+        "brightness": 175.5904296875,
+        "edge_density": 0.1555078125,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 15.466666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 4362.024849700928,
+        "brightness": 174.4759765625,
+        "edge_density": 0.159296875,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 15.966666666666667,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 254.0668597412109,
+        "brightness": 205.2878515625,
+        "edge_density": 0.0216015625,
+        "motion": null
+      }
+    },
+    {
+      "time_s": 16.466666666666665,
+      "topk": [],
+      "output_len": 0,
+      "heuristics": {
+        "blur_var": 1373.1217478942872,
+        "brightness": 174.29890625,
+        "edge_density": 0.1114453125,
+        "motion": null
+      }
+    }
+  ],
+  "audio": {
+    "class": "normal",
+    "confidence": 0.0
+  },
+  "aggregated": null
+}

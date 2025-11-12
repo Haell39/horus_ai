@@ -2,6 +2,8 @@
 # (Versão Completa com Rota de Análise Incluída)
 
 from fastapi import FastAPI
+import asyncio
+import socket
 from fastapi.middleware.cors import CORSMiddleware
 
 # Importa NOSSOS routers
@@ -11,6 +13,7 @@ from app.api.endpoints import docs
 from app.api.endpoints import ws
 from app.api.endpoints import streams
 from app.api.endpoints import admin
+from app.api.endpoints import ml_info
 from fastapi.staticfiles import StaticFiles
 import os
 
@@ -82,6 +85,13 @@ app.include_router(
     analysis.router,
     prefix="/api/v1",       # Mesmo prefixo da API
     tags=["Análise ML"]     # Tag separada na documentação
+)
+
+# Small diagnostics/info about model shapes and class mapping
+app.include_router(
+    ml_info.router,
+    prefix="/api/v1",
+    tags=["ML Info"]
 )
 
 # Docs viewer endpoints (lists markdown files under repo folders)
@@ -161,5 +171,34 @@ async def startup_event():
             print("INFO: VIDEO_THRESH (sample): " + ", ".join(f"{k}:{v}" for k, v in sample))
     except Exception as _:
         # do not crash startup on logging
+        pass
+    # --- Install a friendly asyncio exception handler to silence harmless
+    # ConnectionResetError / WinError 10054 noisy stacktraces when clients
+    # (browsers) abort range requests or cancel downloads. This prevents the
+    # server log from filling with tracebacks while keeping other errors visible.
+    try:
+        loop = asyncio.get_running_loop()
+
+        def _asyncio_exception_handler(loop, context):
+            ex = context.get('exception')
+            # If it's a ConnectionResetError (often caused by client aborting
+            # a download) or a Broken pipe on Windows, just log debug and return.
+            if isinstance(ex, ConnectionResetError):
+                print(f"DEBUG: Ignored client connection reset: {ex}")
+                return
+            # Some Windows cancellations raise OSError with WinError 10054
+            if isinstance(ex, OSError) and getattr(ex, 'winerror', None) == 10054:
+                print(f"DEBUG: Ignored WinError 10054 (connection reset by peer): {ex}")
+                return
+            # Fallback to default handler for anything else
+            try:
+                loop.default_exception_handler(context)
+            except Exception:
+                # last resort: print the context
+                print("ERROR in asyncio exception handler:", context)
+
+        loop.set_exception_handler(_asyncio_exception_handler)
+    except Exception:
+        # If we can't set the handler, don't crash startup.
         pass
 # === Fim do Bloco Opcional ===
