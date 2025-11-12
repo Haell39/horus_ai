@@ -14,4 +14,3 @@ venv/
 /frontend/node_modules/
 
 #backend
-backend\app\static\diagnostics
