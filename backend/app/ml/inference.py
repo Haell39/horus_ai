@@ -600,6 +600,19 @@ def analyze_video_frames(file_path: str, sample_rate_hz: float = 2.0) -> Tuple[s
                 idx = int(np.argmax(probs))
                 confidence = float(probs[idx])
                 pred_class = MODEL_CLASSES[idx] if idx < len(MODEL_CLASSES) else f"idx_{idx}"
+                # Guard against cases where the video model outputs labels
+                # that belong to the audio label set (e.g. 'ausencia_audio').
+                # For the video pipeline we only care about visual faults
+                # (freeze/fade/fora_foco). If the predicted class is not one
+                # of the expected video classes, treat it as 'normal' so that
+                # audio-only labels do not cause visual occurrences.
+                try:
+                    expected_video = [c.lower() for c in VIDEO_CLASSES]
+                    if str(pred_class).lower() not in expected_video and str(pred_class).lower() != 'normal':
+                        pred_class = 'normal'
+                        confidence = 0.0
+                except Exception:
+                    pass
             except Exception as e:
                 print(f"ERRO durante inferência Keras no loop de frames: {e}")
                 traceback.print_exc()

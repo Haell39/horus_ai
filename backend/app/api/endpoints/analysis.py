@@ -135,8 +135,14 @@ async def upload_analysis(
         except Exception as e:
             raise HTTPException(status_code=500, detail=f'Erro na inferência de vídeo: {e}')
 
+        # By default the project runs in visual-only mode. Skip audio
+        # processing entirely when VIDEO_DISABLE_AUDIO_PROCESSING is True
+        # to avoid unnecessary work and to ensure audio cannot influence
+        # detection decisions.
+        audio_class, audio_conf = 'normal', 0.0
         try:
-            audio_class, audio_conf = inference.analyze_audio_segments(clip_path)
+            if not bool(core_settings.VIDEO_DISABLE_AUDIO_PROCESSING):
+                audio_class, audio_conf = inference.analyze_audio_segments(clip_path)
         except Exception:
             audio_class, audio_conf = 'normal', 0.0
 
@@ -213,6 +219,24 @@ async def upload_analysis(
         final_pred_class = video_pred
         final_confidence = float(video_effective_conf or 0.0)
 
+        # If the video pipeline strongly indicates 'normal' (no visual faults),
+        # prefer that and suppress audio influence entirely. This avoids creating
+        # audio-only occurrences when the visual analysis shows no problem.
+        try:
+            per_class_thresh = core_settings.video_thresholds()
+            video_thr = float(per_class_thresh.get(video_pred.upper(), per_class_thresh.get('DEFAULT', float(core_settings.VIDEO_THRESH_DEFAULT))))
+            if (video_pred == 'normal' or (str(video_pred).lower() == 'normal')) and (final_confidence >= video_thr):
+                # Force final to normal and ignore audio results regardless of audio model output
+                final_pred_class = 'normal'
+                final_confidence = float(final_confidence)
+                try:
+                    audio_class, audio_conf = 'normal', 0.0
+                except Exception:
+                    audio_class, audio_conf = 'normal', 0.0
+        except Exception:
+            # If threshold lookup fails, fall back to existing behavior
+            pass
+
         # Compare audio signal: decide final winner between video/audio
         # use separate audio thresholds (AUDIO_THRESH_<CLASS> or AUDIO_THRESH_DEFAULT)
         try:
@@ -226,11 +250,22 @@ async def upload_analysis(
         # 2) or audio_conf is significantly higher than video (delta) and reasonably confident
         # This helps cases where audio identifies 'freeze' but both are below global env thresholds.
         try:
-            if audio_class and (audio_conf or 0.0) > final_confidence:
-                delta = (audio_conf or 0.0) - final_confidence
-                if (audio_conf or 0.0) >= float(audio_thresh) or (delta >= 0.04 and (audio_conf or 0.0) >= max(0.55, float(audio_thresh) - 0.05)):
-                    final_pred_class = audio_class
-                    final_confidence = float(audio_conf or 0.0)
+            # Optionally allow audio to override video decisions. Controlled by
+            # VIDEO_ALLOW_AUDIO_OVERRIDE (default: False) to avoid audio-driven
+            # false positives for visual-only errors.
+            if bool(core_settings.VIDEO_ALLOW_AUDIO_OVERRIDE):
+                if audio_class and (audio_conf or 0.0) > final_confidence:
+                    delta = (audio_conf or 0.0) - final_confidence
+                    if (audio_conf or 0.0) >= float(audio_thresh) or (delta >= 0.04 and (audio_conf or 0.0) >= max(0.55, float(audio_thresh) - 0.05)):
+                        final_pred_class = audio_class
+                        final_confidence = float(audio_conf or 0.0)
+            else:
+                # Audio override disabled: keep video decision but log for debug
+                if audio_class and (audio_conf or 0.0) > final_confidence:
+                    try:
+                        print(f"DEBUG: Audio override suppressed (audio={audio_class} conf={audio_conf:.3f}) by VIDEO_ALLOW_AUDIO_OVERRIDE=False")
+                    except Exception:
+                        pass
         except Exception:
             pass
 

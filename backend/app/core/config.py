@@ -40,6 +40,17 @@ class Settings(BaseSettings):
     # Edge density threshold: proportion of edge pixels (Canny) below which image
     # is considered low-detail / likely out-of-focus. Tweakable via env.
     VIDEO_EDGE_DENSITY_THRESHOLD: float = 0.015
+    # Controls whether audio analysis can override the final video-based decision
+    # when processing uploaded video files. Set to False to force video-only
+    # decisions for visual errors (freeze/fade/fora_foco). Can be overridden
+    # via environment variable VIDEO_ALLOW_AUDIO_OVERRIDE=true/false
+    VIDEO_ALLOW_AUDIO_OVERRIDE: bool = False
+
+    # When True, the backend will skip audio model loading and audio
+    # analysis entirely. This ensures the system focuses only on visual
+    # detections (freeze/fade/fora_foco). Default is True to make visual-only
+    # mode the project default; set to False to enable audio processing.
+    VIDEO_DISABLE_AUDIO_PROCESSING: bool = True
 
     def video_thresholds(self) -> Dict[str, float]:
         """Retorna um dicionário com thresholds por classe extraídos das
