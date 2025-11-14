@@ -284,6 +284,66 @@ async def upload_analysis(
             final_threshold = float(core_settings.VIDEO_THRESH_DEFAULT)
 
         if final_pred_class == 'normal' or (final_confidence or 0.0) < final_threshold:
+            # If video says normal but audio detected a strong audio-only fault,
+            # create a separate audio-file occurrence (do not override video decision).
+            try:
+                audio_thresh_map = core_settings.audio_thresholds()
+                audio_thresh = audio_thresh_map.get(audio_class.upper(), audio_thresh_map.get('DEFAULT', float(core_settings.AUDIO_THRESH_DEFAULT))) if audio_class else float(core_settings.AUDIO_THRESH_DEFAULT)
+            except Exception:
+                audio_thresh = float(core_settings.AUDIO_THRESH_DEFAULT)
+
+            try:
+                if audio_class and str(audio_class).lower() != 'normal' and float(audio_conf or 0.0) >= float(audio_thresh):
+                    # create an audio occurrence and return it
+                    dur_calc, severity = calcular_severidade_e_duracao(clip_path)
+                    now = datetime.now(timezone.utc)
+                    start_ts_calc = now - timedelta(seconds=dur_calc or 0)
+
+                    # ensure public copy
+                    public_clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'static', 'clips'))
+                    os.makedirs(public_clips_dir, exist_ok=True)
+                    public_path = os.path.join(public_clips_dir, os.path.basename(clip_path))
+                    try:
+                        if os.path.abspath(clip_path) != os.path.abspath(public_path):
+                            shutil.copy2(clip_path, public_path)
+                            clip_to_serve = public_path
+                        else:
+                            clip_to_serve = clip_path
+                    except Exception:
+                        clip_to_serve = clip_path
+
+                    clip_dur_saved = _get_duration_seconds(clip_to_serve)
+                    evidence = {
+                        'clip_path': f'/clips/{os.path.basename(clip_to_serve)}',
+                        'clip_duration_s': float(clip_dur_saved or duration_s),
+                        'audio_pred': audio_class,
+                        'audio_confidence': float(audio_conf or 0.0),
+                        'fusion': {'video_pred': pred_class, 'video_conf': float(confidence or 0.0), 'audio_pred': audio_class, 'audio_conf': float(audio_conf or 0.0), 'final_pred': final_pred_class, 'final_conf': float(final_confidence or 0.0)}
+                    }
+
+                    try:
+                        db_oc = models.Ocorrencia(
+                            start_ts=start_ts_calc, end_ts=now, duration_s=dur_calc or clip_dur_saved or duration_s,
+                            category='audio-file', type=audio_class, severity=severity,
+                            confidence=float(audio_conf or 0.0), evidence=evidence
+                        )
+                        db.add(db_oc)
+                        db.commit()
+                        db.refresh(db_oc)
+                        if debug:
+                            # attach diagnostic info in the inline response for convenience
+                            out = db_oc.__dict__
+                            out['diagnostic'] = diag
+                            out['audio_debug'] = {'class': audio_class, 'confidence': float(audio_conf or 0.0)}
+                            return out
+                        return db_oc
+                    except Exception as e:
+                        db.rollback()
+                        print(f"Erro ao salvar ocorrência de áudio inline: {e}")
+
+            except Exception:
+                pass
+
             # cleanup clip if no occurrence
             try:
                 if os.path.exists(clip_path):
@@ -334,15 +394,30 @@ async def upload_analysis(
             dur_calc, severity = calcular_severidade_e_duracao(clip_to_save)
 
             # Use the final chosen class/confidence (after video/audio fusion) when creating the occurrence
+            # Decide category based on whether the final prediction is an audio fault
+            try:
+                audio_label_set = [c.lower() for c in getattr(inference, 'AUDIO_CLASSES', [])]
+            except Exception:
+                audio_label_set = []
+            is_audio_occ = str(final_pred_class).lower() in audio_label_set
+            occ_category = 'audio-file' if is_audio_occ else 'video-file'
+
+            evidence = {
+                'clip_path': f'/clips/{clip_basename}',
+                'clip_duration_s': float(clip_dur_saved or duration_s),
+                'event_window': {'before_margin_s': (before_s if event_time is not None else 0.0), 'after_margin_s': (after_s if event_time is not None else 0.0)},
+                'fusion': {'video_pred': pred_class, 'video_conf': float(confidence or 0.0), 'audio_pred': audio_class, 'audio_conf': float(audio_conf or 0.0), 'final_pred': final_pred_class, 'final_conf': float(final_confidence or 0.0)}
+            }
+
             oc = schemas.OcorrenciaCreate(
                 start_ts=now - timedelta(seconds=dur_calc or duration_s or 0),
                 end_ts=now,
                 duration_s=dur_calc or clip_dur_saved or duration_s,
-                category='video-file',
+                category=occ_category,
                 type=final_pred_class,
                 severity=severity,
                 confidence=float(final_confidence or 0.0),
-                evidence={'clip_path': f'/clips/{clip_basename}', 'clip_duration_s': float(clip_dur_saved or duration_s), 'event_window': {'before_margin_s': (before_s if event_time is not None else 0.0), 'after_margin_s': (after_s if event_time is not None else 0.0)}, 'fusion': {'video_pred': pred_class, 'video_conf': float(confidence or 0.0), 'audio_pred': audio_class, 'audio_conf': float(audio_conf or 0.0), 'final_pred': final_pred_class, 'final_conf': float(final_confidence or 0.0)}}
+                evidence=evidence
             )
 
             try:
@@ -402,8 +477,67 @@ async def upload_analysis(
                             return
                 except Exception:
                     pass
+                # Optionally run audio analysis on the cut and create audio occurrence
+                audio_class = 'normal'
+                audio_conf = 0.0
+                try:
+                    if not bool(core_settings.VIDEO_DISABLE_AUDIO_PROCESSING):
+                        audio_class, audio_conf = inference.analyze_audio_segments(clip_to_save)
+                except Exception:
+                    audio_class, audio_conf = 'normal', 0.0
 
-                # save occurrence
+                # Determine audio threshold
+                try:
+                    audio_thresh_map = core_settings.audio_thresholds()
+                    audio_thresh = audio_thresh_map.get(audio_class.upper(), audio_thresh_map.get('DEFAULT', float(core_settings.AUDIO_THRESH_DEFAULT)))
+                except Exception:
+                    audio_thresh = float(core_settings.AUDIO_THRESH_DEFAULT)
+
+                # If audio indicates a strong audio-only fault, create an audio occurrence and return
+                try:
+                    if audio_class and str(audio_class).lower() != 'normal' and float(audio_conf or 0.0) >= float(audio_thresh):
+                        dur_calc, severity = calcular_severidade_e_duracao(clip_to_save)
+                        now = datetime.now(timezone.utc)
+                        start_ts_calc = now - timedelta(seconds=dur_calc or 0)
+                        public_clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'static', 'clips'))
+                        os.makedirs(public_clips_dir, exist_ok=True)
+                        public_path = os.path.join(public_clips_dir, os.path.basename(clip_to_save))
+                        try:
+                            if os.path.abspath(clip_to_save) != os.path.abspath(public_path):
+                                shutil.copy2(clip_to_save, public_path)
+                                clip_to_serve = public_path
+                            else:
+                                clip_to_serve = clip_to_save
+                        except Exception:
+                            clip_to_serve = clip_to_save
+
+                        clip_dur = _get_duration_seconds(clip_to_serve)
+                        evidence_dict = {
+                            'clip_path': f'/clips/{os.path.basename(clip_to_serve)}',
+                            'original_filename': clip_name_local,
+                            'audio_pred': audio_class,
+                            'audio_confidence': float(audio_conf or 0.0),
+                            'clip_duration_s': float(clip_dur or 0.0),
+                        }
+
+                        try:
+                            db_oc = models.Ocorrencia(
+                                start_ts=start_ts_calc, end_ts=now, duration_s=dur_calc or clip_dur or 0.0,
+                                category='audio-file', type=audio_class, severity=severity,
+                                confidence=float(audio_conf or 0.0), evidence=evidence_dict
+                            )
+                            db_session.add(db_oc)
+                            db_session.commit()
+                            db_session.refresh(db_oc)
+                            print(f"Background worker: ocorrência de áudio criada id={db_oc.id} tipo={db_oc.type}")
+                            return
+                        except Exception as e:
+                            db_session.rollback()
+                            print(f"Background worker: falha ao salvar ocorrência de áudio: {e}")
+                except Exception:
+                    pass
+
+                # save occurrence (video) if audio didn't produce one
                 dur_calc, severity = calcular_severidade_e_duracao(clip_to_save)
                 now = datetime.now(timezone.utc)
                 start_ts_calc = now - timedelta(seconds=dur_calc or 0)

@@ -1,0 +1,12 @@
+Overall accuracy: 0.9833
+
+Per-class metrics:
+class,precision,recall,f1,support
+ausencia_audio,1.0000,1.0000,1.0000,10
+volume_baixo,1.0000,1.0000,1.0000,10
+distorcido_clipping,0.9091,1.0000,0.9524,10
+eco,1.0000,1.0000,1.0000,10
+ruido_chiado,1.0000,1.0000,1.0000,10
+sinal_teste,1.0000,0.9000,0.9474,10
+
+Confusion matrix saved to: train_audio\models\confusion_matrix.csv
