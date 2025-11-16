@@ -248,7 +248,36 @@ def run_keras_inference(model: tf.keras.Model, input_data: np.ndarray, classes: 
     if model is None:
         raise RuntimeError("Modelo Keras não está carregado.")
     try:
-        preds = model.predict(input_data)
+        # If the model expects multiple inputs but we received a single ndarray,
+        # attempt to build a list of ordered inputs (image, motion, brightness)
+        preds = None
+        try:
+            inputs_spec = getattr(model, 'inputs', None)
+            if inputs_spec and len(inputs_spec) > 1 and isinstance(input_data, np.ndarray):
+                # build fallback auxiliary inputs (zeros) matching common small shapes
+                ordered = []
+                for inp in inputs_spec:
+                    in_name = getattr(inp, 'name', '') or ''
+                    lname = in_name.lower()
+                    shape = getattr(inp, 'shape', None)
+                    if ('motion' in lname) or (shape is not None and len(shape) == 2):
+                        ordered.append(np.zeros((1, 1), dtype=np.float32))
+                    elif ('bright' in lname) or ('brightness' in lname):
+                        ordered.append(np.zeros((1, 1), dtype=np.float32))
+                    elif ('image' in lname) or ('input' in lname) or (shape is not None and len(shape) == 4):
+                        ordered.append(input_data)
+                    else:
+                        # default fallback: if expects 4D assume image, else scalar zero
+                        if shape is not None and len(shape) == 4:
+                            ordered.append(input_data)
+                        else:
+                            ordered.append(np.zeros((1, 1), dtype=np.float32))
+                preds = model.predict(ordered)
+            else:
+                preds = model.predict(input_data)
+        except Exception:
+            # fallback to direct predict
+            preds = model.predict(input_data)
         if preds is None:
             return "Erro_Inferência", 0.0
         scores = np.array(preds[0], dtype=np.float32)
@@ -268,7 +297,28 @@ def run_keras_inference_topk(model: tf.keras.Model, input_data: np.ndarray, clas
     if model is None:
         return []
     try:
-        preds = model.predict(input_data)
+        # same multi-input guard as run_keras_inference
+        inputs_spec = getattr(model, 'inputs', None)
+        if inputs_spec and len(inputs_spec) > 1 and isinstance(input_data, np.ndarray):
+            ordered = []
+            for inp in inputs_spec:
+                in_name = getattr(inp, 'name', '') or ''
+                lname = in_name.lower()
+                shape = getattr(inp, 'shape', None)
+                if ('motion' in lname) or (shape is not None and len(shape) == 2):
+                    ordered.append(np.zeros((1, 1), dtype=np.float32))
+                elif ('bright' in lname) or ('brightness' in lname):
+                    ordered.append(np.zeros((1, 1), dtype=np.float32))
+                elif ('image' in lname) or ('input' in lname) or (shape is not None and len(shape) == 4):
+                    ordered.append(input_data)
+                else:
+                    if shape is not None and len(shape) == 4:
+                        ordered.append(input_data)
+                    else:
+                        ordered.append(np.zeros((1, 1), dtype=np.float32))
+            preds = model.predict(ordered)
+        else:
+            preds = model.predict(input_data)
         scores = np.array(preds[0], dtype=np.float32)
         probs = _apply_softmax(scores)
         indices = np.argsort(probs)[::-1]
@@ -565,7 +615,7 @@ def analyze_video_frames(file_path: str, sample_rate_hz: float = 2.0) -> Tuple[s
                 except Exception:
                     raw_resized = None
 
-                # If the model expects auxiliary inputs, build dict/list accordingly
+                # If the model expects auxiliary inputs, build inputs according to model.inputs
                 if globals().get('keras_video_model_requires_motion_brightness'):
                     # motion normalized to [0,1]
                     motion_norm = 1.0 if motion == float('inf') else float(motion) / 255.0
@@ -579,14 +629,37 @@ def analyze_video_frames(file_path: str, sample_rate_hz: float = 2.0) -> Tuple[s
                     else:
                         img_for = input_data
 
-                    # try dict mapping first, then list, then single image fallback
+                    # Build inputs in the order the model expects by inspecting model.inputs
                     try:
-                        preds = model.predict({'image': img_for, 'motion': motion_arr, 'brightness': bright_arr})
+                        ordered_inputs = []
+                        for inp in model.inputs:
+                            in_name = getattr(inp, 'name', '') or ''
+                            lname = in_name.lower()
+                            shape = getattr(inp, 'shape', None)
+                            # Heuristics to match input by name or shape
+                            if 'motion' in lname:
+                                ordered_inputs.append(motion_arr)
+                            elif 'brightness' in lname or 'bright' in lname:
+                                ordered_inputs.append(bright_arr)
+                            elif ('image' in lname) or ('input' in lname) or (shape is not None and len(shape) == 4):
+                                ordered_inputs.append(img_for)
+                            else:
+                                # Fallback: if input expects a scalar / 1D vector, try brightness/motion
+                                if shape is not None and len(shape) == 2:
+                                    ordered_inputs.append(motion_arr)
+                                else:
+                                    ordered_inputs.append(img_for)
+
+                        preds = model.predict(ordered_inputs)
                     except Exception:
+                        # As a last resort try dict mapping by common keys, then single-input
                         try:
-                            preds = model.predict([img_for, motion_arr, bright_arr])
+                            preds = model.predict({'image': img_for, 'motion': motion_arr, 'brightness': bright_arr})
                         except Exception:
-                            preds = model.predict(img_for)
+                            try:
+                                preds = model.predict([img_for, motion_arr, bright_arr])
+                            except Exception:
+                                preds = model.predict(img_for)
                 else:
                     # simple single-input model
                     if globals().get('keras_video_model_has_rescaling') and raw_resized is not None:

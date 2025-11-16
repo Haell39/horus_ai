@@ -44,6 +44,21 @@ class SRTIngestor:
         self._recent_conf = deque(maxlen=max(3, self.mavg_window))
         self._streak_class: Optional[str] = None
         self._streak_count: int = 0
+        # time-based aggregation and reporting
+        # window in seconds used to throttle periodic diagnostics prints
+        self._diag_throttle_s = float(os.getenv('VIDEO_DIAG_THROTTLE_S', '5.0'))
+        self._last_diag_print = None
+        # minimum event duration (seconds) required to report an occurrence
+        self.min_event_duration_s = float(os.getenv('VIDEO_MIN_EVENT_DURATION_S', '2.0'))
+        # currently active candidate event: {'class', 'start_ts', 'last_ts', 'max_conf', 'reported', 'start_idx'}
+        self._active_event = None
+        # fixed-window evaluation (collect preds for window_s seconds and decide by majority)
+        self.fixed_window_enabled = bool(int(os.getenv('VIDEO_FIXED_WINDOW_ENABLED', '1')))
+        self.window_s = float(os.getenv('VIDEO_FIXED_WINDOW_S', '5.0'))
+        # buffer of (timestamp, idx, class, confidence)
+        self._window_preds = []
+        # last time we reported an occurrence (to avoid duplicates)
+        self._last_report_ts = None
 
     def start(self, url: str):
         if self._running:
@@ -240,165 +255,268 @@ class SRTIngestor:
                 for f in files:
                     # determine index
                     basename = os.path.basename(f)
-                    idx = int(basename.replace('frame_', '').replace('.jpg', ''))
+                    try:
+                        idx = int(basename.replace('frame_', '').replace('.jpg', ''))
+                    except Exception:
+                        continue
                     if idx <= last_seen_index:
                         continue
                     last_seen_index = idx
+
                     # run inference on image
                     try:
                         import cv2
-                        import numpy as np
 
                         img = cv2.imread(f)
                         if img is None:
                             continue
-                        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                        img_resized = cv2.resize(img_rgb, (inference.INPUT_WIDTH, inference.INPUT_HEIGHT))
-                        img_normalized = img_resized.astype('float32') / 255.0
-                        input_data = np.expand_dims(img_normalized, axis=0)
-                        # get top-3 for logging, and primary pred
+                        input_data = inference.preprocess_video_single_frame(img)
+                        if input_data is None:
+                            continue
+
                         top3 = inference.run_video_topk(input_data, k=3) or []
+                        pred_class, confidence = 'normal', 0.0
                         if top3:
-                            pred_class, confidence = top3[0]
+                            vc = [v.lower() for v in inference.VIDEO_CLASSES]
+                            found = None
+                            for c, s in top3:
+                                if str(c).lower() in vc:
+                                    found = (c, s)
+                                    break
+                            if found:
+                                pred_class, confidence = found
+                            else:
+                                pred_class, confidence = inference.run_video_inference(input_data)
                         else:
                             pred_class, confidence = inference.run_video_inference(input_data)
 
-                        # log top-3 for calibration
+                        now = datetime.now(timezone.utc)
+                        # diagnostic throttle
+                        do_print = False
                         if top3:
+                            if pred_class != 'normal':
+                                do_print = True
+                            elif self._last_diag_print is None:
+                                do_print = True
+                            else:
+                                try:
+                                    if (now - self._last_diag_print).total_seconds() >= float(self._diag_throttle_s):
+                                        do_print = True
+                                except Exception:
+                                    do_print = False
+                        if do_print and top3:
                             try:
-                                print(f"DEBUG TOP3 frame#{idx}: " + ", ".join([f"{c}:{s:.3f}" for c,s in top3]))
+                                print(f"DEBUG TOP3 frame#{idx}: " + ", ".join([f"{c}:{s:.3f}" for c, s in top3]))
+                                self._last_diag_print = now
                             except Exception:
                                 pass
 
-                        # update moving window and streak
+                        # update history
                         self._recent_classes.append(pred_class)
                         self._recent_conf.append(float(confidence))
-                        if self._streak_class == pred_class:
-                            self._streak_count += 1
-                        else:
-                            self._streak_class = pred_class
-                            self._streak_count = 1
 
-                        # determine threshold for class
                         eff_thresh = self.class_thresholds.get(pred_class, self.confidence_threshold)
-                        # moving average of confidence
                         try:
                             mavg_conf = sum(self._recent_conf) / max(1, len(self._recent_conf))
                         except Exception:
                             mavg_conf = float(confidence)
 
-                        # decide save condition: non-normal, streak >= K, and mavg above threshold
-                        if pred_class != 'normal' and self._streak_count >= max(1, self.vote_k) and mavg_conf >= eff_thresh:
-                            # Save occurrence to DB
-                            db = SessionLocal()
-                            try:
-                                end_ts_now = datetime.now(timezone.utc)
-                                # event duration ~ streak/fps min 1 frame
-                                event_duration = max(1.0 / max(1.0, float(self.fps)), float(self._streak_count) / max(1.0, float(self.fps)))
-                                start_ts_calc = end_ts_now - timedelta(seconds=event_duration)
-                                # Tenta gerar um pequeno clipe a partir dos frames próximos ao índice
-                                evidence_obj = {'frame': f}
-                                try:
-                                    # calcula janela com margem em segundos (ex: 2s antes e 2s depois)
-                                    idx_base = idx
-                                    margin_seconds = 2.0
-                                    before_frames = max(0, int(self.fps * margin_seconds))
-                                    after_frames = max(0, int(self.fps * margin_seconds))
-                                    start_idx = max(1, idx_base - before_frames)
-                                    end_idx = idx_base + after_frames
-                                    num_frames = max(1, end_idx - start_idx + 1)
-                                    clip_duration_s = float(num_frames) / max(1.0, float(self.fps))
-                                    # cria arquivo temporário de saída no tmpdir
-                                    out_name = f"clip_{int(time.time())}_{idx_base}.mp4"
-                                    out_tmp = os.path.join(self._tmpdir, out_name)
-                                    # ffmpeg: usa sequência de imagens com start_number
-                                    ffmpeg_cmd = [
-                                        'ffmpeg', '-y', '-hide_banner', '-loglevel', 'error',
-                                        '-framerate', str(self.fps),
-                                        '-start_number', str(start_idx),
-                                        '-i', os.path.join(self._tmpdir, 'frame_%06d.jpg'),
-                                        '-frames:v', str(num_frames),
-                                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', out_tmp
-                                    ]
-                                    try:
-                                        subprocess.run(ffmpeg_cmd, check=False)
-                                        # move para pasta pública de clipes (pode ser customizada)
-                                        clips_dir = storage_core.get_clips_dir()
-                                        os.makedirs(clips_dir, exist_ok=True)
-                                        dest_path = os.path.join(clips_dir, out_name)
-                                        shutil.move(out_tmp, dest_path)
-                                        evidence_obj['clip_path'] = f"/clips/{out_name}"
-                                        evidence_obj['clip_duration_s'] = clip_duration_s
-                                        evidence_obj['event_window'] = {
-                                            'before_margin_s': float(before_frames) / max(1.0, float(self.fps)),
-                                            'after_margin_s': float(after_frames) / max(1.0, float(self.fps)),
-                                        }
-                                    except Exception as clip_err:
-                                        # fallback: apenas registra o frame path
-                                        print(f"AVISO: Falha gerar clipe de frames: {clip_err}")
-                                except Exception:
-                                    # Se algo falhar, deixamos apenas o frame
-                                    evidence_obj = {'frame': f}
+                        if self.fixed_window_enabled:
+                            # add to sliding window buffer
+                            self._window_preds.append((now, idx, pred_class, float(confidence)))
+                            # evict old
+                            while self._window_preds and (now - self._window_preds[0][0]).total_seconds() > self.window_s:
+                                self._window_preds.pop(0)
 
-                                # Deriva severidade pela duração (cartilha Globo)
-                                def _sev(d: float) -> str:
-                                    try:
-                                        d = float(d)
-                                        if d >= 60:
-                                            return 'Gravíssima (X)'
-                                        if d >= 10:
-                                            return 'Grave (A)'
-                                        if d >= 5:
-                                            return 'Média (B)'
-                                        return 'Leve (C)'
-                                    except Exception:
-                                        return 'Leve (C)'
+                            # evaluate window if it spans at least window_s
+                            if self._window_preds and (now - self._window_preds[0][0]).total_seconds() >= self.window_s:
+                                total = len(self._window_preds)
+                                counts = {}
+                                first_pos = None
+                                last_pos = None
+                                for ts_i, idx_i, cls_i, conf_i in self._window_preds:
+                                    thresh_i = self.class_thresholds.get(cls_i, self.confidence_threshold)
+                                    if cls_i != 'normal' and conf_i >= thresh_i:
+                                        counts[cls_i] = counts.get(cls_i, 0) + 1
+                                        if first_pos is None:
+                                            first_pos = ts_i
+                                        last_pos = ts_i
 
-                                db_oc = models.Ocorrencia(
-                                    start_ts=start_ts_calc,
-                                    end_ts=end_ts_now,
-                                    duration_s=event_duration,
-                                    category='Vídeo Técnico',
-                                    type=pred_class,
-                                    severity=_sev(event_duration),
-                                    confidence=float(confidence),
-                                    evidence=evidence_obj
-                                )
-                                db.add(db_oc)
-                                db.commit()
-                                db.refresh(db_oc)
-                                # broadcast
-                                message = {
-                                    'type': 'nova_ocorrencia',
-                                    'data': {
-                                        'id': db_oc.id,
-                                        'start_ts': db_oc.start_ts.isoformat(),
-                                        'end_ts': db_oc.end_ts.isoformat(),
-                                        'duration_s': db_oc.duration_s,
-                                        'category': db_oc.category,
-                                        'type': db_oc.type,
-                                        'severity': db_oc.severity,
-                                        'confidence': db_oc.confidence,
-                                        'evidence': db_oc.evidence,
-                                    },
-                                }
-                                # async broadcast — schedule via event loop
-                                import asyncio
-
-                                try:
-                                    loop = asyncio.get_event_loop()
-                                except RuntimeError:
-                                    loop = None
-                                if loop and loop.is_running():
-                                    asyncio.run_coroutine_threadsafe(ws_router.manager.broadcast(message), loop)
+                                if counts:
+                                    top_class, top_count = max(counts.items(), key=lambda x: x[1])
                                 else:
-                                    # No running loop — try to start a temporary loop
+                                    top_class, top_count = (None, 0)
+
+                                if top_class and top_count > (total / 2):
+                                    # positive span duration check
+                                    if first_pos and last_pos and (last_pos - first_pos).total_seconds() >= self.min_event_duration_s:
+                                        if self._last_report_ts is None or (now - self._last_report_ts).total_seconds() > max(1.0, self.window_s / 2.0):
+                                            # persist occurrence
+                                            db = SessionLocal()
+                                            try:
+                                                start_ts_calc = first_pos
+                                                end_ts_now = last_pos
+                                                event_duration = (end_ts_now - start_ts_calc).total_seconds()
+                                                evidence_obj = {'frame': f}
+                                                try:
+                                                    idx_base = idx
+                                                    margin_seconds = 2.0
+                                                    before_frames = max(0, int(self.fps * margin_seconds))
+                                                    after_frames = max(0, int(self.fps * margin_seconds))
+                                                    start_idx = max(1, idx_base - before_frames)
+                                                    end_idx = idx_base + after_frames
+                                                    num_frames = max(1, end_idx - start_idx + 1)
+                                                    clip_duration_s = float(num_frames) / max(1.0, float(self.fps))
+                                                    out_name = f"clip_{int(time.time())}_{idx_base}.mp4"
+                                                    out_tmp = os.path.join(self._tmpdir, out_name)
+                                                    ffmpeg_cmd = [
+                                                        'ffmpeg', '-y', '-hide_banner', '-loglevel', 'error',
+                                                        '-framerate', str(self.fps),
+                                                        '-start_number', str(start_idx),
+                                                        '-i', os.path.join(self._tmpdir, 'frame_%06d.jpg'),
+                                                        '-frames:v', str(num_frames),
+                                                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', out_tmp
+                                                    ]
+                                                    expected_files = [os.path.join(self._tmpdir, f'frame_{i:06d}.jpg') for i in range(start_idx, end_idx + 1)]
+                                                    missing = [p for p in expected_files if not os.path.exists(p)]
+                                                    if missing:
+                                                        print(f"AVISO: Frames faltando para gerar clipe ({len(missing)}) — pulando geração de clipe")
+                                                    else:
+                                                        subprocess.run(ffmpeg_cmd, check=False)
+                                                        clips_dir = storage_core.get_clips_dir()
+                                                        os.makedirs(clips_dir, exist_ok=True)
+                                                        dest_path = os.path.join(clips_dir, out_name)
+                                                        shutil.move(out_tmp, dest_path)
+                                                        evidence_obj['clip_path'] = f"/clips/{out_name}"
+                                                        evidence_obj['clip_duration_s'] = clip_duration_s
+                                                        evidence_obj['event_window'] = {
+                                                            'before_margin_s': float(before_frames) / max(1.0, float(self.fps)),
+                                                            'after_margin_s': float(after_frames) / max(1.0, float(self.fps)),
+                                                        }
+                                                except Exception as clip_err:
+                                                    print(f"AVISO: Falha gerar clipe de frames: {clip_err}")
+
+                                                def _sev(d: float) -> str:
+                                                    try:
+                                                        d = float(d)
+                                                        if d >= 60:
+                                                            return 'Gravíssima (X)'
+                                                        if d >= 10:
+                                                            return 'Grave (A)'
+                                                        if d >= 5:
+                                                            return 'Média (B)'
+                                                        return 'Leve (C)'
+                                                    except Exception:
+                                                        return 'Leve (C)'
+
+                                                db_oc = models.Ocorrencia(
+                                                    start_ts=start_ts_calc,
+                                                    end_ts=end_ts_now,
+                                                    duration_s=event_duration,
+                                                    category='Vídeo Técnico',
+                                                    type=top_class,
+                                                    severity=_sev(event_duration),
+                                                    confidence=float(top_count) / max(1.0, float(total)),
+                                                    evidence=evidence_obj,
+                                                )
+                                                db.add(db_oc)
+                                                db.commit()
+                                                db.refresh(db_oc)
+                                                message = {
+                                                    'type': 'nova_ocorrencia',
+                                                    'data': {
+                                                        'id': db_oc.id,
+                                                        'start_ts': db_oc.start_ts.isoformat(),
+                                                        'end_ts': db_oc.end_ts.isoformat(),
+                                                        'duration_s': db_oc.duration_s,
+                                                        'category': db_oc.category,
+                                                        'type': db_oc.type,
+                                                        'severity': db_oc.severity,
+                                                        'confidence': db_oc.confidence,
+                                                        'evidence': db_oc.evidence,
+                                                    },
+                                                }
+                                                # broadcast
+                                                import asyncio
+                                                try:
+                                                    loop = asyncio.get_event_loop()
+                                                except RuntimeError:
+                                                    loop = None
+                                                if loop and loop.is_running():
+                                                    asyncio.run_coroutine_threadsafe(ws_router.manager.broadcast(message), loop)
+                                                else:
+                                                    try:
+                                                        asyncio.run(ws_router.manager.broadcast(message))
+                                                    except Exception:
+                                                        pass
+
+                                                self._last_report_ts = now
+                                                # clear window preds to avoid immediate repeat
+                                                self._window_preds = []
+                                            finally:
+                                                db.close()
+                        else:
+                            # fallback: original streak-based reporting
+                            if pred_class == self._streak_class:
+                                self._streak_count += 1
+                            else:
+                                self._streak_class = pred_class
+                                self._streak_count = 1
+
+                            eff_thresh = self.class_thresholds.get(pred_class, self.confidence_threshold)
+                            try:
+                                mavg_conf = sum(self._recent_conf) / max(1, len(self._recent_conf))
+                            except Exception:
+                                mavg_conf = float(confidence)
+
+                            if pred_class != 'normal' and self._streak_count >= max(1, self.vote_k) and mavg_conf >= eff_thresh:
+                                db = SessionLocal()
+                                try:
+                                    end_ts_now = datetime.now(timezone.utc)
+                                    event_duration = max(1.0 / max(1.0, float(self.fps)), float(self._streak_count) / max(1.0, float(self.fps)))
+                                    start_ts_calc = end_ts_now - timedelta(seconds=event_duration)
+                                    evidence_obj = {'frame': f}
+                                    db_oc = models.Ocorrencia(
+                                        start_ts=start_ts_calc,
+                                        end_ts=end_ts_now,
+                                        duration_s=event_duration,
+                                        category='Vídeo Técnico',
+                                        type=pred_class,
+                                        severity='Leve (C)',
+                                        confidence=float(confidence),
+                                        evidence=evidence_obj,
+                                    )
+                                    db.add(db_oc)
+                                    db.commit()
+                                    db.refresh(db_oc)
+                                    message = {
+                                        'type': 'nova_ocorrencia',
+                                        'data': {
+                                            'id': db_oc.id,
+                                            'start_ts': db_oc.start_ts.isoformat(),
+                                            'end_ts': db_oc.end_ts.isoformat(),
+                                            'duration_s': db_oc.duration_s,
+                                            'category': db_oc.category,
+                                            'type': db_oc.type,
+                                            'severity': db_oc.severity,
+                                            'confidence': db_oc.confidence,
+                                            'evidence': db_oc.evidence,
+                                        },
+                                    }
+                                    import asyncio
                                     try:
-                                        asyncio.run(ws_router.manager.broadcast(message))
-                                    except Exception:
-                                        pass
-                            finally:
-                                db.close()
+                                        loop = asyncio.get_event_loop()
+                                    except RuntimeError:
+                                        loop = None
+                                    if loop and loop.is_running():
+                                        asyncio.run_coroutine_threadsafe(ws_router.manager.broadcast(message), loop)
+                                    else:
+                                        try:
+                                            asyncio.run(ws_router.manager.broadcast(message))
+                                        except Exception:
+                                            pass
+                                finally:
+                                    db.close()
                     except Exception:
                         # ignore per-frame exceptions to keep ingest running
                         pass
