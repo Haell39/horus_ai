@@ -55,6 +55,10 @@ class SRTIngestor:
         # fixed-window evaluation (collect preds for window_s seconds and decide by majority)
         self.fixed_window_enabled = bool(int(os.getenv('VIDEO_FIXED_WINDOW_ENABLED', '1')))
         self.window_s = float(os.getenv('VIDEO_FIXED_WINDOW_S', '5.0'))
+        # sliding window stride (seconds) -> evaluates window every `window_stride_s`
+        self.window_stride_s = float(os.getenv('VIDEO_WINDOW_STRIDE_S', '1.0'))
+        # timestamp when we last evaluated the sliding window
+        self._last_window_eval_ts = None
         # buffer of (timestamp, idx, class, confidence)
         self._window_preds = []
         # last time we reported an occurrence (to avoid duplicates)
@@ -328,30 +332,44 @@ class SRTIngestor:
                             while self._window_preds and (now - self._window_preds[0][0]).total_seconds() > self.window_s:
                                 self._window_preds.pop(0)
 
-                            # evaluate window if it spans at least window_s
-                            if self._window_preds and (now - self._window_preds[0][0]).total_seconds() >= self.window_s:
-                                total = len(self._window_preds)
-                                counts = {}
+                            # evaluate window if it spans at least window_s and stride elapsed
+                            if (self._window_preds
+                                    and (now - self._window_preds[0][0]).total_seconds() >= self.window_s
+                                    and (self._last_window_eval_ts is None or (now - self._last_window_eval_ts).total_seconds() >= self.window_stride_s)):
+                                # weighted vote by confidence
+                                weights = {}
+                                sum_weights = 0.0
                                 first_pos = None
                                 last_pos = None
+                                # collect indices for top-class clip boundaries
+                                class_indices = {}
                                 for ts_i, idx_i, cls_i, conf_i in self._window_preds:
                                     thresh_i = self.class_thresholds.get(cls_i, self.confidence_threshold)
                                     if cls_i != 'normal' and conf_i >= thresh_i:
-                                        counts[cls_i] = counts.get(cls_i, 0) + 1
-                                        if first_pos is None:
-                                            first_pos = ts_i
-                                        last_pos = ts_i
+                                        weights[cls_i] = weights.get(cls_i, 0.0) + float(conf_i)
+                                        sum_weights += float(conf_i)
+                                        if cls_i not in class_indices:
+                                            class_indices[cls_i] = {'first_ts': ts_i, 'last_ts': ts_i, 'min_idx': idx_i, 'max_idx': idx_i}
+                                        else:
+                                            class_indices[cls_i]['last_ts'] = ts_i
+                                            class_indices[cls_i]['min_idx'] = min(class_indices[cls_i]['min_idx'], idx_i)
+                                            class_indices[cls_i]['max_idx'] = max(class_indices[cls_i]['max_idx'], idx_i)
 
-                                if counts:
-                                    top_class, top_count = max(counts.items(), key=lambda x: x[1])
+                                if weights and sum_weights > 0.0:
+                                    top_class, top_weight = max(weights.items(), key=lambda x: x[1])
                                 else:
-                                    top_class, top_count = (None, 0)
+                                    top_class, top_weight = (None, 0.0)
 
-                                if top_class and top_count > (total / 2):
-                                    # positive span duration check
+                                # require weighted majority (>50% of sum weights)
+                                if top_class and top_weight > (sum_weights / 2.0):
+                                    # positive span duration check for top_class
+                                    ci = class_indices.get(top_class)
+                                    if ci:
+                                        first_pos = ci.get('first_ts')
+                                        last_pos = ci.get('last_ts')
                                     if first_pos and last_pos and (last_pos - first_pos).total_seconds() >= self.min_event_duration_s:
                                         if self._last_report_ts is None or (now - self._last_report_ts).total_seconds() > max(1.0, self.window_s / 2.0):
-                                            # persist occurrence
+                                            # persist occurrence (weighted confidence fraction)
                                             db = SessionLocal()
                                             try:
                                                 start_ts_calc = first_pos
@@ -359,15 +377,16 @@ class SRTIngestor:
                                                 event_duration = (end_ts_now - start_ts_calc).total_seconds()
                                                 evidence_obj = {'frame': f}
                                                 try:
-                                                    idx_base = idx
-                                                    margin_seconds = 2.0
-                                                    before_frames = max(0, int(self.fps * margin_seconds))
-                                                    after_frames = max(0, int(self.fps * margin_seconds))
-                                                    start_idx = max(1, idx_base - before_frames)
-                                                    end_idx = idx_base + after_frames
+                                                    # build clip using min/max indices for the top class
+                                                    if ci:
+                                                        start_idx = max(1, ci.get('min_idx', idx) - int(self.fps * 2.0))
+                                                        end_idx = ci.get('max_idx', idx) + int(self.fps * 2.0)
+                                                    else:
+                                                        start_idx = max(1, idx - int(self.fps * 2.0))
+                                                        end_idx = idx + int(self.fps * 2.0)
                                                     num_frames = max(1, end_idx - start_idx + 1)
                                                     clip_duration_s = float(num_frames) / max(1.0, float(self.fps))
-                                                    out_name = f"clip_{int(time.time())}_{idx_base}.mp4"
+                                                    out_name = f"clip_{int(time.time())}_{idx}.mp4"
                                                     out_tmp = os.path.join(self._tmpdir, out_name)
                                                     ffmpeg_cmd = [
                                                         'ffmpeg', '-y', '-hide_banner', '-loglevel', 'error',
@@ -390,8 +409,8 @@ class SRTIngestor:
                                                         evidence_obj['clip_path'] = f"/clips/{out_name}"
                                                         evidence_obj['clip_duration_s'] = clip_duration_s
                                                         evidence_obj['event_window'] = {
-                                                            'before_margin_s': float(before_frames) / max(1.0, float(self.fps)),
-                                                            'after_margin_s': float(after_frames) / max(1.0, float(self.fps)),
+                                                            'before_margin_s': float(int(self.fps * 2.0)) / max(1.0, float(self.fps)),
+                                                            'after_margin_s': float(int(self.fps * 2.0)) / max(1.0, float(self.fps)),
                                                         }
                                                 except Exception as clip_err:
                                                     print(f"AVISO: Falha gerar clipe de frames: {clip_err}")
@@ -409,6 +428,7 @@ class SRTIngestor:
                                                     except Exception:
                                                         return 'Leve (C)'
 
+                                                confidence_fraction = float(top_weight) / max(1.0, float(sum_weights))
                                                 db_oc = models.Ocorrencia(
                                                     start_ts=start_ts_calc,
                                                     end_ts=end_ts_now,
@@ -416,7 +436,7 @@ class SRTIngestor:
                                                     category='Vídeo Técnico',
                                                     type=top_class,
                                                     severity=_sev(event_duration),
-                                                    confidence=float(top_count) / max(1.0, float(total)),
+                                                    confidence=confidence_fraction,
                                                     evidence=evidence_obj,
                                                 )
                                                 db.add(db_oc)
@@ -455,6 +475,8 @@ class SRTIngestor:
                                                 self._window_preds = []
                                             finally:
                                                 db.close()
+                                # update last eval timestamp regardless (throttle evaluations)
+                                self._last_window_eval_ts = now
                         else:
                             # fallback: original streak-based reporting
                             if pred_class == self._streak_class:
