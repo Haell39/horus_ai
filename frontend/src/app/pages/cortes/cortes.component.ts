@@ -272,6 +272,9 @@ export class CortesComponent implements OnInit {
   // Carrega ocorrências reais do backend
   constructor(private ocorrenciaService: OcorrenciaService) {}
 
+  // ID da ocorrência que está pendente de confirmação para deletar
+  public deleteConfirmId: number | null = null;
+
   ngOnInit(): void {
     this.loadOcorrencias();
   }
@@ -493,6 +496,34 @@ export class CortesComponent implements OnInit {
       },
       error: (err) => {
         console.error('Erro ao salvar edição', err);
+      },
+    });
+  }
+
+  // Solicita confirmação visual antes de deletar
+  requestDelete(falha: Falha) {
+    this.deleteConfirmId = falha.id;
+  }
+
+  cancelDelete() {
+    this.deleteConfirmId = null;
+  }
+
+  confirmDelete() {
+    if (!this.deleteConfirmId) return;
+    const id = this.deleteConfirmId;
+    this.ocorrenciaService.deleteOcorrencia(id).subscribe({
+      next: (res: any) => {
+        // Remove localmente da lista e fecha o painel de detalhe se necessário
+        this.falhas = this.falhas.filter((f) => f.id !== id);
+        if (this.falhaSelecionada && this.falhaSelecionada.id === id) {
+          this.falhaSelecionada = null;
+        }
+        this.deleteConfirmId = null;
+      },
+      error: (err) => {
+        console.error('Erro ao deletar ocorrência', err);
+        this.deleteConfirmId = null;
       },
     });
   }

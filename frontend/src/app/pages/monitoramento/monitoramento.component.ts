@@ -687,13 +687,31 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
   // Carrega dados históricos via HTTP
   carregarDadosIniciais() {
     console.log('MonitoramentoComponent: Buscando dados iniciais HTTP...');
+    // Primeiro: solicita ao backend o total real de ocorrências (para o card)
+    this.ocorrenciaService.getTotalOcorrencias().subscribe({
+      next: (res: any) => {
+        try {
+          this.totalOcorrencias = Number(res?.count || 0);
+        } catch (e) {
+          console.warn('Erro ao ler total de ocorrências:', e);
+        }
+        this.cdr.markForCheck();
+      },
+      error: (err) => {
+        console.warn('Falha ao obter total de ocorrências:', err);
+      },
+    });
+
     // Pega apenas os últimos 50 (ou menos) para a carga inicial
     this.ocorrenciaService.getOcorrencias().subscribe({
       // Usando objeto Observer
       next: (data: Ocorrencia[]) => {
         console.log(`HTTP: Recebidas ${data.length} ocorrências.`);
         if (data.length > 0) {
-          this.totalOcorrencias = data.length; // Pode precisar buscar o total real se API paginar
+          // Não sobrescrever o total obtido via /ocorrencias/count; usar apenas como fallback
+          if (!this.totalOcorrencias || this.totalOcorrencias === 0) {
+            this.totalOcorrencias = data.length; // Pode precisar buscar o total real se API paginar
+          }
           this.falhasGraves = data.filter((oc) => this.isGrave(oc)).length; // Calcula sobre todos os dados recebidos
           this.ultimaFalha = data[0].type || 'N/A'; // Assume que API retorna mais recente primeiro
 

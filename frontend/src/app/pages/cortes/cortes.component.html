@@ -115,6 +115,36 @@
             >
               ✖️ Cancelar
             </button>
+            <!-- Delete occurrence (irreversible) -->
+            <button
+              class="btn-vermelho"
+              title="Excluir ocorrência permanentemente"
+              (click)="requestDelete(falhaSelecionada!)"
+            >
+              🗑️ Excluir
+            </button>
+          </div>
+        </div>
+        <!-- Confirmação de deleção -->
+        <div
+          class="confirm-delete"
+          *ngIf="
+            deleteConfirmId !== null &&
+            falhaSelecionada &&
+            deleteConfirmId === falhaSelecionada.id
+          "
+        >
+          <div class="confirm-card">
+            <p>
+              Deseja realmente excluir esta ocorrência (ID
+              {{ deleteConfirmId }})? Esta ação é irreversível.
+            </p>
+            <div class="confirm-actions">
+              <button class="btn-vermelho" (click)="confirmDelete()">
+                Excluir
+              </button>
+              <button class="btn" (click)="cancelDelete()">Cancelar</button>
+            </div>
           </div>
         </div>
 

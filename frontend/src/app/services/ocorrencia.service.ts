@@ -56,6 +56,11 @@ export class OcorrenciaService {
     return this.http.get<Ocorrencia[]>(`${this.apiUrl}/ocorrencias`);
   }
 
+  /** Retorna apenas o total de ocorrências no sistema (útil para dashboards) */
+  getTotalOcorrencias() {
+    return this.http.get<{ count: number }>(`${this.apiUrl}/ocorrencias/count`);
+  }
+
   /** Atualiza campos corrigidos pelo humano */
   updateOcorrencia(
     id: number,
@@ -78,6 +83,11 @@ export class OcorrenciaService {
     return this.http.get(`${this.apiUrl}/ocorrencias/export`, {
       responseType: 'blob' as 'json',
     }) as unknown as Observable<Blob>;
+  }
+
+  /** Deleta uma ocorrência por ID (irreversível) */
+  deleteOcorrencia(id: number) {
+    return this.http.delete(`${this.apiUrl}/ocorrencias/${id}`);
   }
 
   /** Get disk usage for a given path (GB) */

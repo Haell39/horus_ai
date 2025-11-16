@@ -41,6 +41,26 @@ def read_ocorrencias(
         )
 
 
+@router.get(
+    "/ocorrencias/count",
+    summary="Retorna o total de ocorrências armazenadas",
+)
+def ocorrencias_count(db: Session = Depends(get_db)):
+    """
+    Retorna apenas o número total de ocorrências no banco.
+    Útil para dashboards que precisam do total sem paginar toda a lista.
+    """
+    try:
+        total = db.query(models.Ocorrencia).count()
+        return {"count": total}
+    except Exception as e:
+        print(f"ERRO ao contar ocorrências: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao contar ocorrências"
+        )
+
+
 # --- PASSO 6: Endpoint de Escrita (CREATE) ---
 @router.post(
     "/ocorrencias",
@@ -156,6 +176,30 @@ def update_ocorrencia(
         db.rollback()
         print(f"ERRO ao atualizar ocorrência {oc_id}: {e}")
         raise HTTPException(status_code=500, detail="Erro ao atualizar ocorrência")
+
+
+@router.delete(
+    "/ocorrencias/{oc_id}",
+    summary="Deleta uma ocorrência pelo ID",
+)
+def delete_ocorrencia(oc_id: int, db: Session = Depends(get_db)):
+    """
+    Remove permanentemente uma ocorrência do banco de dados.
+    Use com cautela — operação irreversível.
+    """
+    try:
+        db_oc = db.query(models.Ocorrencia).get(oc_id)
+        if not db_oc:
+            raise HTTPException(status_code=404, detail="Ocorrência não encontrada")
+        db.delete(db_oc)
+        db.commit()
+        return {"deleted": oc_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        print(f"ERRO ao deletar ocorrência {oc_id}: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao deletar ocorrência")
 
 
 # --- Exportação CSV ---
