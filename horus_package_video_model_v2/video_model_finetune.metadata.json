@@ -1,0 +1,6 @@
+{
+  "frame_rate_sampled": 4,
+  "segment_duration_s": 3.0,
+  "input_shape": [12, 192, 192, 3],
+  "labels": ["freeze", "fade", "fora_de_foco", "normal"]
+}

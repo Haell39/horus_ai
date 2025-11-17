@@ -1,0 +1,19 @@
+{
+  "model": "audio_mobilenetv2",
+  "model_file": "models/mobilenetv2/audio_model_finetune.keras",
+  "model_version": "v0.1-dryrun-2025-11-11",
+  "input_size": 160,
+  "channels": 3,
+  "preprocess": "mobilenet_v2.preprocess_input",
+  "class_names": [
+    "ausencia_audio",
+    "volume_baixo",
+    "eco",
+    "ruido",
+    "sinal_1khz"
+  ],
+  "created_at": "2025-11-11T00:00:00Z",
+  "notes": "Generated from repository placeholders for packaging to the external agent. Please verify input_size and model_file before using.",
+  "eval_report": "models/audio_mobilenetv2/eval_report.json",
+  "thresholds_file": "models/audio_mobilenetv2/thresholds.yaml"
+}

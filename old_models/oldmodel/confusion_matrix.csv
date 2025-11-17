@@ -1,0 +1,7 @@
+,true,ausencia_audio,volume_baixo,distorcido_clipping,eco,ruido_chiado,sinal_teste
+ausencia_audio,10,0,0,0,0,0
+volume_baixo,0,10,0,0,0,0
+distorcido_clipping,0,0,10,0,0,0
+eco,0,0,0,10,0,0
+ruido_chiado,0,0,0,0,10,0
+sinal_teste,0,0,1,0,0,9

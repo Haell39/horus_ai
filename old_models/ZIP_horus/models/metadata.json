@@ -1,0 +1,16 @@
+{
+  "classes": [
+    "freeze",
+    "fade",
+    "fora_foco"
+  ],
+  "input_size": 160,
+  "preprocess": "(x-127.5)/127.5",
+  "model_h5": "models/newmodel/video_model_finetune.h5",
+  "model_keras": "models/newmodel/video_model_finetune.keras",
+  "saved_model_dir": "models/newmodel/video_model_finetune_saved",
+  "epochs_warmup": 5,
+  "epochs_finetune": 40,
+  "validation_split": 0.15,
+  "tf_version": "2.20.0"
+}

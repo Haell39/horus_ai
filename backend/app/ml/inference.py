@@ -12,6 +12,7 @@ import traceback
 import math
 from collections import deque
 from ..core.config import settings as core_settings
+import json
 
 # === Definições (Mantidas) ===
 MODEL_DIR = os.path.join(os.path.dirname(__file__), 'models')
@@ -29,6 +30,50 @@ AUDIO_MODEL_PATH = os.path.join(MODEL_DIR, AUDIO_MODEL_FILENAME)
 # Default fallbacks (kept for backward compat) — real class list is loaded from training_files/labels.csv when available
 AUDIO_CLASSES = ['ausencia_audio', 'volume_baixo', 'eco', 'ruido', 'sinal_1khz']
 VIDEO_CLASSES = ['freeze', 'fade', 'fora_foco']
+
+# Additional package folder (user-provided model bundle). If you placed a model package
+# at repository root `horus_package_video_model_v2` we attempt to use its metadata/labels
+PACKAGE_MODEL_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'horus_package_video_model_v2'))
+
+# Load metadata if present in the package model dir or in MODEL_DIR
+MODEL_METADATA = {}
+THRESHOLDS = {}
+try:
+    # prefer metadata in MODEL_DIR, else PACKAGE_MODEL_DIR
+    metadata_candidates = [os.path.join(MODEL_DIR, 'video_model_finetune.metadata.json'), os.path.join(PACKAGE_MODEL_DIR, 'video_model_finetune.metadata.json')]
+    for mpath in metadata_candidates:
+        if os.path.exists(mpath):
+            with open(mpath, 'r', encoding='utf-8') as fh:
+                MODEL_METADATA = json.load(fh)
+            break
+except Exception:
+    MODEL_METADATA = {}
+
+try:
+    thresh_candidates = [os.path.join(MODEL_DIR, 'thresholds.yaml'), os.path.join(PACKAGE_MODEL_DIR, 'thresholds.yaml')]
+    for tpath in thresh_candidates:
+        if os.path.exists(tpath):
+            # simple YAML parser for key: value lines (no dependency on PyYAML)
+            with open(tpath, 'r', encoding='utf-8') as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line or line.startswith('#'):
+                        continue
+                    if ':' in line:
+                        k, v = line.split(':', 1)
+                        try:
+                            THRESHOLDS[k.strip()] = float(v.strip())
+                        except Exception:
+                            try:
+                                THRESHOLDS[k.strip()] = float(v.strip())
+                            except Exception:
+                                THRESHOLDS[k.strip()] = v.strip()
+            break
+except Exception:
+    THRESHOLDS = {}
+
+# Expose class thresholds for other modules
+CLASS_THRESHOLDS = THRESHOLDS.copy() if isinstance(THRESHOLDS, dict) else {}
 
 # Canonical model class list (loaded from training metadata if present). This should match the
 # output ordering of your trained Keras models. If training_files/labels.csv exists we will
@@ -69,6 +114,28 @@ else:
         if c not in temp:
             temp.append(c)
     MODEL_CLASSES = temp
+
+# If metadata provided with explicit labels, prefer that ordering
+try:
+    if MODEL_METADATA and 'labels' in MODEL_METADATA and isinstance(MODEL_METADATA['labels'], list):
+        MODEL_CLASSES = MODEL_METADATA['labels']
+        # Derive sensible video classes list (exclude 'normal' if present)
+        VIDEO_CLASSES = [c for c in MODEL_CLASSES if str(c).lower() != 'normal']
+        # If metadata contains input shape, set input size accordingly
+        ishape = MODEL_METADATA.get('input_shape') or MODEL_METADATA.get('input_shape')
+        try:
+            if ishape and isinstance(ishape, (list, tuple)) and len(ishape) >= 3:
+                # assume format [frames, height, width, channels] or [height, width, channels]
+                if len(ishape) == 4:
+                    _, INPUT_HEIGHT, INPUT_WIDTH, _ = ishape
+                elif len(ishape) == 3:
+                    INPUT_HEIGHT, INPUT_WIDTH, _ = ishape
+                INPUT_HEIGHT = int(INPUT_HEIGHT)
+                INPUT_WIDTH = int(INPUT_WIDTH)
+        except Exception:
+            pass
+except Exception:
+    pass
 
 # Input size as specified by the user (160x160x3)
 INPUT_HEIGHT = 160
@@ -112,6 +179,11 @@ def load_all_models():
             os.path.join(MODEL_DIR, 'video_model_finetune.keras'),
             os.path.join(MODEL_DIR, 'video_model_finetune.h5'),
             os.path.join(MODEL_DIR, 'video_model.h5')
+        ]
+        # also accept models placed in the package folder (user-provided bundle)
+        video_candidates += [
+            os.path.join(PACKAGE_MODEL_DIR, 'video_model_finetune.keras'),
+            os.path.join(PACKAGE_MODEL_DIR, 'video_model_finetune.h5')
         ]
 
         # Load audio model (finetune preferred)
@@ -329,6 +401,67 @@ def run_keras_inference_topk(model: tf.keras.Model, input_data: np.ndarray, clas
         return top
     except Exception:
         return []
+
+
+def run_keras_sequence_inference(model: tf.keras.Model, seq_data: np.ndarray, classes: List[str]) -> Tuple[str, float]:
+    """Run inference on a sequence tensor (batch, frames, H, W, C) when model expects 5D input.
+    Falls back to frame-wise inference if model is single-input.
+    Returns (predicted_class, confidence).
+    """
+    if model is None:
+        raise RuntimeError("Modelo Keras não está carregado.")
+    try:
+        # If model expects multiple inputs, try to map similarly to run_keras_inference
+        inputs_spec = getattr(model, 'inputs', None)
+        preds = None
+        try:
+            if inputs_spec and len(inputs_spec) > 1:
+                # Attempt to order inputs: find a 5D input (frames) and pass seq_data there
+                ordered = []
+                for inp in inputs_spec:
+                    in_name = getattr(inp, 'name', '') or ''
+                    lname = in_name.lower()
+                    shape = getattr(inp, 'shape', None)
+                    if shape is not None and len(shape) == 5:
+                        ordered.append(seq_data)
+                    elif 'motion' in lname:
+                        ordered.append(np.zeros((seq_data.shape[0], 1), dtype=np.float32))
+                    elif 'bright' in lname or 'brightness' in lname:
+                        ordered.append(np.zeros((seq_data.shape[0], 1), dtype=np.float32))
+                    else:
+                        # best-effort: if expects 4D, pass middle frame
+                        if shape is not None and len(shape) == 4:
+                            mid = seq_data.shape[1] // 2
+                            ordered.append(np.expand_dims(seq_data[0, mid].astype(np.float32), axis=0))
+                        else:
+                            ordered.append(np.zeros((seq_data.shape[0], 1), dtype=np.float32))
+                preds = model.predict(ordered)
+            else:
+                # model may accept 5D directly
+                preds = model.predict(seq_data)
+        except Exception:
+            # fallback: try predicting with sequence, else with middle frame
+            try:
+                preds = model.predict(seq_data)
+            except Exception:
+                try:
+                    mid = seq_data.shape[1] // 2
+                    preds = model.predict(np.expand_dims(seq_data[0, mid].astype(np.float32), axis=0))
+                except Exception:
+                    return "Erro_Inferência", 0.0
+
+        if preds is None:
+            return "Erro_Inferência", 0.0
+        scores = np.array(preds[0], dtype=np.float32)
+        probs = _apply_softmax(scores)
+        idx = int(np.argmax(probs))
+        conf = float(probs[idx])
+        predicted_class = classes[idx] if idx < len(classes) else f"idx_{idx}"
+        return predicted_class, conf
+    except Exception as e:
+        print(f"ERRO durante inferência de sequência Keras: {e}")
+        traceback.print_exc()
+        return "Erro_Inferência", 0.0
 
 def run_tflite_inference_topk(
     interpreter: tf.lite.Interpreter,

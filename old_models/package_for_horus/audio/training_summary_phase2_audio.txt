@@ -1,0 +1,8 @@
+{
+  "tf_version": "2.20.0",
+  "gpus": [],
+  "duration_seconds": 5.392528533935547,
+  "model_path": "d:/GitHub Desktop/modelos_perplexity/models/audio_mobilenetv2/model_retrain_dryrun.h5",
+  "history_json": "outputs/results/training_history_audio.json",
+  "history_png": "outputs/results/training_history_audio.png"
+}

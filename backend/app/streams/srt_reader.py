@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import tempfile
 import threading
 import subprocess
@@ -38,6 +39,19 @@ class SRTIngestor:
                     self.class_thresholds[cls] = float(val)
         except Exception:
             pass
+        # If no thresholds were provided via ENV, try to load thresholds shipped with the model package
+        try:
+            if not self.class_thresholds:
+                pkg_thresh = getattr(inference, 'CLASS_THRESHOLDS', {}) or {}
+                for k, v in pkg_thresh.items():
+                    # key names in thresholds may be e.g. 'fade' -> map to class if present
+                    if k in getattr(inference, 'MODEL_CLASSES', []):
+                        try:
+                            self.class_thresholds[k] = float(v)
+                        except Exception:
+                            pass
+        except Exception:
+            pass
         # recent predictions
         from collections import deque
         self._recent_classes = deque(maxlen=max(3, self.mavg_window))
@@ -61,6 +75,20 @@ class SRTIngestor:
         self._last_window_eval_ts = None
         # buffer of (timestamp, idx, class, confidence)
         self._window_preds = []
+        # Sequence model support: detect sequence length from inference metadata and create frame buffer
+        try:
+            meta = getattr(inference, 'MODEL_METADATA', {}) or {}
+            seq_len = None
+            if meta and isinstance(meta.get('input_shape'), (list, tuple)):
+                seq_len = int(meta.get('input_shape')[0])
+            self.seq_len = seq_len
+            from collections import deque
+            self._seq_buffer = deque(maxlen=seq_len) if seq_len and seq_len > 1 else None
+            self._last_seq_infer_ts = None
+        except Exception:
+            self.seq_len = None
+            self._seq_buffer = None
+            self._last_seq_infer_ts = None
         # last time we reported an occurrence (to avoid duplicates)
         self._last_report_ts = None
 
@@ -274,25 +302,89 @@ class SRTIngestor:
                         img = cv2.imread(f)
                         if img is None:
                             continue
-                        input_data = inference.preprocess_video_single_frame(img)
-                        if input_data is None:
-                            continue
+                        # Prepare both resized raw frame and normalized input
+                        try:
+                            raw_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                            raw_resized = cv2.resize(raw_rgb, (inference.INPUT_WIDTH, inference.INPUT_HEIGHT)).astype(np.float32)
+                        except Exception:
+                            # fallback to previous preprocess
+                            input_data = inference.preprocess_video_single_frame(img)
+                            if input_data is None:
+                                continue
+                            raw_resized = None
+                        # normalized input (same preprocessing as preprocess_video_single_frame)
+                        if raw_resized is not None:
+                            input_norm = (raw_resized - 127.5) / 127.5
+                        else:
+                            input_norm = None
 
-                        top3 = inference.run_video_topk(input_data, k=3) or []
                         pred_class, confidence = 'normal', 0.0
-                        if top3:
-                            vc = [v.lower() for v in inference.VIDEO_CLASSES]
-                            found = None
-                            for c, s in top3:
-                                if str(c).lower() in vc:
-                                    found = (c, s)
-                                    break
-                            if found:
-                                pred_class, confidence = found
+                        top3 = []
+
+                        # If we have a sequence-model (seq_len > 1), buffer frames and run sequence inference
+                        if getattr(self, 'seq_len', None) and self.seq_len and self.seq_len > 1 and self._seq_buffer is not None:
+                            # choose frame representation according to model rescaling presence
+                            try:
+                                frame_for_seq = raw_resized if getattr(inference, 'keras_video_model_has_rescaling', False) and raw_resized is not None else (input_norm if input_norm is not None else raw_resized)
+                            except Exception:
+                                frame_for_seq = input_norm if input_norm is not None else raw_resized
+
+                            if frame_for_seq is None:
+                                # nothing useful to append
+                                continue
+
+                            # append single-frame (H,W,C) to buffer
+                            try:
+                                self._seq_buffer.append(frame_for_seq)
+                            except Exception:
+                                # if buffer broken, recreate
+                                try:
+                                    from collections import deque
+                                    self._seq_buffer = deque(maxlen=self.seq_len)
+                                    self._seq_buffer.append(frame_for_seq)
+                                except Exception:
+                                    pass
+
+                            now_ts = datetime.now(timezone.utc)
+                            # evaluate sequence inference only when buffer full and stride elapsed
+                            if len(self._seq_buffer) >= self.seq_len and (self._last_seq_infer_ts is None or (now_ts - self._last_seq_infer_ts).total_seconds() >= float(self.window_stride_s)):
+                                try:
+                                    seq_arr = np.stack(list(self._seq_buffer), axis=0).astype(np.float32)  # (seq_len,H,W,C)
+                                    seq_batch = np.expand_dims(seq_arr, axis=0)  # (1,seq_len,H,W,C)
+                                    pred_class, confidence = inference.run_keras_sequence_inference(getattr(inference, 'keras_video_model'), seq_batch, getattr(inference, 'MODEL_CLASSES', []))
+                                    top3 = []
+                                except Exception as e:
+                                    print(f"AVISO: Falha na inferência de sequência: {e}")
+                                    pred_class, confidence = 'Erro_Inferência', 0.0
+                                finally:
+                                    self._last_seq_infer_ts = now_ts
+                            else:
+                                # not time yet to evaluate; skip to next frame
+                                continue
+                        else:
+                            # legacy single-frame inference path
+                            input_data = None
+                            if input_norm is not None:
+                                input_data = np.expand_dims(input_norm, axis=0)
+                            else:
+                                input_data = inference.preprocess_video_single_frame(img)
+                                if input_data is None:
+                                    continue
+
+                            top3 = inference.run_video_topk(input_data, k=3) or []
+                            if top3:
+                                vc = [v.lower() for v in inference.VIDEO_CLASSES]
+                                found = None
+                                for c, s in top3:
+                                    if str(c).lower() in vc:
+                                        found = (c, s)
+                                        break
+                                if found:
+                                    pred_class, confidence = found
+                                else:
+                                    pred_class, confidence = inference.run_video_inference(input_data)
                             else:
                                 pred_class, confidence = inference.run_video_inference(input_data)
-                        else:
-                            pred_class, confidence = inference.run_video_inference(input_data)
 
                         now = datetime.now(timezone.utc)
                         # diagnostic throttle
