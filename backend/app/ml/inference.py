@@ -137,9 +137,13 @@ try:
 except Exception:
     pass
 
-# Input size as specified by the user (160x160x3)
-INPUT_HEIGHT = 160
-INPUT_WIDTH = 160
+# Default input size; may be overridden by MODEL_METADATA or detected from model inputs
+try:
+    INPUT_HEIGHT
+    INPUT_WIDTH
+except NameError:
+    INPUT_HEIGHT = 160
+    INPUT_WIDTH = 160
 
 # === Carregamento dos Intérpretes (Mantido) ===
 # Keras models (preferred if present)
@@ -697,7 +701,6 @@ def analyze_video_frames(file_path: str, sample_rate_hz: float = 2.0) -> Tuple[s
     first_freeze_time = None
     # flag: if any frame showed a sudden brightness drop (strong fade)
     fade_drop_detected = False
-
     try:
         print(f"DEBUG: Analisando frames de vídeo: {file_path} (sample_rate_hz={sample_rate_hz})")
         cap = cv2.VideoCapture(file_path)
