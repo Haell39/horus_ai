@@ -1040,6 +1040,7 @@ def analyze_video_frames_diagnostic(file_path: str, k: int = 3, sample_rate_hz: 
 
         frames_read = 0
         samples = 0
+        prev_gray = None
 
         # Determine FPS and compute frame skip
         fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
@@ -1093,8 +1094,18 @@ def analyze_video_frames_diagnostic(file_path: str, k: int = 3, sample_rate_hz: 
                 blur_var = 0.0
                 brightness = 0.0
                 edge_density = 0.0
-            # motion cannot be computed reliably here without tracking prev frame; set to None in this diagnostic
-            motion_val = None
+            # compute motion using previous sampled frame if available
+            try:
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                small_gray = cv2.resize(gray, (INPUT_WIDTH, INPUT_HEIGHT))
+                if prev_gray is None:
+                    motion_val = float('inf')
+                else:
+                    diff = cv2.absdiff(small_gray, prev_gray)
+                    motion_val = float(diff.mean())
+                prev_gray = small_gray
+            except Exception:
+                motion_val = None
             results.append({
                 'time_s': time_s,
                 'topk': [{'class': t[0], 'score': float(t[1])} for t in top],

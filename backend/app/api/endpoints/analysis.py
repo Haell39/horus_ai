@@ -16,6 +16,7 @@ from app.db import models, schemas
 from app.ml import inference
 from app.core.config import settings as core_settings
 from app.core import storage as storage_core
+import math
 
 # Optional MoviePy for duration extraction
 try:
@@ -360,12 +361,168 @@ async def upload_analysis(
 
         # Otherwise, create occurrence and save evidence
         clip_to_save = clip_path
-        before_s = 2.0
-        after_s = 2.0
+        # default margins (seconds)
+        default_pre_s = 1.0
+        default_post_s = 1.0
+        MAX_CLIP_S = 65.0
         try:
             if event_time is not None:
-                start = max(0.0, event_time - before_s)
-                duration_cut = before_s + after_s
+                # Try to infer precise event start/end times from per-frame diagnostics when available
+                event_start = None
+                event_end = None
+                try:
+                    # 'diag' may have been computed above for inline processing
+                    if 'diag' in locals() and diag:
+                        diag_src = diag
+                    else:
+                        diag_src = inference.analyze_video_frames_diagnostic(clip_path, k=3, sample_rate_hz=2.0, max_samples=400)
+
+                    # per-class threshold lookup
+                    per_class_thresh = core_settings.video_thresholds()
+                    cls_thr = per_class_thresh.get((final_pred_class or pred_class).upper(), per_class_thresh.get('DEFAULT', float(core_settings.VIDEO_THRESH_DEFAULT)))
+
+                    # find supporting samples for the predicted class.
+                    # Be more inclusive: consider class appearing anywhere in top-k
+                    # or with a lower score (scaled threshold). Then cluster nearby
+                    # hits and pick the longest continuous cluster.
+                    times = []
+                    try:
+                        scaled_thr = float(cls_thr) * 0.6
+                    except Exception:
+                        scaled_thr = float(cls_thr)
+                    for it in (diag_src or []):
+                        try:
+                            t = float(it.get('time_s') or 0.0)
+                        except Exception:
+                            t = None
+                        topk = it.get('topk') or []
+                        if t is None or not topk:
+                            continue
+                        matched = False
+                        for entry in topk:
+                            try:
+                                cls = entry.get('class')
+                                sc = float(entry.get('score') or 0.0)
+                            except Exception:
+                                continue
+                            if not cls:
+                                continue
+                            if str(cls).lower() == str((final_pred_class or pred_class)).lower():
+                                # accept if strong enough or as a top-k match
+                                if sc >= float(cls_thr) or sc >= scaled_thr:
+                                    matched = True
+                                    break
+                                else:
+                                    # still accept as looser match if appears in topk
+                                    matched = True
+                                    break
+                        if matched:
+                            times.append(t)
+
+                    if times:
+                        times = sorted(times)
+                        # cluster nearby hits (gap tolerance 1.0s)
+                        clusters = []
+                        cur = [times[0]]
+                        for tt in times[1:]:
+                            if tt - cur[-1] <= 1.0:
+                                cur.append(tt)
+                            else:
+                                clusters.append(cur)
+                                cur = [tt]
+                        clusters.append(cur)
+                        # pick the cluster with most samples (break ties by longest span)
+                        best_cluster = max(clusters, key=lambda c: (len(c), (c[-1] - c[0])))
+                        event_start = float(best_cluster[0])
+                        event_end = float(best_cluster[-1])
+                        # ensure minimum duration
+                        try:
+                            min_span = float(os.getenv('VIDEO_MIN_EVENT_DURATION_S', '2.0'))
+                        except Exception:
+                            min_span = 2.0
+                        if (event_end - event_start) < min_span:
+                            event_end = event_start + min_span
+                    else:
+                        # no model-supported samples found; try heuristics from diagnostics
+                        try:
+                            heur_times = []
+                            b_thr = float(core_settings.VIDEO_BRIGHTNESS_LOW)
+                            blur_thr = float(core_settings.VIDEO_BLUR_VAR_THRESHOLD)
+                            edge_thr = float(getattr(core_settings, 'VIDEO_EDGE_DENSITY_THRESHOLD', 0.015))
+                            for it in (diag_src or []):
+                                try:
+                                    t = float(it.get('time_s') or 0.0)
+                                except Exception:
+                                    t = None
+                                heur = it.get('heuristics') or {}
+                                try:
+                                    brightness = float(heur.get('brightness') or 0.0)
+                                except Exception:
+                                    brightness = 0.0
+                                try:
+                                    blur_v = float(heur.get('blur_var') or 999999.0)
+                                except Exception:
+                                    blur_v = 999999.0
+                                try:
+                                    edge_d = float(heur.get('edge_density') or 1.0)
+                                except Exception:
+                                    edge_d = 1.0
+                                # motion may be absent or Infinity in some diagnostics
+                                try:
+                                    motion_raw = heur.get('motion')
+                                    motion_v = None
+                                    if motion_raw is not None:
+                                        motion_v = float(motion_raw)
+                                except Exception:
+                                    motion_v = None
+                                try:
+                                    motion_thr = float(os.getenv('VIDEO_MOTION_THRESHOLD', '2.0'))
+                                except Exception:
+                                    motion_thr = 2.0
+                                if t is None:
+                                    continue
+                                # consider a frame as supporting a visual fault if any heuristic crosses threshold
+                                motion_support = (motion_v is not None and math.isfinite(motion_v) and motion_v < motion_thr)
+                                if brightness < b_thr or blur_v < blur_thr or edge_d < edge_thr or motion_support:
+                                    heur_times.append(t)
+                            if heur_times:
+                                heur_times = sorted(heur_times)
+                                clusters_h = []
+                                cur_h = [heur_times[0]]
+                                for tt in heur_times[1:]:
+                                    if tt - cur_h[-1] <= 1.0:
+                                        cur_h.append(tt)
+                                    else:
+                                        clusters_h.append(cur_h)
+                                        cur_h = [tt]
+                                clusters_h.append(cur_h)
+                                best_h = max(clusters_h, key=lambda c: (len(c), (c[-1] - c[0])))
+                                event_start = float(best_h[0])
+                                event_end = float(best_h[-1])
+                                if (event_end - event_start) < min_span:
+                                    event_end = event_start + min_span
+                        except Exception:
+                            pass
+                except Exception:
+                    event_start = None
+                    event_end = None
+
+                # Fallbacks: if we couldn't deduce span, use event_time as center and apply minimal margins
+                if event_start is None or event_end is None:
+                    event_start = max(0.0, float(event_time) - 0.5)
+                    event_end = float(event_time) + 0.5
+
+                # compute cut bounds with 1s pre-padding and 1s post-padding
+                start = max(0.0, float(event_start) - default_pre_s)
+                desired_end = float(event_end) + default_post_s
+                duration_cut = max(0.1, desired_end - start)
+
+                # cap overall clip length
+                if duration_cut > MAX_CLIP_S:
+                    # keep the end anchored to desired_end and shorten the start
+                    start = max(0.0, desired_end - MAX_CLIP_S)
+                    duration_cut = MAX_CLIP_S
+
                 dest_name = f"clip_{uid}_cut{ext}"
                 dest_path = os.path.join(storage_core.get_clips_dir(), dest_name)
                 try:
@@ -405,7 +562,7 @@ async def upload_analysis(
             evidence = {
                 'clip_path': f'/clips/{clip_basename}',
                 'clip_duration_s': float(clip_dur_saved or duration_s),
-                'event_window': {'before_margin_s': (before_s if event_time is not None else 0.0), 'after_margin_s': (after_s if event_time is not None else 0.0)},
+                'event_window': {'before_margin_s': float(default_pre_s if event_time is not None else 0.0), 'after_margin_s': float(default_post_s if event_time is not None else 0.0)},
                 'fusion': {'video_pred': pred_class, 'video_conf': float(confidence or 0.0), 'audio_pred': audio_class, 'audio_conf': float(audio_conf or 0.0), 'final_pred': final_pred_class, 'final_conf': float(final_confidence or 0.0)}
             }
 
@@ -451,13 +608,149 @@ async def upload_analysis(
                     print(f"Background worker: job {job_id_local} - sem falhas detectadas (class={pred_class} conf={confidence})")
                     return
 
-                # cut around event if available
-                before_s = 2.0
-                after_s = 2.0
+                # cut around event if available: 1s before, 1s after event span, cap 65s
+                default_pre_s = 1.0
+                default_post_s = 1.0
+                MAX_CLIP_S = 65.0
                 clip_to_save = clip_path_local
                 if event_time is not None:
-                    start = max(0.0, event_time - before_s)
-                    duration = before_s + after_s
+                    # attempt to reconstruct event span using diagnostics
+                    try:
+                        diag_src = inference.analyze_video_frames_diagnostic(clip_path_local, k=3, sample_rate_hz=2.0, max_samples=400)
+                        per_class_thresh = core_settings.video_thresholds()
+                        cls_thr = per_class_thresh.get(pred_class.upper(), per_class_thresh.get('DEFAULT', float(core_settings.VIDEO_THRESH_DEFAULT)))
+                        times = []
+                        try:
+                            scaled_thr = float(cls_thr) * 0.6
+                        except Exception:
+                            scaled_thr = float(cls_thr)
+                        for it in (diag_src or []):
+                            try:
+                                t = float(it.get('time_s') or 0.0)
+                            except Exception:
+                                t = None
+                            topk = it.get('topk') or []
+                            if t is None or not topk:
+                                continue
+                            matched = False
+                            for entry in topk:
+                                try:
+                                    cls = entry.get('class')
+                                    sc = float(entry.get('score') or 0.0)
+                                except Exception:
+                                    continue
+                                if not cls:
+                                    continue
+                                if str(cls).lower() == str(pred_class).lower():
+                                    if sc >= float(cls_thr) or sc >= scaled_thr:
+                                        matched = True
+                                        break
+                                    else:
+                                        matched = True
+                                        break
+                            if matched:
+                                times.append(t)
+
+                        if times:
+                            times = sorted(times)
+                            # cluster nearby hits (1s gap tolerance)
+                            clusters = []
+                            cur = [times[0]]
+                            for tt in times[1:]:
+                                if tt - cur[-1] <= 1.0:
+                                    cur.append(tt)
+                                else:
+                                    clusters.append(cur)
+                                    cur = [tt]
+                            clusters.append(cur)
+                            best_cluster = max(clusters, key=lambda c: (len(c), (c[-1] - c[0])))
+                            event_start = float(best_cluster[0])
+                            event_end = float(best_cluster[-1])
+                            try:
+                                min_span = float(os.getenv('VIDEO_MIN_EVENT_DURATION_S', '2.0'))
+                            except Exception:
+                                min_span = 2.0
+                            if (event_end - event_start) < min_span:
+                                event_end = event_start + min_span
+                        else:
+                            # try heuristics (brightness/blur/edge) when model top-k is empty
+                            try:
+                                heur_times = []
+                                b_thr = float(core_settings.VIDEO_BRIGHTNESS_LOW)
+                                blur_thr = float(core_settings.VIDEO_BLUR_VAR_THRESHOLD)
+                                edge_thr = float(getattr(core_settings, 'VIDEO_EDGE_DENSITY_THRESHOLD', 0.015))
+                                for it in (diag_src or []):
+                                    try:
+                                        t = float(it.get('time_s') or 0.0)
+                                    except Exception:
+                                        t = None
+                                    heur = it.get('heuristics') or {}
+                                    try:
+                                        brightness = float(heur.get('brightness') or 0.0)
+                                    except Exception:
+                                        brightness = 0.0
+                                    try:
+                                        blur_v = float(heur.get('blur_var') or 999999.0)
+                                    except Exception:
+                                        blur_v = 999999.0
+                                    try:
+                                        edge_d = float(heur.get('edge_density') or 1.0)
+                                    except Exception:
+                                        edge_d = 1.0
+                                    # motion may be present (or Infinity). include it in heuristics
+                                    try:
+                                        motion_raw = heur.get('motion')
+                                        motion_v = None
+                                        if motion_raw is not None:
+                                            motion_v = float(motion_raw)
+                                    except Exception:
+                                        motion_v = None
+                                    try:
+                                        motion_thr = float(os.getenv('VIDEO_MOTION_THRESHOLD', '2.0'))
+                                    except Exception:
+                                        motion_thr = 2.0
+                                    if t is None:
+                                        continue
+                                    motion_support = (motion_v is not None and math.isfinite(motion_v) and motion_v < motion_thr)
+                                    if brightness < b_thr or blur_v < blur_thr or edge_d < edge_thr or motion_support:
+                                        heur_times.append(t)
+                                if heur_times:
+                                    heur_times = sorted(heur_times)
+                                    clusters_h = []
+                                    cur_h = [heur_times[0]]
+                                    for tt in heur_times[1:]:
+                                        if tt - cur_h[-1] <= 1.0:
+                                            cur_h.append(tt)
+                                        else:
+                                            clusters_h.append(cur_h)
+                                            cur_h = [tt]
+                                    clusters_h.append(cur_h)
+                                    best_h = max(clusters_h, key=lambda c: (len(c), (c[-1] - c[0])))
+                                    event_start = float(best_h[0])
+                                    event_end = float(best_h[-1])
+                                    try:
+                                        min_span = float(os.getenv('VIDEO_MIN_EVENT_DURATION_S', '2.0'))
+                                    except Exception:
+                                        min_span = 2.0
+                                    if (event_end - event_start) < min_span:
+                                        event_end = event_start + min_span
+                                else:
+                                    event_start = max(0.0, float(event_time) - 0.5)
+                                    event_end = float(event_time) + 0.5
+                            except Exception:
+                                event_start = max(0.0, float(event_time) - 0.5)
+                                event_end = float(event_time) + 0.5
+                    except Exception:
+                        event_start = max(0.0, float(event_time) - 0.5)
+                        event_end = float(event_time) + 0.5
+
+                    start = max(0.0, float(event_start) - default_pre_s)
+                    desired_end = float(event_end) + default_post_s
+                    duration = max(0.1, desired_end - start)
+                    if duration > MAX_CLIP_S:
+                        start = max(0.0, desired_end - MAX_CLIP_S)
+                        duration = MAX_CLIP_S
+
                     dest_name = f"clip_{job_id_local}{os.path.splitext(clip_name_local)[1]}"
                     dest_path = os.path.join(storage_core.get_clips_dir(), dest_name)
                     try:

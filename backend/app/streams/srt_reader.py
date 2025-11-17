@@ -418,8 +418,9 @@ class SRTIngestor:
                             mavg_conf = float(confidence)
 
                         if self.fixed_window_enabled:
-                            # add to sliding window buffer
-                            self._window_preds.append((now, idx, pred_class, float(confidence)))
+                            # add to sliding window buffer (include heuristics so we can use them when model scores are low)
+                            heur = {'blur_var': blur_var, 'brightness': brightness, 'edge_density': edge_density, 'motion': motion}
+                            self._window_preds.append((now, idx, pred_class, float(confidence), heur))
                             # evict old
                             while self._window_preds and (now - self._window_preds[0][0]).total_seconds() > self.window_s:
                                 self._window_preds.pop(0)
@@ -435,7 +436,13 @@ class SRTIngestor:
                                 last_pos = None
                                 # collect indices for top-class clip boundaries
                                 class_indices = {}
-                                for ts_i, idx_i, cls_i, conf_i in self._window_preds:
+                                for entry in self._window_preds:
+                                    # unpack entries which now include heuristics
+                                    try:
+                                        ts_i, idx_i, cls_i, conf_i, heur_i = entry
+                                    except Exception:
+                                        # backward compatibility: skip malformed entries
+                                        continue
                                     thresh_i = self.class_thresholds.get(cls_i, self.confidence_threshold)
                                     if cls_i != 'normal' and conf_i >= thresh_i:
                                         weights[cls_i] = weights.get(cls_i, 0.0) + float(conf_i)
@@ -446,6 +453,57 @@ class SRTIngestor:
                                             class_indices[cls_i]['last_ts'] = ts_i
                                             class_indices[cls_i]['min_idx'] = min(class_indices[cls_i]['min_idx'], idx_i)
                                             class_indices[cls_i]['max_idx'] = max(class_indices[cls_i]['max_idx'], idx_i)
+                                    else:
+                                        # consider heuristic-only support when model confidence is low/normal
+                                        try:
+                                            blur_v = float(heur_i.get('blur_var') or 999999.0)
+                                        except Exception:
+                                            blur_v = 999999.0
+                                        try:
+                                            brightness = float(heur_i.get('brightness') or 0.0)
+                                        except Exception:
+                                            brightness = 0.0
+                                        try:
+                                            edge_d = float(heur_i.get('edge_density') or 1.0)
+                                        except Exception:
+                                            edge_d = 1.0
+                                        try:
+                                            motion_v = heur_i.get('motion')
+                                        except Exception:
+                                            motion_v = None
+                                        # thresholds (from env / config)
+                                        try:
+                                            blur_thr = float(os.getenv('VIDEO_BLUR_VAR_THRESHOLD', str(getattr(inference, 'DEFAULT_BLUR_THRESHOLD', 518.0))))
+                                        except Exception:
+                                            blur_thr = 518.0
+                                        try:
+                                            edge_thr = float(os.getenv('VIDEO_EDGE_DENSITY_THRESHOLD', str(getattr(inference, 'DEFAULT_EDGE_THRESHOLD', 0.015))))
+                                        except Exception:
+                                            edge_thr = 0.015
+                                        try:
+                                            motion_thr = float(os.getenv('VIDEO_MOTION_THRESHOLD', '2.0'))
+                                        except Exception:
+                                            motion_thr = 2.0
+                                        heur_cls = None
+                                        heur_conf = 0.0
+                                        if brightness < float(os.getenv('VIDEO_BRIGHTNESS_LOW', '50.0')):
+                                            heur_cls = 'fade'
+                                            heur_conf = max(0.85, float(conf_i))
+                                        elif motion_v is not None and motion_v != float('inf') and motion_v < motion_thr:
+                                            heur_cls = 'freeze'
+                                            heur_conf = max(0.80, float(conf_i))
+                                        elif blur_v < blur_thr or edge_d < edge_thr:
+                                            heur_cls = 'fora_foco'
+                                            heur_conf = max(0.75, float(conf_i))
+                                        if heur_cls:
+                                            weights[heur_cls] = weights.get(heur_cls, 0.0) + float(heur_conf)
+                                            sum_weights += float(heur_conf)
+                                            if heur_cls not in class_indices:
+                                                class_indices[heur_cls] = {'first_ts': ts_i, 'last_ts': ts_i, 'min_idx': idx_i, 'max_idx': idx_i}
+                                            else:
+                                                class_indices[heur_cls]['last_ts'] = ts_i
+                                                class_indices[heur_cls]['min_idx'] = min(class_indices[heur_cls]['min_idx'], idx_i)
+                                                class_indices[heur_cls]['max_idx'] = max(class_indices[heur_cls]['max_idx'], idx_i)
 
                                 if weights and sum_weights > 0.0:
                                     top_class, top_weight = max(weights.items(), key=lambda x: x[1])
@@ -470,14 +528,40 @@ class SRTIngestor:
                                                 evidence_obj = {'frame': f}
                                                 try:
                                                     # build clip using min/max indices for the top class
+                                                    # use 1s pre/post padding (instead of previous 2s)
+                                                    PRE_PAD_FRAMES = int(round(self.fps * 1.0))
+                                                    POST_PAD_FRAMES = int(round(self.fps * 1.0))
                                                     if ci:
-                                                        start_idx = max(1, ci.get('min_idx', idx) - int(self.fps * 2.0))
-                                                        end_idx = ci.get('max_idx', idx) + int(self.fps * 2.0)
+                                                        start_idx = max(1, ci.get('min_idx', idx) - PRE_PAD_FRAMES)
+                                                        end_idx = ci.get('max_idx', idx) + POST_PAD_FRAMES
                                                     else:
-                                                        start_idx = max(1, idx - int(self.fps * 2.0))
-                                                        end_idx = idx + int(self.fps * 2.0)
+                                                        start_idx = max(1, idx - PRE_PAD_FRAMES)
+                                                        end_idx = idx + POST_PAD_FRAMES
                                                     num_frames = max(1, end_idx - start_idx + 1)
                                                     clip_duration_s = float(num_frames) / max(1.0, float(self.fps))
+                                                    # ensure minimum clip duration (env VIDEO_MIN_EVENT_DURATION_S or 2s)
+                                                    try:
+                                                        min_span_s = float(os.getenv('VIDEO_MIN_EVENT_DURATION_S', '2.0'))
+                                                    except Exception:
+                                                        min_span_s = 2.0
+                                                    if clip_duration_s < min_span_s:
+                                                        needed_frames = int(max(1, round(min_span_s * float(self.fps))))
+                                                        extra = max(0, needed_frames - num_frames)
+                                                        # distribute extra frames before/after (prefer after)
+                                                        add_pre = extra // 2
+                                                        add_post = extra - add_pre
+                                                        start_idx = max(1, start_idx - add_pre)
+                                                        end_idx = end_idx + add_post
+                                                        num_frames = max(1, end_idx - start_idx + 1)
+                                                        clip_duration_s = float(num_frames) / max(1.0, float(self.fps))
+                                                    # cap clip duration to 65s; if larger, shorten from start keeping end anchored
+                                                    MAX_CLIP_S = 65.0
+                                                    if clip_duration_s > MAX_CLIP_S:
+                                                        desired_end_frame = end_idx
+                                                        max_frames = int(round(MAX_CLIP_S * float(self.fps)))
+                                                        start_idx = max(1, desired_end_frame - max_frames + 1)
+                                                        num_frames = max(1, desired_end_frame - start_idx + 1)
+                                                        clip_duration_s = float(num_frames) / max(1.0, float(self.fps))
                                                     out_name = f"clip_{int(time.time())}_{idx}.mp4"
                                                     out_tmp = os.path.join(self._tmpdir, out_name)
                                                     ffmpeg_cmd = [
@@ -501,8 +585,8 @@ class SRTIngestor:
                                                         evidence_obj['clip_path'] = f"/clips/{out_name}"
                                                         evidence_obj['clip_duration_s'] = clip_duration_s
                                                         evidence_obj['event_window'] = {
-                                                            'before_margin_s': float(int(self.fps * 2.0)) / max(1.0, float(self.fps)),
-                                                            'after_margin_s': float(int(self.fps * 2.0)) / max(1.0, float(self.fps)),
+                                                            'before_margin_s': float(PRE_PAD_FRAMES) / max(1.0, float(self.fps)),
+                                                            'after_margin_s': float(POST_PAD_FRAMES) / max(1.0, float(self.fps)),
                                                         }
                                                 except Exception as clip_err:
                                                     print(f"AVISO: Falha gerar clipe de frames: {clip_err}")
