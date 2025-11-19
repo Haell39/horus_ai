@@ -18,6 +18,8 @@ import json
 MODEL_DIR = os.path.join(os.path.dirname(__file__), 'models')
 # Prefer models under mobilenetv2/ to keep versions organized; fallback to root filenames
 MOBILENET_DIR = os.path.join(MODEL_DIR, 'mobilenetv2')
+# Per-model subtype directories (allow audio models under models/audio/)
+AUDIO_MODEL_DIR = os.path.join(MODEL_DIR, 'audio')
 
 # New model filenames (user supplied INT8 quantized models)
 VIDEO_MODEL_FILENAME = os.path.join('mobilenetv2', 'video_model_int8.tflite')
@@ -39,8 +41,13 @@ PACKAGE_MODEL_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'
 MODEL_METADATA = {}
 THRESHOLDS = {}
 try:
-    # prefer metadata in MODEL_DIR, else PACKAGE_MODEL_DIR
-    metadata_candidates = [os.path.join(MODEL_DIR, 'video_model_finetune.metadata.json'), os.path.join(PACKAGE_MODEL_DIR, 'video_model_finetune.metadata.json')]
+    # prefer metadata in MODEL_DIR/audio (for audio-specific bundles), then MODEL_DIR, else PACKAGE_MODEL_DIR
+    metadata_candidates = [
+        os.path.join(AUDIO_MODEL_DIR, 'metadata.json'),
+        os.path.join(MODEL_DIR, 'video_model_finetune.metadata.json'),
+        os.path.join(MODEL_DIR, 'metadata.json'),
+        os.path.join(PACKAGE_MODEL_DIR, 'video_model_finetune.metadata.json')
+    ]
     for mpath in metadata_candidates:
         if os.path.exists(mpath):
             with open(mpath, 'r', encoding='utf-8') as fh:
@@ -115,6 +122,31 @@ else:
             temp.append(c)
     MODEL_CLASSES = temp
 
+# If an audio-specific classes file exists under MODEL_DIR/audio, prefer it for AUDIO_CLASSES and MODEL_CLASSES ordering
+try:
+    audio_classes_path = os.path.join(AUDIO_MODEL_DIR, 'classes.txt')
+    audio_labels_csv = os.path.join(AUDIO_MODEL_DIR, 'labels.csv')
+    prefer_classes = None
+    if os.path.exists(audio_classes_path):
+        with open(audio_classes_path, 'r', encoding='utf-8') as fh:
+            prefer_classes = [l.strip() for l in fh.readlines() if l.strip()]
+    elif os.path.exists(audio_labels_csv):
+        import csv
+        with open(audio_labels_csv, 'r', encoding='utf-8') as fh:
+            reader = csv.DictReader(fh)
+            prefer_classes = []
+            for row in reader:
+                cls = row.get('class')
+                if cls and cls not in prefer_classes:
+                    prefer_classes.append(cls)
+    if prefer_classes:
+        # Update AUDIO_CLASSES and MODEL_CLASSES to match the audio-trained ordering
+        AUDIO_CLASSES = prefer_classes
+        # if MODEL_CLASSES currently contains these classes, reorder MODEL_CLASSES to put audio classes first
+        MODEL_CLASSES = prefer_classes + [c for c in MODEL_CLASSES if c not in prefer_classes]
+except Exception:
+    pass
+
 # If metadata provided with explicit labels, prefer that ordering
 try:
     if MODEL_METADATA and 'labels' in MODEL_METADATA and isinstance(MODEL_METADATA['labels'], list):
@@ -174,10 +206,15 @@ def load_all_models():
     loaded_any = False
     try:
         # Prefer native Keras format (.keras) if present, fall back to legacy HDF5 (.h5)
+        # audio model candidates: prefer finetune in MODEL_DIR, then accept models in MODEL_DIR/audio
         audio_candidates = [
             os.path.join(MODEL_DIR, 'audio_model_finetune.keras'),
             os.path.join(MODEL_DIR, 'audio_model_finetune.h5'),
-            os.path.join(MODEL_DIR, 'audio_model.h5')
+            os.path.join(MODEL_DIR, 'audio_model.h5'),
+            os.path.join(MODEL_DIR, 'audio_model.keras'),
+            os.path.join(AUDIO_MODEL_DIR, 'audio_model.keras'),
+            os.path.join(AUDIO_MODEL_DIR, 'audio_model_head.keras'),
+            os.path.join(AUDIO_MODEL_DIR, 'audio_model.h5'),
         ]
         video_candidates = [
             os.path.join(MODEL_DIR, 'video_model_finetune.keras'),
@@ -512,10 +549,11 @@ def preprocess_audio_segment(y_segment: np.ndarray, sr: int) -> Optional[np.ndar
     """ Pré-processa UM segmento de áudio (y). """
     try:
         # --- PARÂMETROS (DEVEM SER OS MESMOS DO TREINO) ---
-        N_MELS = 128
-        FMAX = 8000
-        HOP_LENGTH = 512
-        N_FFT = 2048
+        # Prefer explicit values from MODEL_METADATA (loaded from metadata.json)
+        N_MELS = int(MODEL_METADATA.get('n_mels', 128))
+        FMAX = int(MODEL_METADATA.get('fmax', 8000))
+        HOP_LENGTH = int(MODEL_METADATA.get('hop_length', 512))
+        N_FFT = int(MODEL_METADATA.get('n_fft', 2048))
         # --- FIM PARÂMETROS ---
 
         if len(y_segment) == 0: return None
@@ -543,20 +581,30 @@ def preprocess_audio_segment(y_segment: np.ndarray, sr: int) -> Optional[np.ndar
         # print(f"ERRO pré-processando segmento de áudio: {e}") # Log menos verboso
         return None
 
-def analyze_audio_segments(file_path: str) -> Tuple[str, float]:
+def analyze_audio_segments(file_path: str) -> Tuple[str, float, Optional[float]]:
     """ Analisa múltiplos segmentos de áudio e retorna a falha mais confiante. """
     if not globals().get('keras_audio_model'):
         raise RuntimeError("Modelo de áudio Keras não está carregado. Remova dependências TFLite ou instale o modelo Keras em backend/app/ml/models/.")
 
     best_fault_class = 'normal'
     max_confidence = 0.0
+    best_event_time_s: Optional[float] = None
     processed_segments = 0
 
     try:
         # --- PARÂMETROS DE SEGMENTAÇÃO ---
-        TARGET_SR = None # Use None ou sr específico (ex: 16000)
-        SEGMENT_DURATION_S = 3.0 # Duração de cada segmento para análise
-        HOP_DURATION_S = 1.0     # Sobreposição (avança 1s por vez)
+        TARGET_SR = int(MODEL_METADATA.get('sample_rate')) if MODEL_METADATA.get('sample_rate') else None
+        SEGMENT_DURATION_S = float(MODEL_METADATA.get('segment_duration', 3.0))
+        # overlap in metadata may be fractional (e.g., 0.5 for 50%), compute hop accordingly
+        overlap = float(MODEL_METADATA.get('overlap', 0.6666667))
+        # overlap defined as fraction of segment (e.g. 0.5 means 50% overlap). Hop = segment * (1 - overlap)
+        try:
+            if overlap <= 0 or overlap >= 1:
+                HOP_DURATION_S = float(MODEL_METADATA.get('hop_duration', 1.0))
+            else:
+                HOP_DURATION_S = max(0.1, SEGMENT_DURATION_S * (1.0 - overlap))
+        except Exception:
+            HOP_DURATION_S = 1.0
         # --- FIM PARÂMETROS ---
 
         print(f"DEBUG: Analisando segmentos de áudio: {file_path}")
@@ -586,20 +634,24 @@ def analyze_audio_segments(file_path: str) -> Tuple[str, float]:
             if pred_class != 'normal' and confidence > max_confidence:
                 max_confidence = confidence
                 best_fault_class = pred_class
+                # compute approximate event time (center of the segment)
+                try:
+                    seg_start_s = float(i) / float(sr)
+                    best_event_time_s = seg_start_s + (SEGMENT_DURATION_S / 2.0)
+                except Exception:
+                    best_event_time_s = None
             # Se ainda não achamos falha, mas achamos 'normal' com alta confiança, guardamos isso
             elif best_fault_class == 'normal' and pred_class == 'normal' and confidence > max_confidence:
                  max_confidence = confidence # Atualiza a confiança do 'normal'
 
         print(f"DEBUG: Áudio - {processed_segments} segmentos processados. Resultado: {best_fault_class} ({max_confidence:.4f})")
-        # Se nenhuma falha foi encontrada (best_fault_class ainda é 'normal'), retorna 'normal'
-        # com a maior confiança de 'normal' encontrada (ou 0 se nenhum segmento foi processado).
-        # Se uma falha foi encontrada, retorna a falha e sua confiança.
-        return best_fault_class, max_confidence
+        # Retorna (classe, confiança, event_time_s) — event_time_s pode ser None
+        return best_fault_class, max_confidence, best_event_time_s
 
     except Exception as e:
         print(f"ERRO durante análise de segmentos de áudio ({file_path}): {e}")
         traceback.print_exc()
-        return "Erro_Análise_Áudio", 0.0
+        return "Erro_Análise_Áudio", 0.0, None
 
 # =====================================================
 # === NOVAS FUNÇÕES: ANÁLISE DE VÍDEO MULTI-FRAME ===

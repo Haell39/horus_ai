@@ -1,0 +1,128 @@
+[
+  {
+    "filename": "blur.mp4",
+    "path": "D:\\GitHub Desktop\\horus_ai\\test_clips\\blur.mp4",
+    "audio": {
+      "class": "normal",
+      "confidence": 0.997112512588501,
+      "segments": 5
+    },
+    "video": {
+      "class": "fora_foco",
+      "confidence": 0.8,
+      "event_time_s": 2.02644
+    }
+  },
+  {
+    "filename": "fade_07.mp4",
+    "path": "D:\\GitHub Desktop\\horus_ai\\test_clips\\fade_07.mp4",
+    "audio": {
+      "class": "normal",
+      "confidence": 0.970684826374054,
+      "segments": 6
+    },
+    "video": {
+      "class": "fade",
+      "confidence": 0.92,
+      "event_time_s": 2.966666666666667
+    }
+  },
+  {
+    "filename": "falha_audio_eco_sintetico_02.mp4",
+    "path": "D:\\GitHub Desktop\\horus_ai\\test_clips\\falha_audio_eco_sintetico_02.mp4",
+    "audio": {
+      "class": "eco_reverb",
+      "confidence": 0.9977086782455444,
+      "segments": 2
+    },
+    "video": {
+      "class": "freeze",
+      "confidence": 0.8,
+      "event_time_s": 2.466666666666667
+    }
+  },
+  {
+    "filename": "freeze_02.mp4",
+    "path": "D:\\GitHub Desktop\\horus_ai\\test_clips\\freeze_02.mp4",
+    "audio": {
+      "class": "normal",
+      "confidence": 0.9660791158676147,
+      "segments": 10
+    },
+    "video": {
+      "class": "freeze",
+      "confidence": 0.8,
+      "event_time_s": 5.966666666666667
+    }
+  },
+  {
+    "filename": "hiss.mp4",
+    "path": "D:\\GitHub Desktop\\horus_ai\\test_clips\\hiss.mp4",
+    "audio": {
+      "class": "ruido_hiss",
+      "confidence": 0.8466219305992126,
+      "segments": 13
+    },
+    "video": {
+      "class": "fade",
+      "confidence": 0.85,
+      "event_time_s": 1.52644
+    }
+  },
+  {
+    "filename": "normal.mp4",
+    "path": "D:\\GitHub Desktop\\horus_ai\\test_clips\\normal.mp4",
+    "audio": {
+      "class": "ausencia_audio",
+      "confidence": 0.8885878920555115,
+      "segments": 12
+    },
+    "video": {
+      "class": "freeze",
+      "confidence": 0.8,
+      "event_time_s": 5.966666666666667
+    }
+  },
+  {
+    "filename": "ruido_hiss.mp4",
+    "path": "D:\\GitHub Desktop\\horus_ai\\test_clips\\ruido_hiss.mp4",
+    "audio": {
+      "class": "ruido_hiss",
+      "confidence": 0.8466219305992126,
+      "segments": 13
+    },
+    "video": {
+      "class": "fade",
+      "confidence": 0.85,
+      "event_time_s": 1.52644
+    }
+  },
+  {
+    "filename": "sinal_test.mp4",
+    "path": "D:\\GitHub Desktop\\horus_ai\\test_clips\\sinal_test.mp4",
+    "audio": {
+      "class": "sinal_teste",
+      "confidence": 0.9997711777687073,
+      "segments": 12
+    },
+    "video": {
+      "class": "normal",
+      "confidence": 0.0,
+      "event_time_s": null
+    }
+  },
+  {
+    "filename": "sinal_teste.mp4",
+    "path": "D:\\GitHub Desktop\\horus_ai\\test_clips\\sinal_teste.mp4",
+    "audio": {
+      "class": "sinal_teste",
+      "confidence": 0.9997711777687073,
+      "segments": 12
+    },
+    "video": {
+      "class": "normal",
+      "confidence": 0.0,
+      "event_time_s": null
+    }
+  }
+]

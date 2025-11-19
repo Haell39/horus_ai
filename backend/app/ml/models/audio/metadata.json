@@ -1,0 +1,15 @@
+{
+  "sample_rate": 16000,
+  "segment_duration": 3.0,
+  "overlap": 0.5,
+  "n_mels": 128,
+  "n_fft": 2048,
+  "hop_length": 512,
+  "fmax": 8000,
+  "input_shape": [
+    160,
+    160,
+    3
+  ],
+  "normalization": "MobileNetV2 ((x-127.5)/127.5)"
+}

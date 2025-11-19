@@ -17,6 +17,7 @@ from app.ml import inference
 from app.core.config import settings as core_settings
 from app.core import storage as storage_core
 import math
+import numpy as _np
 
 # Optional MoviePy for duration extraction
 try:
@@ -25,6 +26,48 @@ except Exception:
     VideoFileClip = None
 
 router = APIRouter()
+
+
+def _sanitize_for_json(obj):
+    """Recursively sanitize an object so json.dumps won't fail on NaN/Inf or numpy types.
+    - Replace non-finite floats with None
+    - Convert numpy scalars to native Python types
+    - Convert unknown objects to str fallback
+    """
+    try:
+        if isinstance(obj, dict):
+            return {k: _sanitize_for_json(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [_sanitize_for_json(v) for v in obj]
+        if isinstance(obj, tuple):
+            return tuple(_sanitize_for_json(v) for v in obj)
+        # numpy scalar
+        if isinstance(obj, _np.generic):
+            try:
+                py = obj.item()
+            except Exception:
+                py = float(obj)
+            return _sanitize_for_json(py)
+        if isinstance(obj, float):
+            if not math.isfinite(obj):
+                return None
+            return float(obj)
+        if isinstance(obj, (int, str, bool)) or obj is None:
+            return obj
+        # try casting to float if possible
+        try:
+            if hasattr(obj, 'astype'):
+                # e.g., numpy arrays
+                return _sanitize_for_json(obj.tolist())
+        except Exception:
+            pass
+        # fallback: stringify
+        return str(obj)
+    except Exception:
+        try:
+            return str(obj)
+        except Exception:
+            return None
 
 # Diretório absoluto onde os diagnostics serão salvos (sempre o mesmo lugar)
 DIAGNOSTICS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'diagnostics'))
@@ -143,7 +186,11 @@ async def upload_analysis(
         audio_class, audio_conf = 'normal', 0.0
         try:
             if not bool(core_settings.VIDEO_DISABLE_AUDIO_PROCESSING):
-                audio_class, audio_conf = inference.analyze_audio_segments(clip_path)
+                        # analyze_audio_segments now returns (class, confidence, event_time_s)
+                try:
+                    audio_class, audio_conf, audio_event_time = inference.analyze_audio_segments(clip_path)
+                except Exception:
+                    audio_class, audio_conf, audio_event_time = 'normal', 0.0, None
         except Exception:
             audio_class, audio_conf = 'normal', 0.0
 
@@ -251,22 +298,52 @@ async def upload_analysis(
         # 2) or audio_conf is significantly higher than video (delta) and reasonably confident
         # This helps cases where audio identifies 'freeze' but both are below global env thresholds.
         try:
-            # Optionally allow audio to override video decisions. Controlled by
-            # VIDEO_ALLOW_AUDIO_OVERRIDE (default: False) to avoid audio-driven
-            # false positives for visual-only errors.
-            if bool(core_settings.VIDEO_ALLOW_AUDIO_OVERRIDE):
-                if audio_class and (audio_conf or 0.0) > final_confidence:
-                    delta = (audio_conf or 0.0) - final_confidence
-                    if (audio_conf or 0.0) >= float(audio_thresh) or (delta >= 0.04 and (audio_conf or 0.0) >= max(0.55, float(audio_thresh) - 0.05)):
+            # Audio strong-evidence override (applies even if VIDEO_ALLOW_AUDIO_OVERRIDE is False):
+            # - If audio_conf > video_conf and audio_conf >= 0.90:
+            #   * If audio_class != 'normal' => audio error prevails
+            #   * If audio_class == 'normal' => only suppress a visual error when the
+            #     video's confidence is weak (<= 0.75)
+            try:
+                audio_conf_val = float(audio_conf or 0.0)
+            except Exception:
+                audio_conf_val = 0.0
+
+            try:
+                video_conf_val = float(final_confidence or 0.0)
+            except Exception:
+                video_conf_val = 0.0
+
+            try:
+                if audio_class and audio_conf_val > video_conf_val and audio_conf_val >= 0.90:
+                    if str(audio_class).lower() != 'normal':
+                        # strong audio error wins
                         final_pred_class = audio_class
-                        final_confidence = float(audio_conf or 0.0)
-            else:
-                # Audio override disabled: keep video decision but log for debug
-                if audio_class and (audio_conf or 0.0) > final_confidence:
-                    try:
-                        print(f"DEBUG: Audio override suppressed (audio={audio_class} conf={audio_conf:.3f}) by VIDEO_ALLOW_AUDIO_OVERRIDE=False")
-                    except Exception:
-                        pass
+                        final_confidence = float(audio_conf_val)
+                    else:
+                        # strong audio normal: only suppress weak visual faults
+                        if str(video_pred).lower() != 'normal' and video_conf_val <= 0.75:
+                            final_pred_class = 'normal'
+                            final_confidence = float(audio_conf_val)
+                        else:
+                            # keep video decision
+                            pass
+                else:
+                    # Fallback to legacy VIDEO_ALLOW_AUDIO_OVERRIDE behavior when enabled
+                    if bool(core_settings.VIDEO_ALLOW_AUDIO_OVERRIDE):
+                        if audio_class and (audio_conf or 0.0) > final_confidence:
+                            delta = (audio_conf or 0.0) - final_confidence
+                            if (audio_conf or 0.0) >= float(audio_thresh) or (delta >= 0.04 and (audio_conf or 0.0) >= max(0.55, float(audio_thresh) - 0.05)):
+                                final_pred_class = audio_class
+                                final_confidence = float(audio_conf or 0.0)
+                    else:
+                        # Audio override disabled: keep video decision but log for debug
+                        if audio_class and (audio_conf or 0.0) > final_confidence:
+                            try:
+                                print(f"DEBUG: Audio override suppressed (audio={audio_class} conf={audio_conf:.3f}) by VIDEO_ALLOW_AUDIO_OVERRIDE=False")
+                            except Exception:
+                                pass
+            except Exception:
+                pass
         except Exception:
             pass
 
@@ -295,21 +372,72 @@ async def upload_analysis(
 
             try:
                 if audio_class and str(audio_class).lower() != 'normal' and float(audio_conf or 0.0) >= float(audio_thresh):
-                    # create an audio occurrence and return it
+                    # create an audio occurrence and return it. Trim clip around
+                    # the detected audio event (±1s) and cap to MAX_CLIP_S.
                     dur_calc, severity = calcular_severidade_e_duracao(clip_path)
                     now = datetime.now(timezone.utc)
-                    start_ts_calc = now - timedelta(seconds=dur_calc or 0)
 
-                    # ensure public copy
-                    public_clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'static', 'clips'))
-                    os.makedirs(public_clips_dir, exist_ok=True)
-                    public_path = os.path.join(public_clips_dir, os.path.basename(clip_path))
+                    # compute trimming window using audio_event_time when available
                     try:
-                        if os.path.abspath(clip_path) != os.path.abspath(public_path):
-                            shutil.copy2(clip_path, public_path)
-                            clip_to_serve = public_path
+                        full_dur = _get_duration_seconds(clip_path) or dur_calc or 0.0
+                    except Exception:
+                        full_dur = dur_calc or 0.0
+
+                    # default margins
+                    pre_s = 1.0
+                    post_s = 1.0
+                    max_clip_s = 65.0
+
+                    # default to copying whole clip if no event time
+                    trimmed_path = None
+                    try:
+                        public_clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'static', 'clips'))
+                        os.makedirs(public_clips_dir, exist_ok=True)
+
+                        if audio_event_time is not None:
+                            start_s = max(0.0, float(audio_event_time) - pre_s)
+                            end_s = min(float(full_dur), float(audio_event_time) + post_s)
+                            # enforce max length
+                            if (end_s - start_s) > max_clip_s:
+                                # center window around event_time
+                                half = max_clip_s / 2.0
+                                start_s = max(0.0, float(audio_event_time) - half)
+                                end_s = min(full_dur, start_s + max_clip_s)
+
+                            base = os.path.splitext(os.path.basename(clip_path))[0]
+                            out_name = f"{base}_audio_trim_{uid}.mp4"
+                            out_path = os.path.join(public_clips_dir, out_name)
+                            # try ffmpeg trim (copy codecs for speed)
+                            try:
+                                # Use input seeking (-ss before -i) and -t for duration for reliable fast copy
+                                duration_trim = float(end_s) - float(start_s)
+                                cmd = [
+                                    'ffmpeg', '-y', '-ss', f"{start_s}", '-i', clip_path,
+                                    '-t', f"{duration_trim}", '-c', 'copy', out_path
+                                ]
+                                subprocess.run(cmd, check=True, capture_output=True)
+                                trimmed_path = out_path
+                            except Exception:
+                                # fallback to copying the full clip
+                                try:
+                                    shutil.copy2(clip_path, out_path)
+                                    trimmed_path = out_path
+                                except Exception:
+                                    trimmed_path = None
+                        # if trimming failed or no event time, copy whole clip
+                        if not trimmed_path:
+                            public_path = os.path.join(public_clips_dir, os.path.basename(clip_path))
+                            try:
+                                if os.path.abspath(clip_path) != os.path.abspath(public_path):
+                                    shutil.copy2(clip_path, public_path)
+                                    clip_to_serve = public_path
+                                else:
+                                    clip_to_serve = clip_path
+                            except Exception:
+                                clip_to_serve = clip_path
                         else:
-                            clip_to_serve = clip_path
+                            clip_to_serve = trimmed_path
+
                     except Exception:
                         clip_to_serve = clip_path
 
@@ -323,8 +451,10 @@ async def upload_analysis(
                     }
 
                     try:
+                        # set occurrence timestamps: approximate start_ts from now minus clip_dur_saved
+                        start_ts_calc = now - timedelta(seconds=clip_dur_saved or dur_calc or 0)
                         db_oc = models.Ocorrencia(
-                            start_ts=start_ts_calc, end_ts=now, duration_s=dur_calc or clip_dur_saved or duration_s,
+                            start_ts=start_ts_calc, end_ts=now, duration_s=clip_dur_saved or dur_calc or duration_s,
                             category='audio-file', type=audio_class, severity=severity,
                             confidence=float(audio_conf or 0.0), evidence=evidence
                         )
@@ -335,9 +465,13 @@ async def upload_analysis(
                             # attach diagnostic info in the inline response for convenience
                             out = db_oc.__dict__
                             out['diagnostic'] = diag
-                            out['audio_debug'] = {'class': audio_class, 'confidence': float(audio_conf or 0.0)}
-                            return out
-                        return db_oc
+                            out['audio_debug'] = {'class': audio_class, 'confidence': float(audio_conf or 0.0), 'event_time_s': audio_event_time}
+                            return _sanitize_for_json(out)
+                        # return a serializable dict instead of ORM object
+                        try:
+                            return _sanitize_for_json(dict(db_oc.__dict__))
+                        except Exception:
+                            return _sanitize_for_json(db_oc.__dict__)
                     except Exception as e:
                         db.rollback()
                         print(f"Erro ao salvar ocorrência de áudio inline: {e}")
@@ -357,7 +491,7 @@ async def upload_analysis(
             if debug:
                 out['diagnostic'] = diag
                 out['audio_debug'] = {'class': audio_class, 'confidence': float(audio_conf or 0.0)}
-            return out
+            return _sanitize_for_json(out)
 
         # Otherwise, create occurrence and save evidence
         clip_to_save = clip_path
@@ -576,13 +710,16 @@ async def upload_analysis(
                 confidence=float(final_confidence or 0.0),
                 evidence=evidence
             )
-
             try:
                 db_oc = models.Ocorrencia(**oc.dict())
                 db.add(db_oc)
                 db.commit()
                 db.refresh(db_oc)
-                return db_oc
+                # return a serializable dict to avoid ORM serialization issues
+                try:
+                    return _sanitize_for_json(dict(db_oc.__dict__))
+                except Exception:
+                    return _sanitize_for_json(db_oc.__dict__)
             except Exception as e:
                 db.rollback()
                 raise HTTPException(status_code=500, detail=f'Erro ao salvar ocorrência: {e}')
@@ -773,11 +910,12 @@ async def upload_analysis(
                 # Optionally run audio analysis on the cut and create audio occurrence
                 audio_class = 'normal'
                 audio_conf = 0.0
+                audio_event_time = None
                 try:
                     if not bool(core_settings.VIDEO_DISABLE_AUDIO_PROCESSING):
-                        audio_class, audio_conf = inference.analyze_audio_segments(clip_to_save)
+                        audio_class, audio_conf, audio_event_time = inference.analyze_audio_segments(clip_to_save)
                 except Exception:
-                    audio_class, audio_conf = 'normal', 0.0
+                    audio_class, audio_conf, audio_event_time = 'normal', 0.0, None
 
                 # Determine audio threshold
                 try:
@@ -810,6 +948,7 @@ async def upload_analysis(
                             'original_filename': clip_name_local,
                             'audio_pred': audio_class,
                             'audio_confidence': float(audio_conf or 0.0),
+                            'audio_event_time_s': audio_event_time,
                             'clip_duration_s': float(clip_dur or 0.0),
                         }
 

@@ -11,7 +11,7 @@ def make_dummy_file_bytes(size=1024):
 def test_analyze_audio_monkeypatched(monkeypatch, tmp_path):
     # monkeypatch high-level analyzer to make test deterministic
     def fake_analyze_audio_segments(path: str):
-        return ("normal", 0.95)
+        return ("normal", 0.95, None)
 
     monkeypatch.setattr(ml.inference, "analyze_audio_segments", fake_analyze_audio_segments)
 
