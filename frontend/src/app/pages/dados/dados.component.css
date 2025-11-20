@@ -106,6 +106,14 @@
   color: #000;
 }
 
+/* Specific smaller container for the hourly-chart card while keeping the chart size intact */
+.card-grafico.hora-card {
+  /* let the content size (chart) drive the height; provide a small min to avoid collapse */
+  height: auto !important;
+  min-height: 320px;
+  padding: 14px 18px;
+}
+
 .card-grafico.combinado {
   display: flex;
   flex-direction: column;
