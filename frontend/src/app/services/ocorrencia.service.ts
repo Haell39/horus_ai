@@ -51,9 +51,14 @@ export class OcorrenciaService {
   /**
    * Busca a lista de todas as ocorrências
    */
-  getOcorrencias(): Observable<Ocorrencia[]> {
-    // 4. Apontar para o endpoint correto
-    return this.http.get<Ocorrencia[]>(`${this.apiUrl}/ocorrencias`);
+  getOcorrencias(limit?: number, skip?: number): Observable<Ocorrencia[]> {
+    // 4. Apontar para o endpoint correto com paginação opcional
+    const params: any = {};
+    if (limit !== undefined) params.limit = String(limit);
+    if (skip !== undefined) params.skip = String(skip);
+    return this.http.get<Ocorrencia[]>(`${this.apiUrl}/ocorrencias`, {
+      params,
+    });
   }
 
   /** Retorna apenas o total de ocorrências no sistema (útil para dashboards) */

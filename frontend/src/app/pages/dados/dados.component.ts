@@ -140,7 +140,8 @@ export class DadosComponent implements AfterViewInit, OnInit {
 
   carregarDadosApi(): void {
     this.errorMsg = null;
-    this.ocorrencias$ = this.ocorrenciaService.getOcorrencias().pipe(
+    // request a larger page so the Dados page can filter/aggregate on the full set
+    this.ocorrencias$ = this.ocorrenciaService.getOcorrencias(1000).pipe(
       tap((data) => {
         this.dadosCarregados = data;
         // fetch the true total from the backend (uncapped count)
