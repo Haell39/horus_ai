@@ -1,0 +1,64 @@
+<app-sidebar></app-sidebar>
+
+<div class="conteudo-dados">
+  <h2 class="titulo-pagina">Acessibilidade</h2>
+
+  <div class="filtros-container">
+    <div class="filtro">
+      <label>Preferências</label>
+      <div class="pref-row">
+        <label><input type="checkbox" [(ngModel)]="config.highContrast" (change)="toggleContrast()" /> Alto Contraste</label>
+      </div>
+      <div class="pref-row">
+        <label><input type="checkbox" [(ngModel)]="config.reduceMotion" /> Reduzir Animações</label>
+      </div>
+      <div class="pref-row">
+        <label><input type="checkbox" [(ngModel)]="config.captionsEnabled" /> Legendas Ativas</label>
+      </div>
+      <div class="pref-row">
+        <label>Fonte: <input type="range" min="12" max="24" [(ngModel)]="config.fontSize" /></label>
+      </div>
+      <div class="pref-row">
+        <label>Paleta: 
+          <select [(ngModel)]="config.colorPalette">
+            <option value="default">Padrão</option>
+            <option value="deuteranopia">Deuteranopia</option>
+            <option value="protanopia">Protanopia</option>
+            <option value="tritanopia">Tritanopia</option>
+          </select>
+        </label>
+      </div>
+      <div style="margin-top:10px">
+        <button class="btn" (click)="save()">Salvar Preferências</button>
+      </div>
+    </div>
+
+    <div class="filtro">
+      <label>Testes Rápidos</label>
+      <div class="test-card card-grafico">
+        <h4>Leitor de Tela</h4>
+        <p>Executa um teste simples com o SpeechSynthesis (se disponível).</p>
+        <button class="btn" (click)="runScreenReaderTest()">Executar Teste</button>
+      </div>
+
+      <div class="test-card card-grafico" style="margin-top:12px">
+        <h4>Mock Notifications</h4>
+        <ul>
+          <li *ngFor="let n of mockNotifications">{{n.text}}</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="card-grafico grande">
+    <h3 class="titulo-grafico">Ideias e Recomendações</h3>
+    <ul class="recommendations">
+      <li><strong>Atalhos de Teclado:</strong> Mapear ações principais (play, pause, mute, toggle captions).</li>
+      <li><strong>Modo Alto Contraste:</strong> Alternar classes CSS e oferecer paletas pré-definidas.</li>
+      <li><strong>Reduzir Movimento:</strong> Remover transições e animações para usuários com sensibilidade ao movimento.</li>
+      <li><strong>Legenda ao Vivo:</strong> Exibir legendas geradas (ASR) e permitir ajuste do tamanho/fonte.</li>
+      <li><strong>Indicadores de Foco:</strong> Garantir foco visível para navegação por teclado.</li>
+      <li><strong>Ferramentas:</strong> Link para verificador de contraste e testes com leitores de tela.</li>
+    </ul>
+  </div>
+</div>
