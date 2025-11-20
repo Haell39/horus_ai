@@ -3,6 +3,8 @@
 <div class="conteudo-dados">
   <h2 class="titulo-pagina">Dados de Falhas</h2>
 
+  <!-- Filters and charts start below -->
+
   <div *ngIf="ocorrencias$ | async as ocorrencias; else loadingOrError">
     <div class="filtros-container">
       <div class="filtro">

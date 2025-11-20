@@ -111,6 +111,13 @@ export class DadosComponent implements AfterViewInit, OnInit {
   public ocorrencias$: Observable<Ocorrencia[]> = of([]);
   public errorMsg: string | null = null;
   public dadosCarregados: Ocorrencia[] = [];
+  // filtered view (after period + tipo filters) — exposed for template/debug
+  public filteredDados: Ocorrencia[] = [];
+  // last computed dataLimite (ISO) for debugging
+  public lastDataLimite: string | null = null;
+  // debug: earliest and latest start_ts in the current loaded dataset
+  public minStartTs: string | null = null;
+  public maxStartTs: string | null = null;
 
   constructor(
     private ocorrenciaService: OcorrenciaService,
@@ -118,7 +125,7 @@ export class DadosComponent implements AfterViewInit, OnInit {
   ) {}
 
   ngOnInit(): void {
-    console.log('DadosComponent: ngOnInit - Carregando...');
+    // Inicialização
     this.carregarEstruturaGraficos(); // Primeiro inicializa a estrutura
     this.carregarDadosApi(); // Depois busca os dados
   }
@@ -135,8 +142,22 @@ export class DadosComponent implements AfterViewInit, OnInit {
     this.errorMsg = null;
     this.ocorrencias$ = this.ocorrenciaService.getOcorrencias().pipe(
       tap((data) => {
-        console.log(`Dados recebidos da API: ${data.length} ocorrências.`);
         this.dadosCarregados = data;
+        // fetch the true total from the backend (uncapped count)
+        this.ocorrenciaService.getTotalOcorrencias().subscribe({
+          next: (res) => {
+            try {
+              this.kpiTotalCount = res.count ?? data.length;
+            } catch (e) {
+              this.kpiTotalCount = data.length;
+            }
+          },
+          error: () => {
+            this.kpiTotalCount = data.length;
+          },
+        });
+        // initialize filtered view and apply filters to update KPIs/charts
+        this.filteredDados = data;
         this.aplicarFiltros(); // Chama a função de filtro (que atualiza os gráficos)
       }),
       catchError((err) => {
@@ -208,11 +229,15 @@ export class DadosComponent implements AfterViewInit, OnInit {
   }
 
   /** Processa e atualiza o gráfico de Barras (Volume) */
-  atualizarGraficoVolumePorPeriodo(dados: Ocorrencia[], periodo: string): void {
+  atualizarGraficoVolumePorPeriodo(
+    dados: Ocorrencia[],
+    periodo: string,
+    dataFim: Date
+  ): void {
     let categories: string[] = [];
     let seriesGrave: number[] = [];
     let seriesSimples: number[] = [];
-    const agora = new Date();
+    const agora = new Date(dataFim);
     agora.setHours(23, 59, 59, 999);
 
     if (periodo === '7d') {
@@ -542,30 +567,54 @@ export class DadosComponent implements AfterViewInit, OnInit {
   // Aplica filtros (ORQUESTRADOR PRINCIPAL)
   // ===========================
   aplicarFiltros() {
-    // --- 1. Filtra por PERÍODO ---
-    const agora = new Date();
-    let dataLimite = new Date(agora);
+    // Recompute min/max timestamps from the loaded dataset first (used to anchor windows)
+    try {
+      const dates = this.dadosCarregados
+        .map((o) => new Date(o.start_ts).getTime())
+        .filter((t) => !isNaN(t));
+      if (dates.length > 0) {
+        this.minStartTs = new Date(Math.min(...dates)).toISOString();
+        this.maxStartTs = new Date(Math.max(...dates)).toISOString();
+      } else {
+        this.minStartTs = null;
+        this.maxStartTs = null;
+      }
+    } catch (e) {
+      this.minStartTs = null;
+      this.maxStartTs = null;
+    }
 
+    // Anchor period windows to the latest available event if present, otherwise use now()
+    const referenceNow = this.maxStartTs
+      ? new Date(this.maxStartTs)
+      : new Date();
+    referenceNow.setHours(23, 59, 59, 999);
+
+    // --- 1. Filtra por PERÍODO (anchored at referenceNow) ---
+    let dataLimite = new Date(referenceNow);
     switch (this.periodoSelecionado) {
       case '7d':
-        dataLimite.setDate(agora.getDate() - 7);
+        dataLimite.setDate(referenceNow.getDate() - 7);
         break;
       case '30d':
-        dataLimite.setDate(agora.getDate() - 30);
+        dataLimite.setDate(referenceNow.getDate() - 30);
         break;
       case '2m':
-        dataLimite.setMonth(agora.getMonth() - 2);
+        dataLimite.setMonth(referenceNow.getMonth() - 2);
         break;
     }
 
     const dadosFiltradosPorPeriodo = this.dadosCarregados.filter((oc) => {
       return new Date(oc.start_ts) >= dataLimite;
     });
+    // store last dataLimite for internal use
+    this.lastDataLimite = dataLimite.toISOString();
 
     // --- 2. Atualiza o Gráfico de Barras (Volume) ---
     this.atualizarGraficoVolumePorPeriodo(
       dadosFiltradosPorPeriodo,
-      this.periodoSelecionado
+      this.periodoSelecionado,
+      referenceNow
     );
 
     // (hour chart update call will be executed after tipo filtering)
@@ -589,11 +638,14 @@ export class DadosComponent implements AfterViewInit, OnInit {
 
     // --- 4. Atualiza o Gráfico de Ocorrências por Hora ---
     this.atualizarGraficoHoras(dadosFiltradosPorTipo);
+    // update filteredDados for template
+    this.filteredDados = dadosFiltradosPorTipo;
     // --- 4.5 Atualiza o cartão KPI (Percent % Ocorrências Graves) ---
     this.atualizarKpiCard(
       dadosFiltradosPorTipo,
       dataLimite,
-      this.periodoSelecionado
+      this.periodoSelecionado,
+      referenceNow
     );
 
     // --- 5. Atualiza os Gráficos Agrupados (Donut e Horizontal) ---
@@ -607,7 +659,8 @@ export class DadosComponent implements AfterViewInit, OnInit {
   private atualizarKpiCard(
     dados: Ocorrencia[],
     dataLimite: Date,
-    periodo: string
+    periodo: string,
+    agoraRef: Date
   ) {
     try {
       // Current period counts
@@ -617,7 +670,7 @@ export class DadosComponent implements AfterViewInit, OnInit {
         totalAtual === 0 ? 0 : (gravesAtual / totalAtual) * 100;
 
       // Determine window length in ms for previous period calculation
-      const agora = new Date();
+      const agora = new Date(agoraRef);
       let windowMs = 7 * 24 * 3600 * 1000; // default 7d
       if (periodo === '7d') windowMs = 7 * 24 * 3600 * 1000;
       else if (periodo === '30d') windowMs = 30 * 24 * 3600 * 1000;
@@ -658,13 +711,8 @@ export class DadosComponent implements AfterViewInit, OnInit {
       // Build sparkline series: compute percent graves per bucket (day/week)
       let buckets: number[] = [];
       if (periodo === '7d') {
-        const [g, s] = this.agruparDadosPorDia(
-          this.dadosCarregados.filter((oc) => {
-            return new Date(oc.start_ts) >= dataLimite;
-          }),
-          new Date(),
-          7
-        );
+        // use already filtered `dados` (period + tipo) to compute percent buckets
+        const [g, s] = this.agruparDadosPorDia(dados, agoraRef, 7);
         buckets = g.map((gv, i) => {
           const total = gv + s[i];
           return total === 0 ? 0 : (gv / total) * 100;
@@ -672,13 +720,8 @@ export class DadosComponent implements AfterViewInit, OnInit {
       } else {
         // for 30d and 2m use weekly buckets
         const weeks = periodo === '30d' ? 5 : 9;
-        const [g, s] = this.agruparDadosPorSemana(
-          this.dadosCarregados.filter((oc) => {
-            return new Date(oc.start_ts) >= dataLimite;
-          }),
-          new Date(),
-          weeks
-        );
+        // use already filtered `dados` (period + tipo) to compute percent buckets (weekly)
+        const [g, s] = this.agruparDadosPorSemana(dados, agoraRef, weeks);
         buckets = g.map((gv, i) => {
           const total = gv + s[i];
           return total === 0 ? 0 : (gv / total) * 100;
@@ -698,38 +741,28 @@ export class DadosComponent implements AfterViewInit, OnInit {
       }
       // Also update Total KPI sparkline and values
       // Build total buckets (counts) matching the same buckets used above
+      // Build total buckets (counts) from the already filtered `dados`
       if (periodo === '7d') {
-        const [, totals] = this.agruparDadosPorDia(
-          this.dadosCarregados.filter((oc) => {
-            return new Date(oc.start_ts) >= dataLimite;
-          }),
-          new Date(),
-          7
-        );
+        const [, totals] = this.agruparDadosPorDia(dados, agoraRef, 7);
         this.kpiTotalSparklineSeries = [
           { name: 'Total', data: totals.map((v) => v) },
         ];
       } else {
         const weeks = periodo === '30d' ? 5 : 9;
-        const [, totals] = this.agruparDadosPorSemana(
-          this.dadosCarregados.filter((oc) => {
-            return new Date(oc.start_ts) >= dataLimite;
-          }),
-          new Date(),
-          weeks
-        );
+        const [, totals] = this.agruparDadosPorSemana(dados, agoraRef, weeks);
         this.kpiTotalSparklineSeries = [
           { name: 'Total', data: totals.map((v) => v) },
         ];
       }
 
-      // compute totals for current period
-      this.kpiTotalCount = dados.length;
+      // compute totals for current period (do not overwrite global total from backend)
+      // keep backend-provided total in `this.kpiTotalCount` (set in carregarDadosApi)
       // previous period total
       const prevTotal = this.dadosCarregados.filter((oc) => {
         const t = new Date(oc.start_ts).getTime();
         return (
-          t >= dataLimite.getTime() - (Date.now() - dataLimite.getTime()) &&
+          t >=
+            dataLimite.getTime() - (agora.getTime() - dataLimite.getTime()) &&
           t < dataLimite.getTime()
         );
       }).length;
