@@ -77,6 +77,7 @@ export class DadosComponent implements AfterViewInit, OnInit {
   @ViewChild('hourChart') hourChart!: ChartComponent;
   @ViewChild('kpiSparkline') kpiSparkline!: ChartComponent;
   @ViewChild('kpiTotalSparkline') kpiTotalSparkline!: ChartComponent;
+  @ViewChild('kpiDonutChart') kpiDonutChart!: ChartComponent;
 
   // === CORREÇÃO DE TIPO (1/3) ===
   // Removemos o 'Partial' e usamos '!' para dizer ao TS que vamos inicializar
@@ -94,6 +95,9 @@ export class DadosComponent implements AfterViewInit, OnInit {
   public kpiTotalDelta: number | null = null;
   public kpiTotalSparklineOptions: any;
   public kpiTotalSparklineSeries: any[] = [];
+  // KPI Donut (Graves vs Outros) — ligado ao filtro de período
+  public kpiDonutOptions!: DonutChartOptions;
+  public kpiDonutSeries: number[] = [];
 
   periodoSelecionado = '7d';
   tipoErroSelecionado = 'todos';
@@ -442,8 +446,8 @@ export class DadosComponent implements AfterViewInit, OnInit {
       dataLabels: { enabled: false, style: { colors: [corTexto] } },
       legend: {
         position: 'bottom',
-        labels: { colors: corTexto },
-        markers: { fillColors: [] },
+        labels: { colors: corTexto, style: { fontSize: '14px' } },
+        markers: { width: 14, height: 14, fillColors: [] },
       },
       tooltip: { theme: 'dark' as any },
       responsive: [
@@ -522,6 +526,32 @@ export class DadosComponent implements AfterViewInit, OnInit {
       tooltip: { enabled: false, theme: 'dark' },
       colors: ['#1E88E5'],
     };
+
+    // KPI Donut (Graves vs Outros) initial options
+    // Note: keep the KPI card height small; make the chart fit the card by using a smaller height
+    // and a responsive width. Also set the donut inner size so it looks balanced inside the card.
+    this.kpiDonutOptions = {
+      series: [0, 0],
+      // increase KPI donut so it is visually prominent when stacked vertically
+      chart: { type: 'donut', height: 260, width: '100%' },
+      labels: ['Graves/Gravíssimas', 'Outros'],
+      /* cores com contraste maior para 'Outros' */
+      colors: ['#FF4B4B', '#9AA6C1'],
+      dataLabels: { enabled: false },
+      legend: {
+        position: 'bottom',
+        labels: { colors: this.getCorTexto(), style: { fontSize: '13px' } },
+        markers: { width: 12, height: 12 },
+      },
+      plotOptions: { pie: { donut: { size: '55%' } } },
+      responsive: [
+        { breakpoint: 1400, options: { chart: { height: 240 } } },
+        { breakpoint: 1200, options: { chart: { height: 220 } } },
+        { breakpoint: 900, options: { chart: { height: 200 } } },
+        { breakpoint: 768, options: { chart: { height: 180 } } },
+        { breakpoint: 480, options: { chart: { height: 140 } } },
+      ],
+    } as any;
   }
 
   // ===========================
@@ -561,6 +591,23 @@ export class DadosComponent implements AfterViewInit, OnInit {
         yaxis: { labels: { style: { colors: [corTexto] } } },
         legend: { labels: { colors: corTexto } },
       });
+    }
+
+    if (this.kpiDonutChart) {
+      try {
+        this.kpiDonutChart.updateOptions({
+          legend: {
+            labels: { colors: corTexto },
+            markers: {
+              width: 14,
+              height: 14,
+              fillColors: this.kpiDonutOptions.colors,
+            },
+          },
+        });
+      } catch (e) {
+        // ignore if not ready
+      }
     }
   }
 
@@ -617,6 +664,28 @@ export class DadosComponent implements AfterViewInit, OnInit {
       this.periodoSelecionado,
       referenceNow
     );
+
+    // --- KPI Donut: Graves vs Outros (aplica somente filtro de PERÍODO) ---
+    try {
+      const graves = dadosFiltradosPorPeriodo.filter((oc) =>
+        this.isGrave(oc)
+      ).length;
+      const totalPeriodo = dadosFiltradosPorPeriodo.length;
+      const outros = Math.max(0, totalPeriodo - graves);
+      this.kpiDonutSeries = [graves, outros];
+      this.kpiDonutOptions.series = this.kpiDonutSeries as any;
+      this.kpiDonutOptions.labels = ['Graves/Gravíssimas', 'Outros'];
+      this.kpiDonutOptions.colors = ['#FF4B4B', '#9AA6C1'];
+      if (this.kpiDonutChart) {
+        this.kpiDonutChart.updateOptions({
+          series: this.kpiDonutSeries,
+          labels: this.kpiDonutOptions.labels,
+          colors: this.kpiDonutOptions.colors,
+        });
+      }
+    } catch (e) {
+      // ignore
+    }
 
     // (hour chart update call will be executed after tipo filtering)
     // --- 3. Filtra por TIPO (Grave/Simples) ---

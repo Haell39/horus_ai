@@ -101,6 +101,7 @@
 }
 
 .card-grafico.grande {
+  /* restaurado para o tamanho original */
   height: 575px;
   color: #000;
 }
@@ -114,6 +115,7 @@
 }
 
 .card-grafico.kpi {
+  /* restaurado ao tamanho original */
   height: 200px;
   display: flex;
   align-items: center;
@@ -206,6 +208,24 @@
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
 }
 
+/* Legend higher-contrast overrides for better readability on dark backgrounds */
+.card-grafico .apexcharts-legend {
+  background: rgba(255, 255, 255, 0.02);
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+.card-grafico .apexcharts-legend-text {
+  color: var(--texto-cor, #ffffff) !important;
+  font-weight: 600;
+  font-size: 0.95rem !important;
+}
+.card-grafico .apexcharts-legend-marker span {
+  width: 14px !important;
+  height: 14px !important;
+  border-radius: 3px !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4) !important;
+}
+
 /* ============================
    PARTES DO CARD COMBINADO
 ============================ */
@@ -214,6 +234,40 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
+}
+
+/* layout for combined card top row: KPI compact + main donut */
+.parte-superior .top-row {
+  /* Empilha os elementos verticalmente: KPI acima, distribuição no meio */
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  align-items: stretch;
+}
+.parte-superior .kpi-compact {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  padding: 8px 6px;
+  /* remove inner card visuals (no shadow/border) */
+  box-shadow: none;
+  border-radius: 0;
+}
+.parte-superior .donut-main {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 900px) {
+  .parte-superior .top-row {
+    gap: 12px;
+  }
 }
 
 .parte-superior apx-chart {
