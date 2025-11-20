@@ -53,7 +53,9 @@ export class AcessibilidadeComponent implements OnInit {
     try {
       const anyWin: any = window as any;
       if (anyWin.speechSynthesis) {
-        const utter = new SpeechSynthesisUtterance(this.mockNotifications[0].text);
+        const utter = new SpeechSynthesisUtterance(
+          this.mockNotifications[0].text
+        );
         anyWin.speechSynthesis.cancel();
         anyWin.speechSynthesis.speak(utter);
       } else {
@@ -66,6 +68,9 @@ export class AcessibilidadeComponent implements OnInit {
 
   toggleContrast(): void {
     this.config.highContrast = !this.config.highContrast;
-    document.body.classList.toggle('high-contrast-mode', this.config.highContrast);
+    document.body.classList.toggle(
+      'high-contrast-mode',
+      this.config.highContrast
+    );
   }
 }
