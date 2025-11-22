@@ -11,92 +11,114 @@
   </div>
 
   <div class="grid">
-    <div class="video-card">
-      <div class="transmissoes">
-        <button
-          *ngFor="let video of videos; let i = index"
-          (click)="trocarTransmissao(i)"
-          [class.ativo]="videoIndex === i"
-        >
-          {{ video.label ? video.label : "Transmissão " + (i + 1) }}
-        </button>
-      </div>
-
-      <div class="video-controls">
-        <div class="input-modo">
-          <label>Fonte:</label>
-          <select [(ngModel)]="streamMode">
-            <option value="srt">Link SRT</option>
-            <option value="capture">Placa de Captura</option>
-          </select>
-          <input
-            *ngIf="streamMode === 'capture'"
-            type="text"
-            placeholder="device (ex: /dev/video0 or video=... )"
-            [(ngModel)]="captureDevice"
-          />
-        </div>
-        <span class="live-badge" [class.on]="isLive">● LIVE</span>
-        <button
-          class="btn-start"
-          (click)="startStreamClicked()"
-          [disabled]="isStreaming"
-        >
-          Start
-        </button>
-        <button
-          class="btn-stop"
-          (click)="stopStreamClicked()"
-          [disabled]="!isStreaming"
-        >
-          Stop
-        </button>
-        <!-- Upload de vídeo para análise (habilitado somente quando não há ingest) -->
-        <div
-          class="upload-area"
-          style="
-            margin-left: 12px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-          "
-        >
-          <input
-            class="file-input"
-            type="file"
-            accept="video/*"
-            (change)="onFileSelected($event)"
-            [disabled]="isStreaming"
-          />
-          <label style="display: flex; align-items: center; gap: 6px">
-            <input
-              type="checkbox"
-              [(ngModel)]="debugAnalysis"
-              [disabled]="isStreaming"
-            />
-            <span style="font-size: 0.9rem">Debug</span>
-          </label>
+    <!-- Left Column: Video & Chart -->
+    <div class="left-column">
+      <div class="video-card">
+        <div class="transmissoes">
           <button
-            class="btn-analise"
-            (click)="uploadAnalysisClicked()"
-            [disabled]="!selectedFile || isStreaming"
+            *ngFor="let video of videos; let i = index"
+            (click)="trocarTransmissao(i)"
+            [class.ativo]="videoIndex === i"
           >
-            Analisar Vídeo
+            {{ video.label ? video.label : "Transmissão " + (i + 1) }}
           </button>
         </div>
+
+        <div class="video-controls">
+          <div class="input-modo">
+            <label>Fonte:</label>
+            <select [(ngModel)]="streamMode">
+              <option value="srt">Link SRT</option>
+              <option value="capture">Placa de Captura</option>
+            </select>
+            <input
+              *ngIf="streamMode === 'capture'"
+              type="text"
+              placeholder="device (ex: /dev/video0 or video=... )"
+              [(ngModel)]="captureDevice"
+            />
+          </div>
+          <span class="live-badge" [class.on]="isLive">● LIVE</span>
+          <button
+            class="btn-start"
+            (click)="startStreamClicked()"
+            [disabled]="isStreaming"
+          >
+            Start
+          </button>
+          <button
+            class="btn-stop"
+            (click)="stopStreamClicked()"
+            [disabled]="!isStreaming"
+          >
+            Stop
+          </button>
+          <!-- Upload de vídeo para análise (habilitado somente quando não há ingest) -->
+          <div
+            class="upload-area"
+            style="
+              margin-left: 12px;
+              display: flex;
+              align-items: center;
+              gap: 8px;
+            "
+          >
+            <input
+              class="file-input"
+              type="file"
+              accept="video/*"
+              (change)="onFileSelected($event)"
+              [disabled]="isStreaming"
+            />
+            <label style="display: flex; align-items: center; gap: 6px">
+              <input
+                type="checkbox"
+                [(ngModel)]="debugAnalysis"
+                [disabled]="isStreaming"
+              />
+              <span style="font-size: 0.9rem">Debug</span>
+            </label>
+            <button
+              class="btn-analise"
+              (click)="uploadAnalysisClicked()"
+              [disabled]="!selectedFile || isStreaming"
+            >
+              Analisar Vídeo
+            </button>
+          </div>
+        </div>
+
+        <video
+          #videoPlayer
+          controls
+          (play)="onPlayVideo()"
+          (ended)="playNextVideo()"
+        >
+          <source [src]="videos[videoIndex].src" type="video/mp4" />
+          Seu navegador não suporta vídeo.
+        </video>
       </div>
 
-      <video
-        #videoPlayer
-        controls
-        (play)="onPlayVideo()"
-        (ended)="playNextVideo()"
-      >
-        <source [src]="videos[videoIndex].src" type="video/mp4" />
-        Seu navegador não suporta vídeo.
-      </video>
+      <!-- Chart moved here -->
+      <div class="chart-card">
+        <h2>Histórico em Tempo Real</h2>
+        <apx-chart
+          [series]="chartOptions.series"
+          [chart]="chartOptions.chart"
+          [xaxis]="chartOptions.xaxis"
+          [yaxis]="chartOptions.yaxis"
+          [stroke]="chartOptions.stroke"
+          [dataLabels]="chartOptions.dataLabels"
+          [labels]="chartOptions.labels"
+          [legend]="chartOptions.legend"
+          [tooltip]="chartOptions.tooltip"
+          [colors]="chartOptions.colors || []"
+        >
+        </apx-chart>
+      </div>
     </div>
 
+    <!-- Right Column: Stats & Alerts -->
     <div class="stats">
       <!-- Painel de Controle SRT (Direita) -->
       <div class="srt-control-panel" *ngIf="streamMode === 'srt'">
@@ -118,60 +140,62 @@
       </div>
 
       <div class="card blue clickable" (click)="goToCortes()">
-        <p>Total de Ocorrências</p>
-        <p>{{ totalOcorrencias }}</p>
+        <div class="card-icon">
+          <i class="fa-solid fa-clipboard-list"></i>
+        </div>
+        <div class="card-content">
+          <span class="card-label">Total de Ocorrências</span>
+          <span class="card-value">{{ totalOcorrencias }}</span>
+        </div>
+        <div class="card-glow"></div>
       </div>
+
       <div class="card red clickable" (click)="goToCortes()">
-        <p>Falhas Graves</p>
-        <p>{{ falhasGraves }}</p>
+        <div class="card-icon">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+        <div class="card-content">
+          <span class="card-label">Falhas Graves</span>
+          <span class="card-value">{{ falhasGraves }}</span>
+        </div>
+        <div class="card-glow"></div>
       </div>
+
       <div class="card yellow">
-        <p>Última Falha</p>
-        <p>{{ ultimaFalha || "N/A" }}</p>
+        <div class="card-icon">
+          <i class="fa-solid fa-bolt"></i>
+        </div>
+        <div class="card-content">
+          <span class="card-label">Última Falha</span>
+          <span class="card-value small">{{ ultimaFalha || "N/A" }}</span>
+        </div>
+        <div class="card-glow"></div>
       </div>
-    </div>
-  </div>
 
-  <div class="historicos">
-    <div class="chart-card">
-      <h2>Histórico em Tempo Real</h2>
-      <apx-chart
-        [series]="chartOptions.series"
-        [chart]="chartOptions.chart"
-        [xaxis]="chartOptions.xaxis"
-        [yaxis]="chartOptions.yaxis"
-        [stroke]="chartOptions.stroke"
-        [dataLabels]="chartOptions.dataLabels"
-        [labels]="chartOptions.labels"
-        [legend]="chartOptions.legend"
-        [tooltip]="chartOptions.tooltip"
-        [colors]="chartOptions.colors || []"
-      >
-      </apx-chart>
-    </div>
-
-    <div class="alertas">
-      <h2>Alertas Recentes</h2>
-      <ul>
-        <li
-          *ngFor="let alerta of alertas"
-          [ngClass]="['alerta', alerta.tipo, alerta.animacao]"
-        >
-          <div class="alerta-header">
-            <span class="titulo">{{ alerta.mensagem }}</span>
-            <span class="badge" [ngClass]="getBadgeClass(alerta.tipo)">
-              {{ getBadgeLetra(alerta.tipo) }} -
-              {{ getBadgeTexto(alerta.tipo) }}
-            </span>
-          </div>
-          <div class="alerta-meta">
-            <span class="hora">
-              <i class="fa-regular fa-clock"></i> {{ alerta.hora }}
-            </span>
-            <span class="origem">• {{ alerta.origem }}</span>
-          </div>
-        </li>
-      </ul>
+      <!-- Alertas Recentes (Moved here) -->
+      <div class="alertas">
+        <h2>Alertas Recentes</h2>
+        <ul>
+          <li
+            *ngFor="let alerta of alertas"
+            [ngClass]="['alerta', alerta.tipo, alerta.animacao]"
+          >
+            <div class="alerta-header">
+              <span class="titulo">{{ alerta.mensagem }}</span>
+              <span class="badge" [ngClass]="getBadgeClass(alerta.tipo)">
+                {{ getBadgeLetra(alerta.tipo) }} -
+                {{ getBadgeTexto(alerta.tipo) }}
+              </span>
+            </div>
+            <div class="alerta-meta">
+              <span class="hora">
+                <i class="fa-regular fa-clock"></i> {{ alerta.hora }}
+              </span>
+              <span class="origem">• {{ alerta.origem }}</span>
+            </div>
+          </li>
+        </ul>
+      </div>
     </div>
   </div>
 </div>

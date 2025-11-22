@@ -102,10 +102,13 @@ body.light-theme {
 }
 
 h1 {
-  font-size: 1.9rem;
-  font-weight: 600;
-  margin-bottom: 20px;
-  color: var(--texto-cor);
+  border-radius: 12px;
+  padding: 10px;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  transition: background 0.3s ease, color 0.3s ease;
 }
 
 /* GRID PRINCIPAL */
@@ -114,6 +117,13 @@ h1 {
   grid-template-columns: 68% 30%;
   gap: 2%;
   align-items: stretch;
+}
+
+/* COLUNA ESQUERDA (Vídeo + Gráfico) */
+.left-column {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
 }
 
 /* VIDEO CARD */
@@ -316,77 +326,125 @@ h1 {
   transform: none;
 }
 
+/* CARDS MODERNIZADOS (V2 - Vibrant & Big) */
 .card {
-  border-radius: 10px;
-  padding: 14px 18px; /* Reduzido de 18px 20px */
-  background: var(--card-bg);
-  color: var(--texto-cor);
-  font-weight: 600;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
-  transition: transform 0.2s ease, background 0.3s ease, color 0.3s ease;
+  position: relative;
+  border-radius: 16px;
+  padding: 24px; /* Increased padding */
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+  border: none; /* Remove border for cleaner look */
 }
 
 .card:hover {
-  transform: scale(1.02);
+  transform: translateY(-5px) scale(1.02);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
 }
 
-/* make stat cards that are clickable show pointer and slight lift */
 .card.clickable {
   cursor: pointer;
 }
+
 .card.clickable:active {
-  transform: scale(0.995);
+  transform: scale(0.98);
 }
 
-.card p:first-child {
-  font-size: 1.1rem; /* Reduzido de 1.5rem */
-  opacity: 0.9;
-  margin-bottom: 4px; /* Reduzido de 6px */
+/* Ícones */
+.card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px; /* Bigger icon container */
+  height: 56px;
+  border-radius: 14px;
+  font-size: 1.8rem;
+  background: rgba(255, 255, 255, 0.2); /* Semi-transparent white */
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.card p:last-child {
-  font-size: 1.8rem; /* Aumentado para destaque numérico, ou manter 1.5rem */
-  font-weight: 700;
+/* Conteúdo */
+.card-content {
+  display: flex;
+  flex-direction: column;
+  z-index: 1;
+  flex: 1; /* Take remaining space */
 }
 
-/* CORES ESPECIAIS DE CARDS */
+.card-label {
+  font-size: 1rem; /* Larger label */
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.card-value {
+  font-size: 2.4rem; /* Much larger number */
+  font-weight: 800;
+  line-height: 1.1;
+  color: #fff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.card-value.small {
+  font-size: 1.4rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+/* Variantes de Cor (Full Gradients) */
 .card.blue {
-  background: linear-gradient(145deg, #1976d2, #2196f3);
+  background: linear-gradient(
+    135deg,
+    #2563eb 0%,
+    #06b6d4 100%
+  ); /* Modern Blue-Cyan */
+}
+.card.blue .card-icon {
   color: #fff;
 }
 
 .card.red {
-  background: linear-gradient(145deg, #c62828, #ef5350);
+  background: linear-gradient(
+    135deg,
+    #dc2626 0%,
+    #ef4444 100%
+  ); /* Modern Red */
+}
+.card.red .card-icon {
   color: #fff;
 }
 
 .card.yellow {
-  background: linear-gradient(145deg, #f9a825, #ffeb3b);
-  color: #222;
+  background: linear-gradient(
+    135deg,
+    #d97706 0%,
+    #fbbf24 100%
+  ); /* Amber-Yellow */
+  color: #fff; /* Keeping text white for consistency, shadow helps readability */
+}
+.card.yellow .card-icon {
+  color: #fff;
 }
 
-/* GRÁFICOS E HISTÓRICOS */
-.historicos {
-  display: grid;
-  grid-template-columns: 68% 30%;
-  gap: 2%;
-  margin-top: 25px;
-  align-items: stretch;
+/* Remove old glow/specific icon colors since we are using white on colored bg */
+.card.blue .card-icon,
+.card.red .card-icon,
+.card.yellow .card-icon {
+  box-shadow: none;
+  background: rgba(255, 255, 255, 0.25);
 }
 
-.chart-card {
-  background: var(--card-bg);
-  padding: 20px;
-  border-radius: 12px;
-  box-shadow: 0 0 15px rgba(0, 0, 0, 0.45);
-  transition: background 0.3s ease, color 0.3s ease;
-  touch-action: pan-y;
-}
-
-.chart-card h2 {
-  font-size: 1.05rem;
-  margin-bottom: 10px;
-  font-weight: 500;
+.card-glow {
   color: var(--texto-cor);
 }
 
