@@ -1,101 +1,165 @@
 <app-sidebar></app-sidebar>
 
-<div class="conteudo-dados">
-  <h2 class="titulo-pagina">Acessibilidade</h2>
-
-  <div class="filtros-container">
-    <div class="filtro">
-      <label>Preferências</label>
-      <div class="pref-row">
-        <label
-          ><input
-            type="checkbox"
-            [(ngModel)]="config.highContrast"
-            (change)="toggleContrast()"
+<div class="page-container">
+  <!-- Header Section -->
+  <header class="page-header">
+    <div class="header-content">
+      <h1>Acessibilidade & Inclusão</h1>
+      <p class="subtitle">
+        Personalize sua experiência no Horus AI para máxima eficiência e
+        conforto.
+      </p>
+    </div>
+    <div class="compliance-badge">
+      <div class="score-circle">
+        <svg viewBox="0 0 36 36" class="circular-chart">
+          <path
+            class="circle-bg"
+            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
           />
-          Alto Contraste</label
-        >
+          <path
+            class="circle"
+            [attr.stroke-dasharray]="complianceScore + ', 100'"
+            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+          />
+        </svg>
+        <span class="score-text">{{ complianceScore }}%</span>
       </div>
-      <div class="pref-row">
-        <label
-          ><input type="checkbox" [(ngModel)]="config.reduceMotion" /> Reduzir
-          Animações</label
-        >
+      <div class="badge-info">
+        <span class="label">WCAG 2.1 AAA</span>
+        <span class="status">Em Conformidade</span>
       </div>
-      <div class="pref-row">
-        <label
-          ><input type="checkbox" [(ngModel)]="config.captionsEnabled" />
-          Legendas Ativas</label
-        >
+    </div>
+  </header>
+
+  <!-- Main Grid -->
+  <div class="settings-grid">
+    <!-- Visual Intelligence Card -->
+    <div class="glass-card visual-card">
+      <div class="card-header">
+        <i class="fa-solid fa-eye"></i>
+        <h2>Inteligência Visual</h2>
       </div>
-      <div class="pref-row">
-        <label
-          >Fonte:
-          <input type="range" min="12" max="24" [(ngModel)]="config.fontSize"
-        /></label>
-      </div>
-      <div class="pref-row">
-        <label
-          >Paleta:
-          <select [(ngModel)]="config.colorPalette">
-            <option value="default">Padrão</option>
-            <option value="deuteranopia">Deuteranopia</option>
-            <option value="protanopia">Protanopia</option>
-            <option value="tritanopia">Tritanopia</option>
+      <div class="card-body">
+        <div class="control-group">
+          <div class="control-label">
+            <span>Modo Alto Contraste</span>
+            <small>Aumenta a distinção entre elementos</small>
+          </div>
+          <label class="switch">
+            <input
+              type="checkbox"
+              [(ngModel)]="config.highContrast"
+              (change)="toggleContrast()"
+            />
+            <span class="slider round"></span>
+          </label>
+        </div>
+
+        <div class="control-group">
+          <div class="control-label">
+            <span>Modo de Cor</span>
+          </div>
+          <select class="premium-select" [(ngModel)]="config.colorMode">
+            <option value="default">Padrão (RGB)</option>
+            <option value="deuteranopia">Deuteranopia (Verde)</option>
+            <option value="protanopia">Protanopia (Vermelho)</option>
+            <option value="tritanopia">Tritanopia (Azul)</option>
+            <option value="monochrome">Monocromático</option>
           </select>
-        </label>
-      </div>
-      <div style="margin-top: 10px">
-        <button class="btn" (click)="save()">Salvar Preferências</button>
+        </div>
+
+        <div class="control-group vertical">
+          <div class="control-label">
+            <span>Escala da Interface</span>
+            <span class="value-badge">{{ config.uiScale }}%</span>
+          </div>
+          <input
+            type="range"
+            min="80"
+            max="150"
+            step="5"
+            [(ngModel)]="config.uiScale"
+            class="premium-range"
+          />
+        </div>
       </div>
     </div>
 
-    <div class="filtro">
-      <label>Testes Rápidos</label>
-      <div class="test-card card-grafico">
-        <h4>Leitor de Tela</h4>
-        <p>Executa um teste simples com o SpeechSynthesis (se disponível).</p>
-        <button class="btn" (click)="runScreenReaderTest()">
-          Executar Teste
+    <!-- Auditory & Cognitive Card -->
+    <div class="glass-card auditory-card">
+      <div class="card-header">
+        <i class="fa-solid fa-ear-listen"></i>
+        <h2>Auditivo & Cognitivo</h2>
+      </div>
+      <div class="card-body">
+        <div class="control-group">
+          <div class="control-label">
+            <span>Leitor de Tela (TTS)</span>
+            <small>Feedback de voz para ações</small>
+          </div>
+          <label class="switch">
+            <input type="checkbox" [(ngModel)]="config.screenReaderEnabled" />
+            <span class="slider round"></span>
+          </label>
+        </div>
+
+        <div class="control-group">
+          <div class="control-label">
+            <span>Reduzir Movimento</span>
+            <small>Minimiza animações</small>
+          </div>
+          <label class="switch">
+            <input type="checkbox" [(ngModel)]="config.reduceMotion" />
+            <span class="slider round"></span>
+          </label>
+        </div>
+
+        <div class="control-group">
+          <div class="control-label">
+            <span>Focus Mode</span>
+            <small>Oculta elementos não essenciais</small>
+          </div>
+          <label class="switch">
+            <input type="checkbox" [(ngModel)]="config.focusMode" />
+            <span class="slider round"></span>
+          </label>
+        </div>
+
+        <div class="control-group vertical">
+          <div class="control-label">
+            <span>Volume de Alertas</span>
+            <span class="value-badge">{{ config.alertVolume }}%</span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            [(ngModel)]="config.alertVolume"
+            class="premium-range"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- Shortcuts Map Card -->
+    <div class="glass-card shortcuts-card">
+      <div class="card-header">
+        <i class="fa-solid fa-keyboard"></i>
+        <h2>Atalhos de Produtividade</h2>
+      </div>
+      <div class="shortcuts-grid">
+        <div class="shortcut-item" *ngFor="let s of shortcuts">
+          <span class="key-combo">{{ s.key }}</span>
+          <span class="action-name">{{ s.action }}</span>
+        </div>
+      </div>
+      <div class="card-footer">
+        <button class="btn-secondary" (click)="resetDefaults()">
+          Restaurar Padrões
         </button>
-      </div>
-
-      <div class="test-card card-grafico" style="margin-top: 12px">
-        <h4>Mock Notifications</h4>
-        <ul>
-          <li *ngFor="let n of mockNotifications">{{ n.text }}</li>
-        </ul>
+        <button class="btn-primary" (click)="save()">Salvar Alterações</button>
       </div>
     </div>
-  </div>
-
-  <div class="card-grafico grande">
-    <h3 class="titulo-grafico">Ideias e Recomendações</h3>
-    <ul class="recommendations">
-      <li>
-        <strong>Atalhos de Teclado:</strong> Mapear ações principais (play,
-        pause, mute, toggle captions).
-      </li>
-      <li>
-        <strong>Modo Alto Contraste:</strong> Alternar classes CSS e oferecer
-        paletas pré-definidas.
-      </li>
-      <li>
-        <strong>Reduzir Movimento:</strong> Remover transições e animações para
-        usuários com sensibilidade ao movimento.
-      </li>
-      <li>
-        <strong>Legenda ao Vivo:</strong> Exibir legendas geradas (ASR) e
-        permitir ajuste do tamanho/fonte.
-      </li>
-      <li>
-        <strong>Indicadores de Foco:</strong> Garantir foco visível para
-        navegação por teclado.
-      </li>
-      <li>
-        <strong>Ferramentas:</strong> Link para verificador de contraste e
-        testes com leitores de tela.
-      </li>
-    </ul>
   </div>
 </div>

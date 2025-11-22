@@ -4,11 +4,26 @@ import { FormsModule } from '@angular/forms';
 import { SidebarComponent } from '../../shared/sidebar/sidebar.component';
 
 interface AccessibilityConfig {
+  // Visual
   highContrast: boolean;
-  reduceMotion: boolean;
-  captionsEnabled: boolean;
+  colorMode:
+    | 'default'
+    | 'deuteranopia'
+    | 'protanopia'
+    | 'tritanopia'
+    | 'monochrome';
   fontSize: number;
-  colorPalette: string;
+  uiScale: number;
+
+  // Auditory
+  screenReaderEnabled: boolean;
+  audioDescription: boolean;
+  alertVolume: number;
+
+  // Cognitive & Motion
+  reduceMotion: boolean;
+  focusMode: boolean;
+  autoPlayMedia: boolean;
 }
 
 @Component({
@@ -21,22 +36,37 @@ interface AccessibilityConfig {
 export class AcessibilidadeComponent implements OnInit {
   config: AccessibilityConfig = {
     highContrast: false,
+    colorMode: 'default',
+    fontSize: 100, // percentage
+    uiScale: 100,
+
+    screenReaderEnabled: false,
+    audioDescription: false,
+    alertVolume: 80,
+
     reduceMotion: true,
-    captionsEnabled: true,
-    fontSize: 16,
-    colorPalette: 'default',
+    focusMode: false,
+    autoPlayMedia: false,
   };
 
-  mockNotifications = [
-    { id: 1, text: 'Alerta de volume alto', severity: 'grave' },
-    { id: 2, text: 'Perda de sincronia detectada', severity: 'simples' },
+  // Mock data for UI
+  complianceScore = 98;
+  systemStatus = 'Em Conformidade (WCAG 2.1 AAA)';
+
+  shortcuts = [
+    { key: 'Space', action: 'Play / Pause' },
+    { key: 'M', action: 'Mute Audio' },
+    { key: 'F', action: 'Fullscreen' },
+    { key: 'Alt + S', action: 'Start Stream' },
+    { key: 'Alt + C', action: 'Capture Mode' },
+    { key: 'Esc', action: 'Close Modals' },
   ];
 
   ngOnInit(): void {
-    const saved = localStorage.getItem('acessibilidade_config');
+    const saved = localStorage.getItem('acessibilidade_config_v2');
     if (saved) {
       try {
-        this.config = JSON.parse(saved);
+        this.config = { ...this.config, ...JSON.parse(saved) };
       } catch (e) {
         // ignore
       }
@@ -44,33 +74,35 @@ export class AcessibilidadeComponent implements OnInit {
   }
 
   save(): void {
-    localStorage.setItem('acessibilidade_config', JSON.stringify(this.config));
-    alert('Preferências de acessibilidade salvas localmente.');
-  }
-
-  runScreenReaderTest(): void {
-    // Simple mock: speak the first notification using Web Speech API if available
-    try {
-      const anyWin: any = window as any;
-      if (anyWin.speechSynthesis) {
-        const utter = new SpeechSynthesisUtterance(
-          this.mockNotifications[0].text
-        );
-        anyWin.speechSynthesis.cancel();
-        anyWin.speechSynthesis.speak(utter);
-      } else {
-        alert('Speech Synthesis API não disponível neste navegador');
-      }
-    } catch (e) {
-      console.warn('Screen reader test failed', e);
-    }
+    localStorage.setItem(
+      'acessibilidade_config_v2',
+      JSON.stringify(this.config)
+    );
+    // Here we would trigger a toast or notification
+    console.log('Config saved:', this.config);
   }
 
   toggleContrast(): void {
-    this.config.highContrast = !this.config.highContrast;
+    // Mock implementation of visual toggle
     document.body.classList.toggle(
       'high-contrast-mode',
       this.config.highContrast
     );
+  }
+
+  resetDefaults(): void {
+    this.config = {
+      highContrast: false,
+      colorMode: 'default',
+      fontSize: 100,
+      uiScale: 100,
+      screenReaderEnabled: false,
+      audioDescription: false,
+      alertVolume: 80,
+      reduceMotion: true,
+      focusMode: false,
+      autoPlayMedia: false,
+    };
+    this.save();
   }
 }
