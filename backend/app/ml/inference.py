@@ -620,7 +620,12 @@ def analyze_audio_segments(file_path: str) -> Tuple[str, float, Optional[float]]
             try:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", UserWarning)
-                    return librosa.load(path, sr=sr)
+                    warnings.simplefilter("ignore", FutureWarning)
+                    y, sr_loaded = librosa.load(path, sr=sr)
+                    # Check if loaded audio is empty - if so, trigger ffmpeg fallback
+                    if len(y) == 0:
+                        raise RuntimeError("Librosa returned empty audio array, triggering ffmpeg fallback")
+                    return y, sr_loaded
             except Exception as e:
                 ffmpeg_path = shutil.which('ffmpeg')
                 if not ffmpeg_path:
@@ -654,6 +659,7 @@ def analyze_audio_segments(file_path: str) -> Tuple[str, float, Optional[float]]
                 try:
                     with warnings.catch_warnings():
                         warnings.simplefilter("ignore", UserWarning)
+                        warnings.simplefilter("ignore", FutureWarning)
                         y, sr_native = librosa.load(tmp_path, sr=sr)
                 finally:
                     try:
