@@ -366,3 +366,44 @@ input:checked + .slider:before {
     stroke-dasharray: 0, 100;
   }
 }
+
+/* Platinum Rainbow Text Animation */
+.rainbow-text {
+  background: linear-gradient(
+    90deg,
+    #ffffff 0%,
+    #c0c0c0 20%,
+    #00f2ff 40%,
+    /* Cyan */ #ff00ff 60%,
+    /* Magenta */ #c0c0c0 80%,
+    #ffffff 100%
+  );
+  background-size: 200% auto;
+  color: #fff;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shine 3s linear infinite;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+}
+
+@keyframes shine {
+  to {
+    background-position: 200% center;
+  }
+}
+
+/* Ensure the button background is dark enough for the text to pop */
+.btn-primary {
+  background: rgba(0, 0, 0, 0.6); /* Darker background override */
+  border: 1px solid var(--primary-neon);
+  box-shadow: 0 0 15px rgba(0, 242, 255, 0.15);
+}
+
+.btn-primary:hover {
+  background: rgba(0, 0, 0, 0.8);
+  box-shadow: 0 0 25px rgba(0, 242, 255, 0.3);
+  transform: translateY(-2px);
+}
