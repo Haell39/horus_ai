@@ -75,6 +75,8 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
   public streamMode: 'srt' | 'capture' = 'srt';
   // optional capture device string (e.g. '/dev/video0' or dshow spec)
   public captureDevice: string = '';
+  // optional custom SRT URL
+  public customSrtUrl: string = '';
 
   // HLS / reconnection state
   private hlsInstance: any = null;
@@ -533,7 +535,12 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
         this.captureDevice || (environment as any).captureDevice || '';
     } else {
       payload.mode = 'srt';
-      payload.streamId = environment.streamId;
+      // if user provided a custom URL, use it; otherwise fall back to streamId/env
+      if (this.customSrtUrl && this.customSrtUrl.trim().length > 0) {
+        payload.url = this.customSrtUrl.trim();
+      } else {
+        payload.streamId = environment.streamId;
+      }
     }
 
     this.ocorrenciaService.startStream(payload).subscribe({

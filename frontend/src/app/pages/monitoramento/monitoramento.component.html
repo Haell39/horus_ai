@@ -98,6 +98,25 @@
     </div>
 
     <div class="stats">
+      <!-- Painel de Controle SRT (Direita) -->
+      <div class="srt-control-panel" *ngIf="streamMode === 'srt'">
+        <label>Link SRT Personalizado</label>
+        <div class="srt-input-group">
+          <input
+            type="text"
+            placeholder="srt://..."
+            [(ngModel)]="customSrtUrl"
+          />
+          <button
+            class="btn-ativar"
+            (click)="startStreamClicked()"
+            [disabled]="isStreaming"
+          >
+            Ativar
+          </button>
+        </div>
+      </div>
+
       <div class="card blue clickable" (click)="goToCortes()">
         <p>Total de Ocorrências</p>
         <p>{{ totalOcorrencias }}</p>

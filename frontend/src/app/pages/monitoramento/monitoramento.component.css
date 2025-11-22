@@ -257,13 +257,68 @@ h1 {
 .stats {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  gap: 18px;
+  justify-content: flex-start; /* Alinha ao topo */
+  gap: 12px; /* Reduzido de 18px para compactar */
+}
+
+/* Painel de Controle SRT na direita */
+.srt-control-panel {
+  background: var(--card-bg);
+  border-radius: 10px;
+  padding: 15px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+
+.srt-control-panel label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--texto-cor);
+  opacity: 0.9;
+}
+
+.srt-input-group {
+  display: flex;
+  gap: 8px;
+}
+
+.srt-input-group input {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
+  color: #fff;
+}
+
+.btn-ativar {
+  background: linear-gradient(90deg, #00b09b, #96c93d); /* Gradiente distinto */
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.btn-ativar:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+}
+
+.btn-ativar:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .card {
   border-radius: 10px;
-  padding: 18px 20px;
+  padding: 14px 18px; /* Reduzido de 18px 20px */
   background: var(--card-bg);
   color: var(--texto-cor);
   font-weight: 600;
@@ -284,13 +339,13 @@ h1 {
 }
 
 .card p:first-child {
-  font-size: 1.5rem;
+  font-size: 1.1rem; /* Reduzido de 1.5rem */
   opacity: 0.9;
-  margin-bottom: 6px;
+  margin-bottom: 4px; /* Reduzido de 6px */
 }
 
 .card p:last-child {
-  font-size: 1.5rem;
+  font-size: 1.8rem; /* Aumentado para destaque numérico, ou manter 1.5rem */
   font-weight: 700;
 }
 
