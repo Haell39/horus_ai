@@ -16,6 +16,7 @@ from app.api.endpoints import admin
 from app.api.endpoints import ml_info
 from fastapi.staticfiles import StaticFiles
 import os
+from app.core import storage as storage_core
 
 # Importa a base do banco para criação de tabelas
 from app.db.base import Base, engine
@@ -130,8 +131,13 @@ def read_root():
 print("INFO: Aplicação FastAPI iniciada e rotas configuradas.")
 
 # --- Monta rota para servir clipes estáticos (ex: /clips/clip_123.mp4) ---
-# Monta a pasta pública padrão para clipes
-clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'static', 'clips'))
+# Usa a configuração de storage para decidir o diretório público de clipes.
+# Isso permite que clipes sejam gravados em um local configurado (ex: D:\Videos)
+# e ainda sejam servidos pela rota `/clips`.
+try:
+    clips_dir = storage_core.get_clips_dir()
+except Exception:
+    clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'static', 'clips'))
 os.makedirs(clips_dir, exist_ok=True)
 app.mount("/clips", StaticFiles(directory=clips_dir), name="clips")
 print(f"INFO: Static clips mount configured at /clips -> {clips_dir}")

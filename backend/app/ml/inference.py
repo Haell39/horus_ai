@@ -13,6 +13,10 @@ import math
 from collections import deque
 from ..core.config import settings as core_settings
 import json
+import tempfile
+import subprocess
+import shutil
+import warnings
 
 # === Definições (Mantidas) ===
 MODEL_DIR = os.path.join(os.path.dirname(__file__), 'models')
@@ -87,6 +91,9 @@ CLASS_THRESHOLDS = THRESHOLDS.copy() if isinstance(THRESHOLDS, dict) else {}
 # extract the unique classes in file order and use that as MODEL_CLASSES. Otherwise we fall back
 # to AUDIO_CLASSES + VIDEO_CLASSES as a reasonable default.
 MODEL_CLASSES = []
+
+# One-time diagnostic flag to log model input specs
+keras_video_inputs_logged = False
 
 def _load_model_classes_from_training_files():
     try:
@@ -385,12 +392,12 @@ def run_keras_inference(model: tf.keras.Model, input_data: np.ndarray, classes: 
                             ordered.append(input_data)
                         else:
                             ordered.append(np.zeros((1, 1), dtype=np.float32))
-                preds = model.predict(ordered)
+                preds = model.predict(ordered, verbose=0)
             else:
-                preds = model.predict(input_data)
+                preds = model.predict(input_data, verbose=0)
         except Exception:
             # fallback to direct predict
-            preds = model.predict(input_data)
+            preds = model.predict(input_data, verbose=0)
         if preds is None:
             return "Erro_Inferência", 0.0
         scores = np.array(preds[0], dtype=np.float32)
@@ -476,18 +483,18 @@ def run_keras_sequence_inference(model: tf.keras.Model, seq_data: np.ndarray, cl
                             ordered.append(np.expand_dims(seq_data[0, mid].astype(np.float32), axis=0))
                         else:
                             ordered.append(np.zeros((seq_data.shape[0], 1), dtype=np.float32))
-                preds = model.predict(ordered)
+                preds = model.predict(ordered, verbose=0)
             else:
                 # model may accept 5D directly
-                preds = model.predict(seq_data)
+                preds = model.predict(seq_data, verbose=0)
         except Exception:
             # fallback: try predicting with sequence, else with middle frame
             try:
-                preds = model.predict(seq_data)
+                preds = model.predict(seq_data, verbose=0)
             except Exception:
                 try:
                     mid = seq_data.shape[1] // 2
-                    preds = model.predict(np.expand_dims(seq_data[0, mid].astype(np.float32), axis=0))
+                    preds = model.predict(np.expand_dims(seq_data[0, mid].astype(np.float32), axis=0), verbose=0)
                 except Exception:
                     return "Erro_Inferência", 0.0
 
@@ -608,8 +615,54 @@ def analyze_audio_segments(file_path: str) -> Tuple[str, float, Optional[float]]
         # --- FIM PARÂMETROS ---
 
         print(f"DEBUG: Analisando segmentos de áudio: {file_path}")
-        # Carrega o áudio completo uma vez
-        y_full, sr = librosa.load(file_path, sr=TARGET_SR)
+        # Carrega o áudio completo uma vez. Use fallback via ffmpeg se librosa falhar
+        def _librosa_load_with_ffmpeg_fallback(path, sr=None):
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", UserWarning)
+                    return librosa.load(path, sr=sr)
+            except Exception as e:
+                ffmpeg_path = shutil.which('ffmpeg')
+                if not ffmpeg_path:
+                    # no ffmpeg -> re-raise original error
+                    raise
+                tmpf = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+                tmp_path = tmpf.name
+                tmpf.close()
+                cmd = [ffmpeg_path, '-y', '-i', path, '-vn', '-acodec', 'pcm_s16le', '-ar', str(sr or 16000), '-ac', '1', tmp_path]
+                proc = subprocess.run(cmd, check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                stderr = proc.stderr.decode(errors='ignore') if proc.stderr is not None else ''
+                # If ffmpeg failed, inspect stderr: if it says there is no audio stream
+                # treat this as "no audio" and return an empty array so caller will
+                # treat the clip as silent/normal. Otherwise raise for real failures.
+                if proc.returncode != 0 or not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
+                    no_audio_indicators = [
+                        'Output file does not contain any stream',
+                        'does not contain any stream',
+                        'could not find audio',
+                        'Invalid data found when processing input'
+                    ]
+                    try:
+                        if os.path.exists(tmp_path):
+                            os.unlink(tmp_path)
+                    except Exception:
+                        pass
+                    if any(ind in stderr for ind in no_audio_indicators):
+                        # Return empty audio (caller maps empty to 'normal')
+                        return np.array([], dtype=np.float32), sr or 0
+                    raise RuntimeError(f"ffmpeg failed to extract audio: rc={proc.returncode} stderr={stderr}")
+                try:
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", UserWarning)
+                        y, sr_native = librosa.load(tmp_path, sr=sr)
+                finally:
+                    try:
+                        os.unlink(tmp_path)
+                    except Exception:
+                        pass
+                return y, sr_native
+
+        y_full, sr = _librosa_load_with_ffmpeg_fallback(file_path, sr=TARGET_SR)
         if len(y_full) == 0:
             print(f"AVISO: Áudio completo vazio: {file_path}")
             return 'normal', 0.0 # Se vazio, é normal
@@ -768,6 +821,39 @@ def analyze_video_frames(file_path: str, sample_rate_hz: float = 2.0) -> Tuple[s
             fps = 30.0
         FRAME_SKIP = max(1, int(round(fps / float(max(0.001, sample_rate_hz)))))
 
+        # Determine model and expected input dims once per call
+        model = globals().get('keras_video_model')
+        expected_frames = 1
+        expected_h = INPUT_HEIGHT
+        expected_w = INPUT_WIDTH
+        try:
+            if model is not None and hasattr(model, 'inputs') and len(model.inputs) > 0:
+                shape = getattr(model.inputs[0], 'shape', None)
+                if shape is not None and len(shape) == 5:
+                    try:
+                        expected_frames = int(shape[1]) if shape[1] is not None else 1
+                        expected_h = int(shape[2]) if shape[2] is not None else INPUT_HEIGHT
+                        expected_w = int(shape[3]) if shape[3] is not None else INPUT_WIDTH
+                    except Exception:
+                        expected_frames = 1
+        except Exception:
+            expected_frames = 1
+
+        # one-time diagnostic print of model inputs to aid debugging
+        try:
+            global keras_video_inputs_logged
+            if model is not None and not keras_video_inputs_logged:
+                try:
+                    print("DEBUG: keras_video_model.inputs:", [(getattr(i,'name',None), getattr(i,'shape',None)) for i in model.inputs])
+                except Exception:
+                    pass
+                keras_video_inputs_logged = True
+        except Exception:
+            pass
+
+        # prepare deque for sequence frames if needed
+        seq_queue = deque(maxlen=max(1, expected_frames))
+
         while True:
             # Lê o frame
             ret, frame = cap.read()
@@ -779,7 +865,7 @@ def analyze_video_frames(file_path: str, sample_rate_hz: float = 2.0) -> Tuple[s
             if frames_read % FRAME_SKIP != 0:
                 continue
 
-            # Pré-processa o frame selecionado
+            # Pré-processa o frame selecionado (frame-level preprocessing uses INPUT_* defaults)
             input_data = preprocess_video_single_frame(frame)
             if input_data is None:
                 continue # Pula frame se pré-processamento falhar
@@ -796,12 +882,42 @@ def analyze_video_frames(file_path: str, sample_rate_hz: float = 2.0) -> Tuple[s
             if model is None:
                 raise RuntimeError("Modelo de vídeo Keras não está carregado.")
             try:
-                # prepare raw resized RGB frame (no normalization) for models that include Rescaling
+                # prepare raw resized RGB frames for both default and expected sizes
                 try:
                     raw_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    raw_resized = cv2.resize(raw_rgb, (INPUT_WIDTH, INPUT_HEIGHT)).astype(np.float32)
+                except Exception:
+                    raw_rgb = None
+                try:
+                    raw_resized = cv2.resize(raw_rgb, (INPUT_WIDTH, INPUT_HEIGHT)).astype(np.float32) if raw_rgb is not None else None
                 except Exception:
                     raw_resized = None
+                try:
+                    raw_resized_expected = cv2.resize(raw_rgb, (expected_w, expected_h)).astype(np.float32) if raw_rgb is not None else None
+                except Exception:
+                    raw_resized_expected = None
+
+                # Append an element suitable for sequence models into seq_queue.
+                # Prefer the expected-size RGB float frame; fall back to default resized.
+                try:
+                    if expected_frames > 1:
+                        if raw_resized_expected is not None:
+                            seq_elem = raw_resized_expected
+                        elif raw_resized is not None:
+                            # resize default resized to expected dims
+                            try:
+                                seq_elem = cv2.resize(raw_resized.astype(np.uint8), (expected_w, expected_h)).astype(np.float32)
+                            except Exception:
+                                seq_elem = raw_resized
+                        else:
+                            # as a last resort, resize the original frame
+                            seq_elem = cv2.resize(raw_rgb, (expected_w, expected_h)).astype(np.float32) if raw_rgb is not None else None
+                        if seq_elem is not None:
+                            # ensure shape (H,W,3)
+                            if seq_elem.ndim == 4:
+                                seq_elem = np.squeeze(seq_elem, axis=0)
+                            seq_queue.append(seq_elem)
+                except Exception:
+                    pass
 
                 # If the model expects auxiliary inputs, build inputs according to model.inputs
                 if globals().get('keras_video_model_requires_motion_brightness'):
@@ -811,11 +927,37 @@ def analyze_video_frames(file_path: str, sample_rate_hz: float = 2.0) -> Tuple[s
                     brightness_norm = float(brightness) / 255.0
                     bright_arr = np.array([[brightness_norm]], dtype=np.float32)
 
-                    # image input: if the model already rescales internally, pass raw uint8/resized image
-                    if globals().get('keras_video_model_has_rescaling') and raw_resized is not None:
-                        img_for = np.expand_dims(raw_resized, axis=0)
+                    # image input: choose representation matching expected dims
+                    if expected_frames > 1:
+                        # For sequence models, we'll build a 5D sequence batch using
+                        # the frames in seq_queue (or pad by repeating the last frame).
+                        try:
+                            seq_list = list(seq_queue)
+                            if len(seq_list) == 0:
+                                single_img = np.squeeze(input_data, axis=0)
+                                resized_single = cv2.resize((single_img * 127.5 + 127.5).astype(np.uint8), (expected_w, expected_h)).astype(np.float32)
+                                seq_list = [resized_single]
+                            # pad/trim to expected_frames
+                            if len(seq_list) < expected_frames:
+                                pad_base = seq_list[-1] if len(seq_list) > 0 else np.zeros((expected_h, expected_w, 3), dtype=np.float32)
+                                while len(seq_list) < expected_frames:
+                                    seq_list.insert(0, pad_base)
+                            elif len(seq_list) > expected_frames:
+                                seq_list = seq_list[-expected_frames:]
+
+                            seq_arr = np.stack(seq_list, axis=0)  # (frames, H, W, C)
+                            seq_batch = np.expand_dims(seq_arr, axis=0).astype(np.float32)  # (1, frames, H, W, C)
+                            # If model expects rescaled inputs, apply same rescaling used elsewhere
+                            if not globals().get('keras_video_model_has_rescaling'):
+                                seq_batch = (seq_batch - 127.5) / 127.5
+                            img_for = seq_batch
+                        except Exception:
+                            img_for = input_data
                     else:
-                        img_for = input_data
+                        if globals().get('keras_video_model_has_rescaling') and raw_resized is not None:
+                            img_for = np.expand_dims(raw_resized, axis=0)
+                        else:
+                            img_for = input_data
 
                     # Build inputs in the order the model expects by inspecting model.inputs
                     try:
@@ -838,22 +980,108 @@ def analyze_video_frames(file_path: str, sample_rate_hz: float = 2.0) -> Tuple[s
                                 else:
                                     ordered_inputs.append(img_for)
 
-                        preds = model.predict(ordered_inputs)
+                        # Debug: print shapes of ordered inputs to help diagnose shape mismatches
+                        try:
+                            shapes = []
+                            for o in ordered_inputs:
+                                try:
+                                    shapes.append(getattr(o, 'shape', None))
+                                except Exception:
+                                    shapes.append(None)
+                            print(f"DEBUG: Calling model.predict with ordered input shapes: {shapes}")
+                        except Exception:
+                            pass
+                        preds = model.predict(ordered_inputs, verbose=0)
                     except Exception:
                         # As a last resort try dict mapping by common keys, then single-input
                         try:
-                            preds = model.predict({'image': img_for, 'motion': motion_arr, 'brightness': bright_arr})
+                            preds = model.predict({'image': img_for, 'motion': motion_arr, 'brightness': bright_arr}, verbose=0)
                         except Exception:
                             try:
-                                preds = model.predict([img_for, motion_arr, bright_arr])
+                                preds = model.predict([img_for, motion_arr, bright_arr], verbose=0)
                             except Exception:
-                                preds = model.predict(img_for)
+                                # If model expects a sequence (5D) but we have only a single frame,
+                                # build a padded sequence by repeating the current frame until expected_frames.
+                                try:
+                                    if expected_frames > 1:
+                                        # form sequence elements consistent with what we appended to seq_queue
+                                        base = img_for if isinstance(img_for, np.ndarray) else np.asarray(img_for)
+                                        elems = [base.squeeze(0) for _ in range(expected_frames)]
+                                        seq_arr = np.stack(elems, axis=0)
+                                        seq_batch = np.expand_dims(seq_arr, axis=0).astype(np.float32)
+                                        preds = run_keras_sequence_inference(model, seq_batch, MODEL_CLASSES)
+                                        # run_keras_sequence_inference returns (class, conf) so coerce
+                                        if isinstance(preds, tuple) and len(preds) == 2:
+                                            pred_class, confidence = preds
+                                            preds = np.zeros((1, len(MODEL_CLASSES)), dtype=np.float32)
+                                            try:
+                                                idx = MODEL_CLASSES.index(pred_class)
+                                                preds[0, idx] = confidence
+                                            except Exception:
+                                                pass
+                                    else:
+                                        # If model expects sequences but img_for is a single 4D frame,
+                                        # coerce to a padded 5D sequence batch to avoid shape errors.
+                                        if expected_frames > 1 and isinstance(img_for, np.ndarray) and img_for.ndim == 4:
+                                            try:
+                                                base = img_for.squeeze(0)
+                                                elems = [base for _ in range(expected_frames)]
+                                                seq_arr = np.stack(elems, axis=0)
+                                                seq_batch = np.expand_dims(seq_arr, axis=0).astype(np.float32)
+                                                if not globals().get('keras_video_model_has_rescaling'):
+                                                    seq_batch = (seq_batch - 127.5) / 127.5
+                                                preds = model.predict(seq_batch, verbose=0)
+                                            except Exception:
+                                                preds = model.predict(img_for, verbose=0)
+                                        else:
+                                            preds = model.predict(img_for, verbose=0)
+                                except Exception:
+                                    # Same safeguard in the outer fallback: coerce 4D->5D when needed
+                                    if expected_frames > 1 and isinstance(img_for, np.ndarray) and img_for.ndim == 4:
+                                        try:
+                                            base = img_for.squeeze(0)
+                                            elems = [base for _ in range(expected_frames)]
+                                            seq_arr = np.stack(elems, axis=0)
+                                            seq_batch = np.expand_dims(seq_arr, axis=0).astype(np.float32)
+                                            if not globals().get('keras_video_model_has_rescaling'):
+                                                seq_batch = (seq_batch - 127.5) / 127.5
+                                            preds = model.predict(seq_batch, verbose=0)
+                                        except Exception:
+                                            preds = model.predict(img_for, verbose=0)
+                                    else:
+                                        preds = model.predict(img_for, verbose=0)
                 else:
                     # simple single-input model
                     if globals().get('keras_video_model_has_rescaling') and raw_resized is not None:
                         img_for = np.expand_dims(raw_resized, axis=0)
                     else:
                         img_for = input_data
+                    # If the model is a single-input sequence model (expects 5D),
+                    # coerce the single-frame img_for into a padded 5D sequence batch.
+                    try:
+                        if expected_frames > 1 and isinstance(img_for, np.ndarray) and img_for.ndim == 4:
+                            try:
+                                # attempt to use recent seq_queue if available
+                                seq_list = list(seq_queue) if 'seq_queue' in locals() else []
+                                if len(seq_list) == 0:
+                                    base = img_for.squeeze(0)
+                                    seq_list = [base]
+                                # pad/trim
+                                if len(seq_list) < expected_frames:
+                                    pad_base = seq_list[-1] if len(seq_list) > 0 else np.zeros((expected_h, expected_w, 3), dtype=np.float32)
+                                    while len(seq_list) < expected_frames:
+                                        seq_list.insert(0, pad_base)
+                                elif len(seq_list) > expected_frames:
+                                    seq_list = seq_list[-expected_frames:]
+                                seq_arr = np.stack(seq_list, axis=0)
+                                seq_batch = np.expand_dims(seq_arr, axis=0).astype(np.float32)
+                                if not globals().get('keras_video_model_has_rescaling'):
+                                    seq_batch = (seq_batch - 127.5) / 127.5
+                                img_for = seq_batch
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
                     preds = model.predict(img_for)
 
                 scores = np.array(preds[0], dtype=np.float32)

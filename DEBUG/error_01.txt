@@ -1,0 +1,276 @@
+INFO: Stream buffer audio analysis result -> class=Erro_Análise_Áudio, conf=0.000, time_s=None
+DEBUG: Stream buffer initial video decision -> freeze (0.800), aggregated -> None, audio -> Erro_Análise_Áudio (0.000)
+INFO:     127.0.0.1:54358 - "GET /hls/stream.m3u8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59641 - "GET /hls/stream.m3u8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59641 - "GET /hls/stream11.ts HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54195 - "GET /hls/stream.m3u8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54195 - "GET /hls/stream13.ts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54195 - "GET /hls/stream14.ts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54195 - "GET /hls/stream15.ts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54195 - "GET /hls/stream16.ts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54195 - "GET /hls/stream17.ts HTTP/1.1" 200 OK
+DEBUG: Analisando frames de vídeo: D:\Videos\streambuf_1763693333_63.mp4 (sample_rate_hz=2.0)
+1/1 ━━━━━━━━━━━━━━━━━━━━ 0s 102ms/step
+ERRO durante inferência Keras no loop de frames: as_list() is not defined on an unknown TensorShape.
+Traceback (most recent call last):
+  File "D:\GitHub Desktop\horus_ai\backend\app\ml\inference.py", line 1018, in analyze_video_frames
+    preds = model.predict(np.asarray(img_for).astype(np.float32))
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 122, in error_handler
+    raise e.with_traceback(filtered_tb) from None
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 124, in error_handler
+    del filtered_tb
+ValueError: as_list() is not defined on an unknown TensorShape.
+1/1 ━━━━━━━━━━━━━━━━━━━━ 0s 113ms/step
+ERRO durante inferência Keras no loop de frames: as_list() is not defined on an unknown TensorShape.
+Traceback (most recent call last):
+  File "D:\GitHub Desktop\horus_ai\backend\app\ml\inference.py", line 1018, in analyze_video_frames
+    preds = model.predict(np.asarray(img_for).astype(np.float32))
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 122, in error_handler
+    raise e.with_traceback(filtered_tb) from None
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 124, in error_handler
+    del filtered_tb
+ValueError: as_list() is not defined on an unknown TensorShape.
+1/1 ━━━━━━━━━━━━━━━━━━━━ 0s 113ms/step
+ERRO durante inferência Keras no loop de frames: as_list() is not defined on an unknown TensorShape.
+Traceback (most recent call last):
+  File "D:\GitHub Desktop\horus_ai\backend\app\ml\inference.py", line 1018, in analyze_video_frames
+    preds = model.predict(np.asarray(img_for).astype(np.float32))
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 122, in error_handler
+    raise e.with_traceback(filtered_tb) from None
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 124, in error_handler
+    del filtered_tb
+ValueError: as_list() is not defined on an unknown TensorShape.
+1/1 ━━━━━━━━━━━━━━━━━━━━ 0s 107ms/step
+ERRO durante inferência Keras no loop de frames: as_list() is not defined on an unknown TensorShape.
+Traceback (most recent call last):
+  File "D:\GitHub Desktop\horus_ai\backend\app\ml\inference.py", line 1018, in analyze_video_frames
+    preds = model.predict(np.asarray(img_for).astype(np.float32))
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 122, in error_handler
+    raise e.with_traceback(filtered_tb) from None
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 124, in error_handler
+    del filtered_tb
+ValueError: as_list() is not defined on an unknown TensorShape.
+1/1 ━━━━━━━━━━━━━━━━━━━━ 0s 109ms/step
+ERRO durante inferência Keras no loop de frames: as_list() is not defined on an unknown TensorShape.
+Traceback (most recent call last):
+  File "D:\GitHub Desktop\horus_ai\backend\app\ml\inference.py", line 1018, in analyze_video_frames
+    preds = model.predict(np.asarray(img_for).astype(np.float32))
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 122, in error_handler
+    raise e.with_traceback(filtered_tb) from None
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 124, in error_handler
+    del filtered_tb
+ValueError: as_list() is not defined on an unknown TensorShape.
+1/1 ━━━━━━━━━━━━━━━━━━━━ 0s 120ms/step
+ERRO durante inferência Keras no loop de frames: as_list() is not defined on an unknown TensorShape.
+Traceback (most recent call last):
+  File "D:\GitHub Desktop\horus_ai\backend\app\ml\inference.py", line 1018, in analyze_video_frames
+    preds = model.predict(np.asarray(img_for).astype(np.float32))
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 122, in error_handler
+    raise e.with_traceback(filtered_tb) from None
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 124, in error_handler
+    del filtered_tb
+ValueError: as_list() is not defined on an unknown TensorShape.
+1/1 ━━━━━━━━━━━━━━━━━━━━ 0s 115ms/step
+ERRO durante inferência Keras no loop de frames: as_list() is not defined on an unknown TensorShape.
+Traceback (most recent call last):
+  File "D:\GitHub Desktop\horus_ai\backend\app\ml\inference.py", line 1018, in analyze_video_frames
+    preds = model.predict(np.asarray(img_for).astype(np.float32))
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 122, in error_handler
+    raise e.with_traceback(filtered_tb) from None
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 124, in error_handler
+    del filtered_tb
+ValueError: as_list() is not defined on an unknown TensorShape.
+1/1 ━━━━━━━━━━━━━━━━━━━━ 0s 92ms/stepINFO:     127.0.0.1:54195 - "GET /hls/stream.m3u8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54195 - "GET /hls/stream13.ts HTTP/1.1" 200 OK
+1/1 ━━━━━━━━━━━━━━━━━━━━ 0s 119ms/step
+ERRO durante inferência Keras no loop de frames: as_list() is not defined on an unknown TensorShape.
+Traceback (most recent call last):
+  File "D:\GitHub Desktop\horus_ai\backend\app\ml\inference.py", line 1018, in analyze_video_frames
+    preds = model.predict(np.asarray(img_for).astype(np.float32))
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 122, in error_handler
+    raise e.with_traceback(filtered_tb) from None
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 124, in error_handler
+    del filtered_tb
+ValueError: as_list() is not defined on an unknown TensorShape.
+1/1 ━━━━━━━━━━━━━━━━━━━━ 0s 102ms/step
+ERRO durante inferência Keras no loop de frames: as_list() is not defined on an unknown TensorShape.
+Traceback (most recent call last):
+  File "D:\GitHub Desktop\horus_ai\backend\app\ml\inference.py", line 1018, in analyze_video_frames
+    preds = model.predict(np.asarray(img_for).astype(np.float32))
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 122, in error_handler
+    raise e.with_traceback(filtered_tb) from None
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 124, in error_handler
+    del filtered_tb
+ValueError: as_list() is not defined on an unknown TensorShape.
+DEBUG: Vídeo - 9 frames processados (20 lidos). Resultado: freeze (0.8000) time=15.0 (supports blur=0 fade=0 freeze=2)
+DEBUG: Analisando segmentos de áudio: D:\Videos\streambuf_1763693333_63.mp4
+ERRO durante análise de segmentos de áudio (D:\Videos\streambuf_1763693333_63.mp4): 
+Traceback (most recent call last):
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\librosa\core\audio.py", line 176, in load
+    y, sr_native = __soundfile_load(path, offset, duration, dtype)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\librosa\core\audio.py", line 209, in __soundfile_load
+    context = sf.SoundFile(path)
+              ^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\soundfile.py", line 690, in __init__
+    self._file = self._open(file, mode_int, closefd)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\soundfile.py", line 1265, in _open
+    raise LibsndfileError(err, prefix="Error opening {0!r}: ".format(self.name))
+soundfile.LibsndfileError: Error opening 'C:\\Users\\Rafael\\AppData\\Local\\Temp\\tmpj86bx_sm.wav': Format not recognised.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\GitHub Desktop\horus_ai\backend\app\ml\inference.py", line 671, in _librosa_load_with_ffmpeg_fallback       
+    y, sr_native = librosa.load(tmp_path, sr=sr)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\librosa\core\audio.py", line 184, in load
+    y, sr_native = __audioread_load(path, offset, duration, dtype)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\decorator.py", line 235, in fun
+    return caller(func, *(extras + args), **kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\librosa\util\decorators.py", line 63, in __wrapper   
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\librosa\core\audio.py", line 240, in __audioread_load
+    reader = audioread.audio_open(path)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\audioread\__init__.py", line 126, in audio_open      
+    return BackendClass(path)
+           ^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\audioread\rawread.py", line 62, in __init__
+    self._file = aifc.open(self._fh)
+                 ^^^^^^^^^^^^^^^^^^^
+  File "D:\downloads\PRO Downloads\PYTHON\Lib\aifc.py", line 954, in open
+    return Aifc_read(f)
+           ^^^^^^^^^^^^
+  File "D:\downloads\PRO Downloads\PYTHON\Lib\aifc.py", line 364, in __init__
+    self.initfp(f)
+  File "D:\downloads\PRO Downloads\PYTHON\Lib\aifc.py", line 320, in initfp
+    chunk = Chunk(file)
+            ^^^^^^^^^^^
+  File "D:\downloads\PRO Downloads\PYTHON\Lib\chunk.py", line 67, in __init__
+    raise EOFError
+EOFError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\GitHub Desktop\horus_ai\backend\app\ml\inference.py", line 681, in analyze_audio_segments
+    y_full, sr = _librosa_load_with_ffmpeg_fallback(file_path, sr=TARGET_SR)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\app\ml\inference.py", line 679, in _librosa_load_with_ffmpeg_fallback       
+    raise e
+  File "D:\GitHub Desktop\horus_ai\backend\app\ml\inference.py", line 662, in _librosa_load_with_ffmpeg_fallback       
+    return librosa.load(path, sr=sr)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\librosa\core\audio.py", line 184, in load
+    y, sr_native = __audioread_load(path, offset, duration, dtype)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\decorator.py", line 235, in fun
+    return caller(func, *(extras + args), **kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\librosa\util\decorators.py", line 63, in __wrapper   
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\librosa\core\audio.py", line 240, in __audioread_load
+    reader = audioread.audio_open(path)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\audioread\__init__.py", line 131, in audio_open      
+    raise NoBackendError()
+audioread.exceptions.NoBackendError
+INFO: Stream buffer audio analysis result -> class=Erro_Análise_Áudio, conf=0.000, time_s=None
+DEBUG: Stream buffer initial video decision -> freeze (0.800), aggregated -> None, audio -> Erro_Análise_Áudio (0.000)
+
+deu isso agora tambem:
+
+audioread.exceptions.NoBackendError
+INFO: Stream buffer audio analysis result -> class=Erro_Análise_Áudio, conf=0.000, time_s=None
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+DEBUG: Stream buffer initial video decision -> freeze (0.800), aggregated -> None, audio -> Erro_Análise_Áudio (0.000)
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+DEBUG: Analisando frames de vídeo: D:\Videos\streambuf_1763693531_223.mp4 (sample_rate_hz=2.0)
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+1/1 ━━━━━━━━━━━━━━━━━━━━ 0s 478ms/step
+ERRO durante inferência Keras no loop de frames: as_list() is not defined on an unknown TensorShape.
+Traceback (most recent call last):
+  File "D:\GitHub Desktop\horus_ai\backend\app\ml\inference.py", line 1018, in analyze_video_frames
+    preds = model.predict(np.asarray(img_for).astype(np.float32))
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 122, in error_handler
+    raise e.with_traceback(filtered_tb) from None
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 124, in error_handler
+    del filtered_tb
+ValueError: as_list() is not defined on an unknown TensorShape.
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+1/1 ━━━━━━━━━━━━━━━━━━━━ 0s 175ms/step
+ERRO durante inferência Keras no loop de frames: as_list() is not defined on an unknown TensorShape.
+Traceback (most recent call last):
+  File "D:\GitHub Desktop\horus_ai\backend\app\ml\inference.py", line 1018, in analyze_video_frames
+    preds = model.predict(np.asarray(img_for).astype(np.float32))
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 122, in error_handler
+    raise e.with_traceback(filtered_tb) from None
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 124, in error_handler
+    del filtered_tb
+ValueError: as_list() is not defined on an unknown TensorShape.
+1/1 ━━━━━━━━━━━━━━━━━━━━ 0s 377ms/step
+ERRO durante inferência Keras no loop de frames: as_list() is not defined on an unknown TensorShape.
+Traceback (most recent call last):
+  File "D:\GitHub Desktop\horus_ai\backend\app\ml\inference.py", line 1018, in analyze_video_frames
+    preds = model.predict(np.asarray(img_for).astype(np.float32))
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 122, in error_handler
+    raise e.with_traceback(filtered_tb) from None
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 124, in error_handler
+    del filtered_tb
+ValueError: as_list() is not defined on an unknown TensorShape.
+1/1 ━━━━━━━━━━━━━━━━━━━━ 1s 1s/step
+1/1 ━━━━━━━━━━━━━━━━━━━━ 0s 167ms/step
+ERRO durante inferência Keras no loop de frames: as_list() is not defined on an unknown TensorShape.
+Traceback (most recent call last):
+  File "D:\GitHub Desktop\horus_ai\backend\app\ml\inference.py", line 1018, in analyze_video_frames
+    preds = model.predict(np.asarray(img_for).astype(np.float32))
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 122, in error_handler
+    raise e.with_traceback(filtered_tb) from None
+  File "D:\GitHub Desktop\horus_ai\backend\venv\Lib\site-packages\keras\src\utils\traceback_utils.py", line 124, in error_handler
+    del filtered_tb
+ValueError: as_list() is not defined on an unknown TensorShape.
+1/1 ━━━━━━━━━━━━━━━━━━━━ 0s 491ms/step
+ERRO durante inferência Keras no loop de frames: as_list() is not defined on an unknown TensorShape.
+Traceback (most recent call last):
+  File "D:\GitHub Desktop\horus_ai\backend\app\ml\inference.py", line 1018, in analyze_video_frames
+    preds = model.predict(np.asarray(img_for).astype(np.float32))

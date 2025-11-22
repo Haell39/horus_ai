@@ -10,6 +10,7 @@ from typing import Optional
 from datetime import datetime, timedelta, timezone
 
 from app.ml import inference
+from app.core.config import settings as core_settings
 from app.api.endpoints import ws as ws_router
 from app.db.base import SessionLocal
 from app.db import models
@@ -91,6 +92,12 @@ class SRTIngestor:
             self._last_seq_infer_ts = None
         # last time we reported an occurrence (to avoid duplicates)
         self._last_report_ts = None
+        # periodic stream-buffer analysis
+        try:
+            self.stream_buffer_s = int(float(os.getenv('VIDEO_STREAM_BUFFER_S', '20')))
+        except Exception:
+            self.stream_buffer_s = 20
+        self._last_stream_analysis_ts = None
 
     def start(self, url: str):
         if self._running:
@@ -126,10 +133,12 @@ class SRTIngestor:
                 pass
             try:
                 if self._hls_log_file:
-                    self._hls_log_file.close()
+                    try:
+                        self._hls_log_file.close()
+                    except Exception:
+                        pass
+            finally:
                 self._hls_log_file = None
-            except Exception:
-                pass
             return False
         # give HLS process a bit longer to produce an initial playlist/segments
         time.sleep(2.0)
@@ -281,6 +290,7 @@ class SRTIngestor:
 
     def _watch_loop(self):
         last_seen_index = 0
+        prev_gray = None
         while self._running:
             try:
                 files = sorted(glob.glob(os.path.join(self._tmpdir, 'frame_*.jpg')))
@@ -387,6 +397,23 @@ class SRTIngestor:
                                 pred_class, confidence = inference.run_video_inference(input_data)
 
                         now = datetime.now(timezone.utc)
+                        # compute heuristics used later for window voting
+                        try:
+                            blur_var = inference._compute_blur_var(img)
+                        except Exception:
+                            blur_var = 0.0
+                        try:
+                            brightness = inference._compute_brightness(img)
+                        except Exception:
+                            brightness = 0.0
+                        try:
+                            motion = inference._compute_motion(prev_gray, img)
+                        except Exception:
+                            motion = float('inf')
+                        try:
+                            edge_density = inference._compute_edge_density(img)
+                        except Exception:
+                            edge_density = 0.0
                         # diagnostic throttle
                         do_print = False
                         if top3:
@@ -514,143 +541,191 @@ class SRTIngestor:
                                 if top_class and top_weight > (sum_weights / 2.0):
                                     # positive span duration check for top_class
                                     ci = class_indices.get(top_class)
+                                    # no muxing at this stage; proceed to build clip from frame indices
+                                    muxed = False
+                                    # build clip using min/max indices for the top class
+                                    PRE_PAD_FRAMES = int(round(self.fps * 1.0))
+                                    POST_PAD_FRAMES = int(round(self.fps * 1.0))
                                     if ci:
-                                        first_pos = ci.get('first_ts')
-                                        last_pos = ci.get('last_ts')
-                                    if first_pos and last_pos and (last_pos - first_pos).total_seconds() >= self.min_event_duration_s:
-                                        if self._last_report_ts is None or (now - self._last_report_ts).total_seconds() > max(1.0, self.window_s / 2.0):
-                                            # persist occurrence (weighted confidence fraction)
-                                            db = SessionLocal()
+                                        start_idx = max(1, ci.get('min_idx', idx) - PRE_PAD_FRAMES)
+                                        end_idx = ci.get('max_idx', idx) + POST_PAD_FRAMES
+                                    else:
+                                        start_idx = max(1, idx - PRE_PAD_FRAMES)
+                                        end_idx = idx + POST_PAD_FRAMES
+                                    num_frames = max(1, end_idx - start_idx + 1)
+                                    clip_duration_s = float(num_frames) / max(1.0, float(self.fps))
+                                    # ensure minimum clip duration (env VIDEO_MIN_EVENT_DURATION_S or 2s)
+                                    try:
+                                        min_span_s = float(os.getenv('VIDEO_MIN_EVENT_DURATION_S', '2.0'))
+                                    except Exception:
+                                        min_span_s = 2.0
+                                    if clip_duration_s < min_span_s:
+                                        needed_frames = int(max(1, round(min_span_s * float(self.fps))))
+                                        extra = max(0, needed_frames - num_frames)
+                                        # distribute extra frames before/after (prefer after)
+                                        add_pre = extra // 2
+                                        add_post = extra - add_pre
+                                        start_idx = max(1, start_idx - add_pre)
+                                        end_idx = end_idx + add_post
+                                        num_frames = max(1, end_idx - start_idx + 1)
+                                        clip_duration_s = float(num_frames) / max(1.0, float(self.fps))
+                                    # cap clip duration to 65s; if larger, shorten from start keeping end anchored
+                                    MAX_CLIP_S = 65.0
+                                    if clip_duration_s > MAX_CLIP_S:
+                                        desired_end_frame = end_idx
+                                        max_frames = int(round(MAX_CLIP_S * float(self.fps)))
+                                        start_idx = max(1, desired_end_frame - max_frames + 1)
+                                        num_frames = max(1, desired_end_frame - start_idx + 1)
+                                        clip_duration_s = float(num_frames) / max(1.0, float(self.fps))
+                                    out_name = f"clip_{int(time.time())}_{idx}.mp4"
+                                    out_tmp = os.path.join(self._tmpdir, out_name)
+                                    ffmpeg_cmd = [
+                                        'ffmpeg', '-y', '-hide_banner', '-loglevel', 'error',
+                                        '-fflags', '+genpts+igndts+discardcorrupt', '-err_detect', 'ignore_err',
+                                        '-framerate', str(self.fps),
+                                        '-start_number', str(start_idx),
+                                        '-i', os.path.join(self._tmpdir, 'frame_%06d.jpg'),
+                                        '-frames:v', str(num_frames),
+                                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', out_tmp
+                                    ]
+                                    expected_files = [os.path.join(self._tmpdir, f'frame_{i:06d}.jpg') for i in range(start_idx, end_idx + 1)]
+                                    missing = [p for p in expected_files if not os.path.exists(p)]
+                                    if missing:
+                                        print(f"AVISO: Frames faltando para gerar clipe ({len(missing)}) — pulando geração de clipe")
+                                    else:
+                                        try:
+                                            # To avoid race conditions where ffmpeg tries to read
+                                            # frame files while they are still being written by
+                                            # the extractor, copy the needed frames to a
+                                            # temporary directory and run ffmpeg on that
+                                            # stable snapshot.
+                                            tmp_clip_dir = tempfile.mkdtemp(prefix='srt_clip_')
                                             try:
-                                                start_ts_calc = first_pos
-                                                end_ts_now = last_pos
-                                                event_duration = (end_ts_now - start_ts_calc).total_seconds()
-                                                evidence_obj = {'frame': f}
-                                                try:
-                                                    # build clip using min/max indices for the top class
-                                                    # use 1s pre/post padding (instead of previous 2s)
-                                                    PRE_PAD_FRAMES = int(round(self.fps * 1.0))
-                                                    POST_PAD_FRAMES = int(round(self.fps * 1.0))
-                                                    if ci:
-                                                        start_idx = max(1, ci.get('min_idx', idx) - PRE_PAD_FRAMES)
-                                                        end_idx = ci.get('max_idx', idx) + POST_PAD_FRAMES
-                                                    else:
-                                                        start_idx = max(1, idx - PRE_PAD_FRAMES)
-                                                        end_idx = idx + POST_PAD_FRAMES
-                                                    num_frames = max(1, end_idx - start_idx + 1)
-                                                    clip_duration_s = float(num_frames) / max(1.0, float(self.fps))
-                                                    # ensure minimum clip duration (env VIDEO_MIN_EVENT_DURATION_S or 2s)
+                                                for src in expected_files:
                                                     try:
-                                                        min_span_s = float(os.getenv('VIDEO_MIN_EVENT_DURATION_S', '2.0'))
+                                                        shutil.copy2(src, os.path.join(tmp_clip_dir, os.path.basename(src)))
                                                     except Exception:
-                                                        min_span_s = 2.0
-                                                    if clip_duration_s < min_span_s:
-                                                        needed_frames = int(max(1, round(min_span_s * float(self.fps))))
-                                                        extra = max(0, needed_frames - num_frames)
-                                                        # distribute extra frames before/after (prefer after)
-                                                        add_pre = extra // 2
-                                                        add_post = extra - add_pre
-                                                        start_idx = max(1, start_idx - add_pre)
-                                                        end_idx = end_idx + add_post
-                                                        num_frames = max(1, end_idx - start_idx + 1)
-                                                        clip_duration_s = float(num_frames) / max(1.0, float(self.fps))
-                                                    # cap clip duration to 65s; if larger, shorten from start keeping end anchored
-                                                    MAX_CLIP_S = 65.0
-                                                    if clip_duration_s > MAX_CLIP_S:
-                                                        desired_end_frame = end_idx
-                                                        max_frames = int(round(MAX_CLIP_S * float(self.fps)))
-                                                        start_idx = max(1, desired_end_frame - max_frames + 1)
-                                                        num_frames = max(1, desired_end_frame - start_idx + 1)
-                                                        clip_duration_s = float(num_frames) / max(1.0, float(self.fps))
-                                                    out_name = f"clip_{int(time.time())}_{idx}.mp4"
-                                                    out_tmp = os.path.join(self._tmpdir, out_name)
-                                                    ffmpeg_cmd = [
-                                                        'ffmpeg', '-y', '-hide_banner', '-loglevel', 'error',
-                                                        '-framerate', str(self.fps),
-                                                        '-start_number', str(start_idx),
-                                                        '-i', os.path.join(self._tmpdir, 'frame_%06d.jpg'),
-                                                        '-frames:v', str(num_frames),
-                                                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', out_tmp
-                                                    ]
-                                                    expected_files = [os.path.join(self._tmpdir, f'frame_{i:06d}.jpg') for i in range(start_idx, end_idx + 1)]
-                                                    missing = [p for p in expected_files if not os.path.exists(p)]
-                                                    if missing:
-                                                        print(f"AVISO: Frames faltando para gerar clipe ({len(missing)}) — pulando geração de clipe")
-                                                    else:
-                                                        subprocess.run(ffmpeg_cmd, check=False)
-                                                        clips_dir = storage_core.get_clips_dir()
-                                                        os.makedirs(clips_dir, exist_ok=True)
-                                                        dest_path = os.path.join(clips_dir, out_name)
-                                                        shutil.move(out_tmp, dest_path)
-                                                        evidence_obj['clip_path'] = f"/clips/{out_name}"
-                                                        evidence_obj['clip_duration_s'] = clip_duration_s
-                                                        evidence_obj['event_window'] = {
-                                                            'before_margin_s': float(PRE_PAD_FRAMES) / max(1.0, float(self.fps)),
-                                                            'after_margin_s': float(POST_PAD_FRAMES) / max(1.0, float(self.fps)),
-                                                        }
-                                                except Exception as clip_err:
-                                                    print(f"AVISO: Falha gerar clipe de frames: {clip_err}")
-
-                                                def _sev(d: float) -> str:
-                                                    try:
-                                                        d = float(d)
-                                                        if d >= 60:
-                                                            return 'Gravíssima (X)'
-                                                        if d >= 10:
-                                                            return 'Grave (A)'
-                                                        if d >= 5:
-                                                            return 'Média (B)'
-                                                        return 'Leve (C)'
-                                                    except Exception:
-                                                        return 'Leve (C)'
-
-                                                confidence_fraction = float(top_weight) / max(1.0, float(sum_weights))
-                                                db_oc = models.Ocorrencia(
-                                                    start_ts=start_ts_calc,
-                                                    end_ts=end_ts_now,
-                                                    duration_s=event_duration,
-                                                    category='Vídeo Técnico',
-                                                    type=top_class,
-                                                    severity=_sev(event_duration),
-                                                    confidence=confidence_fraction,
-                                                    evidence=evidence_obj,
-                                                )
-                                                db.add(db_oc)
-                                                db.commit()
-                                                db.refresh(db_oc)
-                                                message = {
-                                                    'type': 'nova_ocorrencia',
-                                                    'data': {
-                                                        'id': db_oc.id,
-                                                        'start_ts': db_oc.start_ts.isoformat(),
-                                                        'end_ts': db_oc.end_ts.isoformat(),
-                                                        'duration_s': db_oc.duration_s,
-                                                        'category': db_oc.category,
-                                                        'type': db_oc.type,
-                                                        'severity': db_oc.severity,
-                                                        'confidence': db_oc.confidence,
-                                                        'evidence': db_oc.evidence,
-                                                    },
-                                                }
-                                                # broadcast
-                                                import asyncio
+                                                        # if copying fails, break and abort
+                                                        raise
+                                                # run ffmpeg on the snapshot
+                                                snap_pattern = os.path.join(tmp_clip_dir, 'frame_%06d.jpg')
+                                                ffmpeg_cmd_snapshot = ffmpeg_cmd.copy()
+                                                # replace input pattern (it's located at index of '-i' + 1)
                                                 try:
-                                                    loop = asyncio.get_event_loop()
-                                                except RuntimeError:
-                                                    loop = None
-                                                if loop and loop.is_running():
-                                                    asyncio.run_coroutine_threadsafe(ws_router.manager.broadcast(message), loop)
-                                                else:
+                                                    i_idx = ffmpeg_cmd_snapshot.index('-i') + 1
+                                                    ffmpeg_cmd_snapshot[i_idx] = snap_pattern
+                                                except Exception:
+                                                    pass
+                                                proc = subprocess.run(ffmpeg_cmd_snapshot, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                                                if proc.returncode != 0:
+                                                    stderr = proc.stderr.decode(errors='ignore') if proc.stderr is not None else ''
+                                                    print(f"AVISO: ffmpeg clip generation failed rc={proc.returncode} stderr={stderr}")
+                                                    # cleanup and skip
                                                     try:
-                                                        asyncio.run(ws_router.manager.broadcast(message))
+                                                        if os.path.exists(out_tmp):
+                                                            os.remove(out_tmp)
                                                     except Exception:
                                                         pass
-
-                                                self._last_report_ts = now
-                                                # clear window preds to avoid immediate repeat
-                                                self._window_preds = []
+                                                else:
+                                                    clips_dir = storage_core.get_clips_dir()
+                                                    os.makedirs(clips_dir, exist_ok=True)
+                                                    dest_path = os.path.join(clips_dir, out_name)
+                                                    shutil.move(out_tmp, dest_path)
                                             finally:
-                                                db.close()
+                                                try:
+                                                    shutil.rmtree(tmp_clip_dir)
+                                                except Exception:
+                                                    pass
+                                            evidence_obj['clip_path'] = f"/clips/{out_name}"
+                                            evidence_obj['clip_duration_s'] = clip_duration_s
+                                            evidence_obj['event_window'] = {
+                                                'before_margin_s': float(PRE_PAD_FRAMES) / max(1.0, float(self.fps)),
+                                                'after_margin_s': float(POST_PAD_FRAMES) / max(1.0, float(self.fps)),
+                                            }
+                                            # Attempt audio analysis on generated clip (conservative, non-blocking)
+                                            try:
+                                                from app.ml import inference as ml_infer
+                                                # analyze_audio_segments expects a path to a file and returns (class, conf, event_time_s)
+                                                try:
+                                                    audio_cls, audio_conf, audio_time = ml_infer.analyze_audio_segments(dest_path)
+                                                except Exception:
+                                                    audio_cls, audio_conf, audio_time = 'normal', 0.0, None
+                                                evidence_obj['audio_analysis'] = {
+                                                    'class': audio_cls,
+                                                    'confidence': float(audio_conf),
+                                                    'event_time_s': audio_time,
+                                                }
+                                            except Exception:
+                                                # do not fail clip persistence if audio analysis fails
+                                                pass
+                                        except Exception as clip_err:
+                                            print(f"AVISO: Falha gerar clipe de frames: {clip_err}")
+
+                                    def _sev(d: float) -> str:
+                                        try:
+                                            d = float(d)
+                                            if d >= 60:
+                                                return 'Gravíssima (X)'
+                                            if d >= 10:
+                                                return 'Grave (A)'
+                                            if d >= 5:
+                                                return 'Média (B)'
+                                            return 'Leve (C)'
+                                        except Exception:
+                                            return 'Leve (C)'
+
+                                    confidence_fraction = float(top_weight) / max(1.0, float(sum_weights))
+                                    db = SessionLocal()
+                                    try:
+                                        db_oc = models.Ocorrencia(
+                                            start_ts=start_ts_calc,
+                                            end_ts=end_ts_now,
+                                            duration_s=event_duration,
+                                            category='Vídeo Técnico',
+                                            type=top_class,
+                                            severity=_sev(event_duration),
+                                            confidence=confidence_fraction,
+                                            evidence=evidence_obj,
+                                        )
+                                        db.add(db_oc)
+                                        db.commit()
+                                        db.refresh(db_oc)
+                                        message = {
+                                            'type': 'nova_ocorrencia',
+                                            'data': {
+                                                'id': db_oc.id,
+                                                'start_ts': db_oc.start_ts.isoformat(),
+                                                'end_ts': db_oc.end_ts.isoformat(),
+                                                'duration_s': db_oc.duration_s,
+                                                'category': db_oc.category,
+                                                'type': db_oc.type,
+                                                'severity': db_oc.severity,
+                                                'confidence': db_oc.confidence,
+                                                'evidence': db_oc.evidence,
+                                            },
+                                        }
+                                        # broadcast
+                                        import asyncio
+                                        try:
+                                            loop = asyncio.get_event_loop()
+                                        except RuntimeError:
+                                            loop = None
+                                        if loop and loop.is_running():
+                                            asyncio.run_coroutine_threadsafe(ws_router.manager.broadcast(message), loop)
+                                        else:
+                                            try:
+                                                asyncio.run(ws_router.manager.broadcast(message))
+                                            except Exception:
+                                                pass
+                                    finally:
+                                        try:
+                                            db.close()
+                                        except Exception:
+                                            pass
+
+                                    # clear window preds to avoid immediate repeat
+                                    self._window_preds = []
+                                    self._last_report_ts = now
                                 # update last eval timestamp regardless (throttle evaluations)
                                 self._last_window_eval_ts = now
                         else:
@@ -715,14 +790,309 @@ class SRTIngestor:
                                             pass
                                 finally:
                                     db.close()
+                        # update prev_gray for motion calculation in next frame
+                        try:
+                            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                            prev_gray = cv2.resize(gray, (inference.INPUT_WIDTH, inference.INPUT_HEIGHT))
+                        except Exception:
+                            prev_gray = None
                     except Exception:
                         # ignore per-frame exceptions to keep ingest running
                         pass
                 time.sleep(max(0.1, 1.0 / max(1, int(self.fps))))
+                # periodic stream-buffer analysis (non-blocking)
+                try:
+                    now_loop = datetime.now(timezone.utc)
+                    if (self._last_stream_analysis_ts is None or (now_loop - self._last_stream_analysis_ts).total_seconds() >= max(1.0, float(self.stream_buffer_s))):
+                        # decide end index from last_seen_index
+                        try:
+                            end_idx_local = last_seen_index
+                        except Exception:
+                            end_idx_local = None
+                        if end_idx_local and end_idx_local > 0:
+                            try:
+                                # spawn background thread to avoid blocking main loop
+                                t = threading.Thread(target=self._run_stream_buffer_analysis, args=(end_idx_local,), daemon=True)
+                                t.start()
+                                self._last_stream_analysis_ts = now_loop
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
             except Exception:
                 time.sleep(1)
+    
+    def _run_stream_buffer_analysis(self, end_idx: int):
+        """Create a temporary clip from the last `stream_buffer_s` seconds of frames,
+        run the same video+audio analysis used by the upload endpoint, and
+        persist an occurrence if the aggregated decision passes thresholds.
+        This runs in a background thread and must not raise.
+        """
+        try:
+            if not self._tmpdir or not os.path.exists(self._tmpdir):
+                return
+            # compute frames window
+            try:
+                num_frames = max(1, int(round(float(self.stream_buffer_s) * float(self.fps))))
+            except Exception:
+                num_frames = int(max(1, round(20 * max(1.0, float(self.fps)))))
+            start_idx = max(1, int(end_idx) - num_frames + 1)
+            end_idx = int(end_idx)
 
+            expected_files = [os.path.join(self._tmpdir, f'frame_{i:06d}.jpg') for i in range(start_idx, end_idx + 1)]
+            existing = [p for p in expected_files if os.path.exists(p)]
+            if not existing:
+                return
 
+            out_name = f"streambuf_{int(time.time())}_{end_idx}.mp4"
+            out_tmp = os.path.join(self._tmpdir, out_name)
+            ffmpeg_cmd = [
+                'ffmpeg', '-y', '-hide_banner', '-loglevel', 'error',
+                '-fflags', '+genpts+igndts+discardcorrupt', '-err_detect', 'ignore_err',
+                '-framerate', str(self.fps),
+                '-start_number', str(start_idx),
+                '-i', os.path.join(self._tmpdir, 'frame_%06d.jpg'),
+                '-frames:v', str(max(1, end_idx - start_idx + 1)),
+                '-c:v', 'libx264', '-pix_fmt', 'yuv420p', out_tmp
+            ]
+            try:
+                subprocess.run(ffmpeg_cmd, check=False)
+            except Exception:
+                return
+
+            # move to public clips dir
+            try:
+                clips_dir = storage_core.get_clips_dir()
+                os.makedirs(clips_dir, exist_ok=True)
+                dest_path = os.path.join(clips_dir, out_name)
+                shutil.move(out_tmp, dest_path)
+                public_clip = f"/clips/{out_name}"
+            except Exception:
+                try:
+                    if os.path.exists(out_tmp):
+                        os.remove(out_tmp)
+                except Exception:
+                    pass
+                return
+
+            # Run analyses (video + optional audio)
+            try:
+                video_pred, video_conf, video_time = inference.analyze_video_frames(dest_path, sample_rate_hz=2.0)
+            except Exception:
+                video_pred, video_conf, video_time = 'normal', 0.0, None
+
+            audio_pred, audio_conf, audio_time = 'normal', 0.0, None
+            try:
+                if not bool(getattr(core_settings, 'VIDEO_DISABLE_AUDIO_PROCESSING', False)):
+                    try:
+                        audio_pred, audio_conf, audio_time = inference.analyze_audio_segments(dest_path)
+                    except Exception:
+                        audio_pred, audio_conf, audio_time = 'normal', 0.0, None
+                    else:
+                        # Log that audio analysis was executed (helpful to debug stream vs upload parity)
+                        try:
+                            print(f"INFO: Stream buffer audio analysis result -> class={audio_pred}, conf={audio_conf:.3f}, time_s={audio_time}")
+                        except Exception:
+                            pass
+            except Exception:
+                audio_pred, audio_conf, audio_time = 'normal', 0.0, None
+
+            try:
+                diag = inference.analyze_video_frames_diagnostic(dest_path, k=3, sample_rate_hz=2.0, max_samples=200)
+            except Exception:
+                diag = []
+
+            # Aggregation logic (mirrors upload endpoint)
+            aggregated = None
+            try:
+                if diag:
+                    score_sum = {}
+                    count_above = {}
+                    total_samples = 0
+                    per_class_thresh = core_settings.video_thresholds()
+                    vote_k = int(core_settings.VIDEO_VOTE_K)
+                    for item in diag:
+                        total_samples += 1
+                        topk = item.get('topk') or []
+                        if not topk:
+                            continue
+                        top1 = topk[0]
+                        cls = top1.get('class')
+                        sc = float(top1.get('score') or 0.0)
+                        score_sum[cls] = score_sum.get(cls, 0.0) + sc
+                        thr = per_class_thresh.get(cls.upper(), per_class_thresh.get('DEFAULT', float(core_settings.VIDEO_THRESH_DEFAULT)))
+                        if sc >= float(thr):
+                            count_above[cls] = count_above.get(cls, 0) + 1
+                    if score_sum:
+                        best_cls = max(score_sum.items(), key=lambda x: x[1])[0]
+                        summed = score_sum[best_cls]
+                        avg_conf = summed / (total_samples or 1)
+                        supporting = count_above.get(best_cls, 0)
+                        if supporting >= vote_k or avg_conf >= float(per_class_thresh.get(best_cls.upper(), per_class_thresh.get('DEFAULT', float(core_settings.VIDEO_THRESH_DEFAULT)))):
+                            aggregated = {'class': best_cls, 'confidence': float(avg_conf), 'samples': total_samples, 'supporting': supporting}
+                        else:
+                            aggregated = None
+            except Exception:
+                aggregated = None
+
+            # Decide final prediction
+            final_pred = video_pred
+            final_conf = float(video_conf or 0.0)
+            if aggregated:
+                final_pred = aggregated.get('class') or final_pred
+                final_conf = float(aggregated.get('confidence') or final_conf)
+
+            try:
+                print(f"DEBUG: Stream buffer initial video decision -> {video_pred} ({video_conf:.3f}), aggregated -> {aggregated}, audio -> {audio_pred} ({audio_conf:.3f})")
+            except Exception:
+                pass
+
+            # strong video-normal suppression of audio
+            try:
+                per_class_thresh = core_settings.video_thresholds()
+                video_thr = float(per_class_thresh.get(str(video_pred).upper(), per_class_thresh.get('DEFAULT', float(core_settings.VIDEO_THRESH_DEFAULT))))
+                if (str(video_pred).lower() == 'normal') and (final_conf >= video_thr):
+                    final_pred = 'normal'
+                    final_conf = float(final_conf)
+                    audio_pred, audio_conf = 'normal', 0.0
+            except Exception:
+                pass
+
+            # Audio override rules (conservative)
+            try:
+                audio_thresh_map = core_settings.audio_thresholds()
+                audio_thresh = audio_thresh_map.get(str(audio_pred).upper(), audio_thresh_map.get('DEFAULT', float(core_settings.AUDIO_THRESH_DEFAULT))) if audio_pred else float(core_settings.AUDIO_THRESH_DEFAULT)
+            except Exception:
+                audio_thresh = float(core_settings.AUDIO_THRESH_DEFAULT)
+
+            try:
+                audio_conf_val = float(audio_conf or 0.0)
+            except Exception:
+                audio_conf_val = 0.0
+            try:
+                video_conf_val = float(final_conf or 0.0)
+            except Exception:
+                video_conf_val = 0.0
+
+            try:
+                if audio_pred and audio_conf_val > video_conf_val and audio_conf_val >= 0.90:
+                    if str(audio_pred).lower() != 'normal':
+                        final_pred = audio_pred
+                        final_conf = float(audio_conf_val)
+                    else:
+                        if str(video_pred).lower() != 'normal' and video_conf_val <= 0.75:
+                            final_pred = 'normal'
+                            final_conf = float(audio_conf_val)
+                else:
+                    if bool(core_settings.VIDEO_ALLOW_AUDIO_OVERRIDE):
+                        if audio_pred and (audio_conf or 0.0) > final_conf:
+                            delta = (audio_conf or 0.0) - final_conf
+                            if (audio_conf or 0.0) >= float(audio_thresh) or (delta >= 0.04 and (audio_conf or 0.0) >= max(0.55, float(audio_thresh) - 0.05)):
+                                final_pred = audio_pred
+                                final_conf = float(audio_conf or 0.0)
+            except Exception:
+                pass
+
+            try:
+                if final_pred and audio_pred and final_pred == audio_pred:
+                    final_threshold = float(audio_thresh)
+                else:
+                    per_class_thresh = core_settings.video_thresholds()
+                    final_threshold = float(per_class_thresh.get(str(final_pred).upper(), per_class_thresh.get('DEFAULT', float(core_settings.VIDEO_THRESH_DEFAULT))))
+            except Exception:
+                final_threshold = float(core_settings.VIDEO_THRESH_DEFAULT)
+
+            # If decision passes threshold and it's not 'normal', persist occurrence
+            if final_pred and str(final_pred).lower() != 'normal' and float(final_conf or 0.0) >= float(final_threshold):
+                try:
+                    # avoid duplicates
+                    now = datetime.now(timezone.utc)
+                    if self._last_report_ts and (now - self._last_report_ts).total_seconds() < max(1.0, float(self.stream_buffer_s) / 2.0):
+                        return
+
+                    # compute clip duration (ffprobe)
+                    clip_dur = 0.0
+                    try:
+                        proc = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', dest_path], capture_output=True, text=True, timeout=10)
+                        out = proc.stdout.strip()
+                        clip_dur = float(out) if out else 0.0
+                    except Exception:
+                        clip_dur = float(max(1.0, float(self.stream_buffer_s)))
+
+                    def _sev_local(d: float) -> str:
+                        try:
+                            d = float(d)
+                            if d >= 60:
+                                return 'Gravíssima (X)'
+                            if d >= 10:
+                                return 'Grave (A)'
+                            if d >= 5:
+                                return 'Média (B)'
+                            return 'Leve (C)'
+                        except Exception:
+                            return 'Leve (C)'
+
+                    start_ts_calc = now - timedelta(seconds=float(clip_dur or self.stream_buffer_s))
+                    end_ts_now = now
+                    evidence_obj = {'clip_path': public_clip, 'clip_duration_s': float(clip_dur or self.stream_buffer_s)}
+                    try:
+                        evidence_obj['audio_analysis'] = {'class': audio_pred, 'confidence': float(audio_conf or 0.0), 'event_time_s': audio_time}
+                    except Exception:
+                        pass
+
+                    db = SessionLocal()
+                    try:
+                        db_oc = models.Ocorrencia(
+                            start_ts=start_ts_calc,
+                            end_ts=end_ts_now,
+                            duration_s=float(clip_dur or self.stream_buffer_s),
+                            category='Stream Buffered',
+                            type=final_pred,
+                            severity=_sev_local(float(clip_dur or self.stream_buffer_s)),
+                            confidence=float(final_conf or 0.0),
+                            evidence=evidence_obj,
+                        )
+                        db.add(db_oc)
+                        db.commit()
+                        db.refresh(db_oc)
+                        message = {
+                            'type': 'nova_ocorrencia',
+                            'data': {
+                                'id': db_oc.id,
+                                'start_ts': db_oc.start_ts.isoformat(),
+                                'end_ts': db_oc.end_ts.isoformat(),
+                                'duration_s': db_oc.duration_s,
+                                'category': db_oc.category,
+                                'type': db_oc.type,
+                                'severity': db_oc.severity,
+                                'confidence': db_oc.confidence,
+                                'evidence': db_oc.evidence,
+                            },
+                        }
+                        import asyncio
+                        try:
+                            loop = asyncio.get_event_loop()
+                        except RuntimeError:
+                            loop = None
+                        if loop and loop.is_running():
+                            asyncio.run_coroutine_threadsafe(ws_router.manager.broadcast(message), loop)
+                        else:
+                            try:
+                                asyncio.run(ws_router.manager.broadcast(message))
+                            except Exception:
+                                pass
+
+                        self._last_report_ts = now
+                    finally:
+                        db.close()
+                except Exception:
+                    pass
+        except Exception:
+            # never let this background analysis crash
+            try:
+                return
+            except Exception:
+                return
 # Singleton instance
 srt_ingestor = SRTIngestor()
 
