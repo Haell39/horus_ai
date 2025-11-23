@@ -75,11 +75,6 @@
 
 .glass-card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.storage-card:hover {
   border-color: var(--primary-neon);
   box-shadow: 0 20px 40px rgba(0, 242, 255, 0.2);
 }
