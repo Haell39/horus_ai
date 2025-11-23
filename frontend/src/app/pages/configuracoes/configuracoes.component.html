@@ -1,158 +1,224 @@
 <app-sidebar></app-sidebar>
 
-<div class="configuracoes-container">
-  <h2>Configurações</h2>
-
-  <div class="cards-container">
-    <!-- Tema -->
-    <div class="card">
-      <h3>Tema</h3>
-      <div class="linha">
-        <label>Modo Escuro</label>
-        <label class="switch">
-          <input
-            type="checkbox"
-            [checked]="isModoEscuro"
-            (change)="alternarTema()"
-          />
-          <span class="slider"></span>
-        </label>
-      </div>
-      <p class="descricao">
-        Tema escuro {{ isModoEscuro ? "ativado" : "desativado" }}
+<div class="page-container">
+  <!-- Header Section -->
+  <header class="page-header">
+    <div class="header-content">
+      <h1>Configurações do Sistema</h1>
+      <p class="subtitle">
+        Personalize o comportamento e armazenamento do Horus AI.
       </p>
     </div>
+    <button class="btn-primary btn-save-top" (click)="salvarTudo()">
+      <span class="rainbow-text">Salvar Alterações</span>
+    </button>
+  </header>
 
-    <!-- Armazenamento -->
-    <div class="card card-armazenamento">
-      <h3>Armazenamento</h3>
-
-      <div class="linha">
-        <label>Destino</label>
-        <div style="display: flex; gap: 12px; align-items: center">
-          <label
-            ><input
-              type="radio"
-              name="storage"
-              [(ngModel)]="configuracoes.storageMode"
-              value="local"
+  <!-- Main Settings Grid -->
+  <div class="settings-grid">
+    <!-- Tema Card -->
+    <div class="glass-card">
+      <div class="card-header">
+        <i class="fa-solid fa-palette"></i>
+        <h2>Aparência</h2>
+      </div>
+      <div class="card-body">
+        <div class="control-group">
+          <div class="control-label">
+            <span>Modo Escuro</span>
+            <small>{{ isModoEscuro ? "Ativado" : "Desativado" }}</small>
+          </div>
+          <label class="switch">
+            <input
+              type="checkbox"
+              [checked]="isModoEscuro"
+              (change)="alternarTema()"
             />
-            Local</label
-          >
-          <label
-            ><input
-              type="radio"
-              name="storage"
-              [(ngModel)]="configuracoes.storageMode"
-              value="onedrive"
-            />
-            OneDrive</label
-          >
+            <span class="slider round"></span>
+          </label>
         </div>
-      </div>
-
-      <!-- Local -->
-      <div
-        *ngIf="configuracoes.storageMode === 'local'"
-        style="margin-top: 8px"
-      >
-        <div class="linha">
-          <label>Caminho Local</label>
-          <input
-            type="text"
-            [(ngModel)]="configuracoes.localPath"
-            placeholder="Ex: C:\\ ou /mnt/data"
-          />
-          <button
-            class="btn-analise verificar-disco"
-            (click)="checkDiskUsage()"
-          >
-            Verificar Disco
-          </button>
-        </div>
-
-        <p class="descricao">
-          Uso do disco para
-          <strong>{{
-            detectedPath || configuracoes.localPath || "(não verificado)"
-          }}</strong>
-        </p>
-
-        <div style="display: flex; gap: 12px; align-items: center">
-          <div>
-            Usado: <strong>{{ storageUsed | number : "1.1-1" }} GB</strong>
-          </div>
-          <div>
-            Total: <strong>{{ storageTotal | number : "1.1-1" }} GB</strong>
-          </div>
-          <div>
-            Percent:
-            <strong
-              >{{
-                (storageTotal ? (storageUsed / storageTotal) * 100 : 0)
-                  | number : "1.0-0"
-              }}%</strong
-            >
-          </div>
-        </div>
-      </div>
-
-      <!-- OneDrive -->
-      <div
-        *ngIf="configuracoes.storageMode === 'onedrive'"
-        style="margin-top: 8px"
-      >
-        <div class="linha">
-          <label>OneDrive - Pasta / Link</label>
-          <input
-            type="text"
-            [(ngModel)]="configuracoes.oneDriveLink"
-            placeholder="https://onedrive.live.com/..."
-          />
-          <button class="btn-analise" (click)="copiarOneDriveLink()">
-            Abrir OneDrive
-          </button>
-        </div>
-        <p class="descricao">
-          Os clipes continuarão sendo salvos localmente até que a integração com
-          OneDrive seja configurada no backend.
-        </p>
-      </div>
-
-      <!-- Gerenciar Clipes temporarily removed; this card now only manages storage settings -->
-    </div>
-
-    <!-- Notificações -->
-    <div class="card">
-      <h3>Notificações</h3>
-      <div class="linha">
-        <label>Som de Alerta</label>
-        <select [(ngModel)]="configuracoes.somAlerta">
-          <option value="beep">Alerta Curto (Padrão)</option>
-          <option value="digital">Alerta Digital</option>
-          <option value="alerta">Alerta Sutil</option>
-        </select>
-        <button class="testar-som" (click)="testarSom()">🔊 Testar</button>
       </div>
     </div>
 
-    <!-- Exportação -->
-    <div class="card">
-      <h3>Exportação</h3>
-      <div class="linha">
-        <label>Formato de Relatórios</label>
-        <select [(ngModel)]="configuracoes.formatoRelatorio">
-          <option value="json">JSON</option>
-          <option value="csv">CSV</option>
-          <option value="pdf">PDF</option>
-        </select>
-        <button class="exportar-btn" (click)="exportar()">Exportar</button>
+    <!-- Armazenamento Card -->
+    <div class="glass-card storage-card">
+      <div class="card-header">
+        <i class="fa-solid fa-database"></i>
+        <h2>Armazenamento</h2>
+      </div>
+      <div class="card-body">
+        <!-- Storage Mode Selection -->
+        <div class="control-group">
+          <div class="control-label">
+            <span>Destino dos Clipes</span>
+          </div>
+          <div class="radio-group">
+            <label class="radio-option">
+              <input
+                type="radio"
+                name="storage"
+                [(ngModel)]="configuracoes.storageMode"
+                value="local"
+              />
+              <span>Local</span>
+            </label>
+            <label class="radio-option">
+              <input
+                type="radio"
+                name="storage"
+                [(ngModel)]="configuracoes.storageMode"
+                value="onedrive"
+              />
+              <span>OneDrive</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Local Storage -->
+        <div
+          *ngIf="configuracoes.storageMode === 'local'"
+          class="storage-details"
+        >
+          <div class="control-group vertical">
+            <div class="control-label">
+              <span>Caminho Local</span>
+              <small>Exemplo: C:\ ou /mnt/data</small>
+            </div>
+            <div class="input-with-button">
+              <input
+                type="text"
+                [(ngModel)]="configuracoes.localPath"
+                placeholder="Ex: C:\ ou /mnt/data"
+                class="premium-input"
+              />
+              <button class="btn-secondary" (click)="checkDiskUsage()">
+                <i class="fa-solid fa-hard-drive"></i> Verificar Disco
+              </button>
+            </div>
+          </div>
+
+          <div class="disk-stats">
+            <div class="stat-item">
+              <span class="stat-label">Caminho Detectado</span>
+              <span class="stat-value">{{
+                detectedPath || configuracoes.localPath || "(não verificado)"
+              }}</span>
+            </div>
+            <div class="stat-row">
+              <div class="stat-item">
+                <span class="stat-label">Usado</span>
+                <span class="stat-value neon"
+                  >{{ storageUsed | number : "1.1-1" }} GB</span
+                >
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Total</span>
+                <span class="stat-value"
+                  >{{ storageTotal | number : "1.1-1" }} GB</span
+                >
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Uso</span>
+                <span class="stat-value"
+                  >{{
+                    (storageTotal ? (storageUsed / storageTotal) * 100 : 0)
+                      | number : "1.0-0"
+                  }}%</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- OneDrive Storage -->
+        <div
+          *ngIf="configuracoes.storageMode === 'onedrive'"
+          class="storage-details"
+        >
+          <div class="control-group vertical">
+            <div class="control-label">
+              <span>OneDrive - Pasta / Link</span>
+              <small>Link para sua pasta do OneDrive</small>
+            </div>
+            <div class="input-with-button">
+              <input
+                type="text"
+                [(ngModel)]="configuracoes.oneDriveLink"
+                placeholder="https://onedrive.live.com/..."
+                class="premium-input"
+              />
+              <button class="btn-secondary" (click)="copiarOneDriveLink()">
+                <i class="fa-solid fa-external-link-alt"></i> Abrir OneDrive
+              </button>
+            </div>
+          </div>
+          <p class="info-message">
+            <i class="fa-solid fa-info-circle"></i>
+            Os clipes continuarão sendo salvos localmente até que a integração
+            com OneDrive seja configurada no backend.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notificações Card -->
+    <div class="glass-card">
+      <div class="card-header">
+        <i class="fa-solid fa-bell"></i>
+        <h2>Notificações</h2>
+      </div>
+      <div class="card-body">
+        <div class="control-group vertical">
+          <div class="control-label">
+            <span>Som de Alerta</span>
+            <small>Escolha o som para notificações</small>
+          </div>
+          <select
+            [(ngModel)]="configuracoes.somAlerta"
+            class="premium-select select-large"
+          >
+            <option value="beep">Alerta Curto (Padrão)</option>
+            <option value="digital">Alerta Digital</option>
+            <option value="alerta">Alerta Sutil</option>
+          </select>
+          <button class="btn-test-sound" (click)="testarSom()">
+            <i class="fa-solid fa-volume-high"></i>
+            <span>Testar Som</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Exportação Card -->
+    <div class="glass-card">
+      <div class="card-header">
+        <i class="fa-solid fa-file-export"></i>
+        <h2>Exportação</h2>
+      </div>
+      <div class="card-body">
+        <div class="control-group vertical">
+          <div class="control-label">
+            <span>Formato de Relatórios</span>
+            <small>Formato para exportar ocorrências</small>
+          </div>
+          <select
+            [(ngModel)]="configuracoes.formatoRelatorio"
+            class="premium-select select-large"
+          >
+            <option value="json">JSON - JavaScript Object Notation</option>
+            <option value="csv">CSV - Comma-Separated Values</option>
+            <option value="pdf">PDF - Portable Document Format</option>
+          </select>
+          <button class="btn-secondary btn-export" (click)="exportar()">
+            <i class="fa-solid fa-download"></i> Exportar Agora
+          </button>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- Documentação: lista de MDs (colocado dentro do grid de cards para melhor posicionamento) -->
-  <app-documentation-card></app-documentation-card>
-
-  <button class="salvar-tudo" (click)="salvarTudo()">Salvar Alterações</button>
+  <!-- Documentation Card -->
+  <div class="documentation-section">
+    <app-documentation-card></app-documentation-card>
+  </div>
 </div>

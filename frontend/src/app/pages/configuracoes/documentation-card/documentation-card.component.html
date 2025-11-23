@@ -1,64 +1,91 @@
-<div class="doc-card">
-  <h3>Documentação</h3>
-  <p class="descricao">
-    Arquivos de referência das pastas <strong>docs</strong>,
-    <strong>tools</strong> e <strong>configs</strong>.
-  </p>
-
-  <div class="doc-sections">
-    <div class="doc-section">
-      <h4>Docs ({{ lists.docs?.length || 0 }})</h4>
-      <ul>
-        <li *ngFor="let f of lists.docs">
-          <button class="link-like" (click)="openFile('docs', f.name)">
-            {{ f.name }}
-          </button>
-        </li>
-      </ul>
-    </div>
-
-    <div class="doc-section">
-      <h4>Tools ({{ lists.tools?.length || 0 }})</h4>
-      <ul>
-        <li *ngFor="let f of lists.tools">
-          <button class="link-like" (click)="openFile('tools', f.name)">
-            {{ f.name }}
-          </button>
-        </li>
-      </ul>
-    </div>
-
-    <div class="doc-section">
-      <h4>Configs ({{ lists.configs?.length || 0 }})</h4>
-      <ul>
-        <li *ngFor="let f of lists.configs">
-          <button class="link-like" (click)="openFile('configs', f.name)">
-            {{ f.name }}
-          </button>
-        </li>
-      </ul>
-    </div>
+<div class="glass-card doc-card">
+  <div class="card-header">
+    <i class="fa-solid fa-book"></i>
+    <h2>Documentação</h2>
   </div>
+  <div class="card-body">
+    <p class="doc-description">
+      Arquivos de referência das pastas <strong>docs</strong>,
+      <strong>tools</strong> e <strong>configs</strong>.
+    </p>
 
-  <div style="margin-top: 12px; display: flex; gap: 8px; align-items: center">
-    <button class="btn-analise" (click)="refresh()" [disabled]="loading">
-      Atualizar
-    </button>
-    <span *ngIf="loading">Carregando...</span>
+    <div class="doc-sections">
+      <div class="doc-section">
+        <div class="section-header">
+          <i class="fa-solid fa-file-lines"></i>
+          <h4>
+            Docs <span class="count-badge">{{ lists.docs?.length || 0 }}</span>
+          </h4>
+        </div>
+        <ul class="doc-list">
+          <li *ngFor="let f of lists.docs">
+            <button class="doc-link" (click)="openFile('docs', f.name)">
+              <i class="fa-solid fa-file-alt"></i>
+              <span>{{ f.name }}</span>
+            </button>
+          </li>
+        </ul>
+      </div>
+
+      <div class="doc-section">
+        <div class="section-header">
+          <i class="fa-solid fa-wrench"></i>
+          <h4>
+            Tools
+            <span class="count-badge">{{ lists.tools?.length || 0 }}</span>
+          </h4>
+        </div>
+        <ul class="doc-list">
+          <li *ngFor="let f of lists.tools">
+            <button class="doc-link" (click)="openFile('tools', f.name)">
+              <i class="fa-solid fa-file-code"></i>
+              <span>{{ f.name }}</span>
+            </button>
+          </li>
+        </ul>
+      </div>
+
+      <div class="doc-section">
+        <div class="section-header">
+          <i class="fa-solid fa-cog"></i>
+          <h4>
+            Configs
+            <span class="count-badge">{{ lists.configs?.length || 0 }}</span>
+          </h4>
+        </div>
+        <ul class="doc-list">
+          <li *ngFor="let f of lists.configs">
+            <button class="doc-link" (click)="openFile('configs', f.name)">
+              <i class="fa-solid fa-file-code"></i>
+              <span>{{ f.name }}</span>
+            </button>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card-footer">
+      <button class="btn-secondary" (click)="refresh()" [disabled]="loading">
+        <i class="fa-solid fa-rotate"></i>
+        {{ loading ? "Carregando..." : "Atualizar" }}
+      </button>
+    </div>
   </div>
 
   <!-- Modal -->
-  <div class="modal-backdrop" *ngIf="showModal">
-    <div class="modal">
+  <div class="modal-backdrop" *ngIf="showModal" (click)="close()">
+    <div class="modal-container" (click)="$event.stopPropagation()">
       <div class="modal-header">
-        <strong>{{ modalTitle }}</strong>
-        <button class="close" (click)="close()">✕</button>
+        <h3>{{ modalTitle }}</h3>
+        <button class="modal-close" (click)="close()">
+          <i class="fa-solid fa-times"></i>
+        </button>
       </div>
       <div class="modal-body">
         <div class="md-content" [innerHTML]="modalHtml"></div>
       </div>
       <div class="modal-footer">
-        <button class="btn-analise" (click)="close()">Fechar</button>
+        <button class="btn-primary" (click)="close()">Fechar</button>
       </div>
     </div>
   </div>
