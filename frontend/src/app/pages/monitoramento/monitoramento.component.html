@@ -132,7 +132,7 @@
           <button
             class="btn-ativar"
             (click)="startStreamClicked()"
-            [disabled]="isStreaming"
+            [disabled]="isStreaming || streamMode !== 'srt'"
           >
             Ativar
           </button>
