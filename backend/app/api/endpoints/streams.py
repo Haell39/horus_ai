@@ -93,3 +93,85 @@ def cleanup():
     except Exception:
         pass
     return {'status': 'cleaned'}
+
+
+@router.get('/streams/devices')
+def list_capture_devices():
+    """Auto-detect available capture devices (webcams, capture cards, etc.)"""
+    import subprocess
+    import platform
+    
+    devices = []
+    system = platform.system()
+    
+    try:
+        if system == 'Windows':
+            # Use DirectShow on Windows
+            cmd = ['ffmpeg', '-list_devices', 'true', '-f', 'dshow', '-i', 'dummy']
+        else:
+            # Use v4l2 on Linux (list /dev/video* devices)
+            cmd = ['v4l2-ctl', '--list-devices']
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        output = result.stderr + result.stdout  # ffmpeg outputs to stderr
+        
+        if system == 'Windows':
+            # Parse DirectShow output
+            lines = output.split('\n')
+            in_video_section = False
+            for line in lines:
+                if 'DirectShow video devices' in line:
+                    in_video_section = True
+                    continue
+                if 'DirectShow audio devices' in line:
+                    in_video_section = False
+                    break
+                if in_video_section and '"' in line:
+                    # Extract device name between quotes
+                    parts = line.split('"')
+                    if len(parts) >= 2:
+                        device_name = parts[1]
+                        devices.append({
+                            'name': device_name,
+                            'value': f'video={device_name}',
+                            'type': 'video'
+                        })
+        else:
+            # Parse v4l2-ctl output for Linux
+            lines = output.split('\n')
+            current_device = None
+            for line in lines:
+                line = line.strip()
+                if line and not line.startswith('/dev/'):
+                    current_device = line.rstrip(':')
+                elif line.startswith('/dev/video'):
+                    device_path = line.strip()
+                    devices.append({
+                        'name': f'{current_device} ({device_path})' if current_device else device_path,
+                        'value': device_path,
+                        'type': 'video'
+                    })
+        
+        # If ffmpeg/v4l2-ctl not available or no devices found, return friendly message
+        if not devices:
+            # Try fallback: common default devices
+            if system == 'Windows':
+                devices.append({
+                    'name': 'Dispositivo padrão (manual)',
+                    'value': '',
+                    'type': 'default'
+                })
+            else:
+                devices.append({
+                    'name': '/dev/video0 (padrão)',
+                    'value': '/dev/video0',
+                    'type': 'default'
+                })
+        
+        return {'devices': devices, 'count': len(devices)}
+    
+    except Exception as e:
+        print(f"Erro ao listar dispositivos: {e}")
+        # Return empty list with error info
+        return {'devices': [], 'count': 0, 'error': str(e)}
+

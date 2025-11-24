@@ -31,12 +31,21 @@
               <option value="srt">Link SRT</option>
               <option value="capture">Placa de Captura</option>
             </select>
-            <input
+            <select
               *ngIf="streamMode === 'capture'"
-              type="text"
-              placeholder="device (ex: /dev/video0 or video=... )"
               [(ngModel)]="captureDevice"
-            />
+              (click)="loadCaptureDevices()"
+            >
+              <option value="">
+                {{ loadingDevices ? "Carregando..." : "Dispositivo" }}
+              </option>
+              <option
+                *ngFor="let device of availableDevices"
+                [value]="device.value"
+              >
+                {{ device.name }}
+              </option>
+            </select>
           </div>
           <span class="live-badge" [class.on]="isLive">● LIVE</span>
           <button

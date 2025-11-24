@@ -173,7 +173,6 @@ h1 {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
 }
 .input-modo select,
 .input-modo input {
@@ -183,10 +182,6 @@ h1 {
   background: rgba(0, 0, 0, 0.3);
   color: var(--texto-cor);
   outline: none;
-}
-.input-modo input[type="text"] {
-  flex: 1 1 100%;
-  min-width: 250px;
 }
 
 .live-badge {

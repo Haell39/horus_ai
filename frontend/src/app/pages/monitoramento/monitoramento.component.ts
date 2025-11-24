@@ -75,6 +75,12 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
   public streamMode: 'srt' | 'capture' = 'srt';
   // optional capture device string (e.g. '/dev/video0' or dshow spec)
   public captureDevice: string = '';
+  public availableDevices: Array<{
+    name: string;
+    value: string;
+    type: string;
+  }> = [];
+  public loadingDevices: boolean = false;
   // optional custom SRT URL
   public customSrtUrl: string = '';
 
@@ -649,6 +655,35 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         console.error('Erro ao parar stream:', err);
+      },
+    });
+  }
+
+  // Load available capture devices from backend
+  public loadCaptureDevices() {
+    // Only load once or if empty
+    if (this.availableDevices.length > 0 || this.loadingDevices) {
+      return;
+    }
+
+    this.loadingDevices = true;
+    this.ocorrenciaService.getCaptureDevices().subscribe({
+      next: (res: any) => {
+        try {
+          if (res && res.devices && Array.isArray(res.devices)) {
+            this.availableDevices = res.devices;
+            console.log(`Dispositivos detectados: ${res.count}`);
+          }
+        } catch (e) {
+          console.warn('Erro ao processar lista de dispositivos:', e);
+        }
+        this.loadingDevices = false;
+        this.cdr.markForCheck();
+      },
+      error: (err) => {
+        console.error('Erro ao carregar dispositivos:', err);
+        this.loadingDevices = false;
+        this.cdr.markForCheck();
       },
     });
   }

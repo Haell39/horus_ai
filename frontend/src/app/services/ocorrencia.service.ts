@@ -48,6 +48,11 @@ export class OcorrenciaService {
     return this.http.post(`${this.apiUrl}/streams/stop`, {});
   }
 
+  /** Get available capture devices (webcams, capture cards, etc.) */
+  getCaptureDevices() {
+    return this.http.get(`${this.apiUrl}/streams/devices`);
+  }
+
   /**
    * Busca a lista de todas as ocorrências
    */
