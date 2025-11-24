@@ -134,7 +134,7 @@ export class MonitoramentoComponent implements OnInit, OnDestroy {
   // Chave localStorage para alertas recentes
   private ALERTAS_STORAGE_KEY = 'horus_alertas_recentes_v1';
   // Quantos alertas mostrar no card (mais recente primeiro)
-  private MAX_ALERTAS_NA_TELA = 5;
+  private MAX_ALERTAS_NA_TELA = 7;
 
   constructor(
     private ocorrenciaService: OcorrenciaService,
