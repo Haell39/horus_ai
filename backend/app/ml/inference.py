@@ -704,7 +704,7 @@ def analyze_audio_segments(file_path: str) -> Tuple[str, float, Optional[float],
         SILENCE_STRICT_RMS = 0.006  # RMS muito baixo = silêncio garantido
         
         # --- FASE 3: Thresholds de Confiança por Classe ---
-        MIN_CONFIDENCE = 0.68           # Geral (hiss, sinal_teste)
+        MIN_CONFIDENCE = 0.80           # Geral (hiss, sinal_teste)
         MIN_CONFIDENCE_ECO = 0.85       # Eco precisa de confiança alta
         MIN_CONFIDENCE_AUSENCIA = 0.75  # Silêncio detectado pelo modelo
         
@@ -791,7 +791,7 @@ def analyze_audio_segments(file_path: str) -> Tuple[str, float, Optional[float],
         y_full, sr = _librosa_load_with_ffmpeg_fallback(file_path, sr=TARGET_SR)
         if len(y_full) == 0:
             print(f"DEBUG: Áudio vazio detectado: {file_path}")
-            return 'ausencia_audio', 0.95, 0.0
+            return 'ausencia_audio', 0.95, 0.0, 0.0
 
         segment_samples = int(SEGMENT_DURATION_S * sr)
         hop_samples = int(HOP_DURATION_S * sr)
@@ -906,7 +906,7 @@ def analyze_audio_segments(file_path: str) -> Tuple[str, float, Optional[float],
         if total_faults == 0:
             # Nenhuma falha detectada
             avg_confidence = np.mean([s['confidence'] for s in all_segments if s['class'] == 'normal']) if all_segments else 0.5
-            result = ('normal', float(avg_confidence), None)
+            result = ('normal', float(avg_confidence), None, None)
         else:
             # Encontra a classe de falha dominante com regras de suavização
             best_fault_class = None
@@ -958,8 +958,11 @@ def analyze_audio_segments(file_path: str) -> Tuple[str, float, Optional[float],
                 avg_normal = np.mean([s['confidence'] for s in all_segments if s['class'] == 'normal']) if any(s['class'] == 'normal' for s in all_segments) else 0.6
                 result = ('normal', float(avg_normal), None, None)
 
+        # Debug output - handle None values for normal results
+        start_str = f"{result[2]}s" if result[2] is not None else "N/A"
+        end_str = f"{result[3]}s" if result[3] is not None else "N/A"
         print(f"DEBUG: Áudio - {processed_segments} segmentos processados. "
-              f"Resultado: {result[0]} ({result[1]:.4f}) start={result[2]}s end={result[3]}s")
+              f"Resultado: {result[0]} ({result[1]:.4f}) start={start_str} end={end_str}")
         
         return result
 
