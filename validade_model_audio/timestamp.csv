@@ -1,0 +1,9 @@
+video_filename,t_start,t_end,class
+falha_audio_mudo_jornal_07,00:00:03,00:00:09,ausencia_audio
+falha_audio_mudo_jornal_09,00:00:04,00:00:08,ausencia_audio
+falha_audio_eco_02,00:00:00,00:00:05,eco
+falha_audio_eco_04,00:00:00,00:00:05,eco
+hiss1,00:00:10,00:00:16,hiss
+hiss2,00:00:03,00:00:08,hiss
+sinalerro1,00:00:06,00:00:10,sinal_erro
+sinalerro2,00:00:06,00:00:10,sinal_erro

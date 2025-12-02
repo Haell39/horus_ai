@@ -26,16 +26,16 @@ MOBILENET_DIR = os.path.join(MODEL_DIR, 'mobilenetv2')
 AUDIO_MODEL_DIR = os.path.join(MODEL_DIR, 'audio')
 
 # New model filenames (user supplied INT8 quantized models)
-VIDEO_MODEL_FILENAME = os.path.join('mobilenetv2', 'video_model_int8.tflite')
-AUDIO_MODEL_FILENAME = os.path.join('mobilenetv2', 'audio_model_int8.tflite')
+VIDEO_MODEL_FILENAME = os.path.join('video', 'odin_model_v4.5', 'video_model_finetune_fixed.keras')
+AUDIO_MODEL_FILENAME = os.path.join('audio', 'heimdall_audio_model_ultra_v1', 'audio_model_fixed.keras')
 
 VIDEO_MODEL_PATH = os.path.join(MODEL_DIR, VIDEO_MODEL_FILENAME)
 AUDIO_MODEL_PATH = os.path.join(MODEL_DIR, AUDIO_MODEL_FILENAME)
 
 # Classes for the new models (as provided)
 # Default fallbacks (kept for backward compat) — real class list is loaded from training_files/labels.csv when available
-AUDIO_CLASSES = ['ausencia_audio', 'volume_baixo', 'eco', 'ruido', 'sinal_1khz']
-VIDEO_CLASSES = ['freeze', 'fade', 'fora_foco']
+AUDIO_CLASSES = ['ausencia_audio', 'eco_reverb', 'ruido_hiss', 'sinal_teste', 'normal']
+VIDEO_CLASSES = ['normal', 'freeze', 'fade', 'fora_de_foco']
 
 # Additional package folder (user-provided model bundle). If you placed a model package
 # at repository root `horus_package_video_model_v2` we attempt to use its metadata/labels
@@ -47,6 +47,8 @@ THRESHOLDS = {}
 try:
     # prefer metadata in MODEL_DIR/audio (for audio-specific bundles), then MODEL_DIR, else PACKAGE_MODEL_DIR
     metadata_candidates = [
+        os.path.join(MODEL_DIR, 'audio', 'heimdall_audio_model_ultra_v1', 'metadata.json'),
+        os.path.join(MODEL_DIR, 'video', 'odin_model_v4.5', 'metadata.json'),
         os.path.join(AUDIO_MODEL_DIR, 'metadata.json'),
         os.path.join(MODEL_DIR, 'video_model_finetune.metadata.json'),
         os.path.join(MODEL_DIR, 'metadata.json'),
@@ -55,13 +57,17 @@ try:
     for mpath in metadata_candidates:
         if os.path.exists(mpath):
             with open(mpath, 'r', encoding='utf-8') as fh:
-                MODEL_METADATA = json.load(fh)
-            break
+                data = json.load(fh)
+                MODEL_METADATA.update(data) # Merge metadata
 except Exception:
     MODEL_METADATA = {}
 
 try:
-    thresh_candidates = [os.path.join(MODEL_DIR, 'thresholds.yaml'), os.path.join(PACKAGE_MODEL_DIR, 'thresholds.yaml')]
+    thresh_candidates = [
+        os.path.join(MODEL_DIR, 'video', 'odin_model_v4.5', 'thresholds.yaml'),
+        os.path.join(MODEL_DIR, 'thresholds.yaml'), 
+        os.path.join(PACKAGE_MODEL_DIR, 'thresholds.yaml')
+    ]
     for tpath in thresh_candidates:
         if os.path.exists(tpath):
             # simple YAML parser for key: value lines (no dependency on PyYAML)
@@ -98,21 +104,35 @@ keras_video_inputs_logged = False
 def _load_model_classes_from_training_files():
     try:
         import csv
-        training_labels = os.path.join(MODEL_DIR, 'training_files', 'labels.csv')
-        if not os.path.exists(training_labels):
-            return []
+        # Priority: 
+        # 1. labels.csv in specific audio/video model folders (if we can guess which one is active)
+        # 2. training_files/labels.csv
+        # 3. labels.csv in model root
+        
+        candidates = [
+            os.path.join(MODEL_DIR, 'audio', 'heimdall_audio_model_ultra_v1', 'labels.csv'),
+            os.path.join(MODEL_DIR, 'video', 'odin_model_v4.5', 'labels.csv'),
+            os.path.join(MODEL_DIR, 'training_files', 'labels.csv'),
+            os.path.join(MODEL_DIR, 'labels.csv')
+        ]
+        
         seen = []
-        with open(training_labels, 'r', encoding='utf-8') as fh:
-            reader = csv.DictReader(fh)
-            for row in reader:
-                cls = row.get('class')
-                if not cls:
-                    continue
-                # If multi-label (pipe-separated), take each
-                parts = [p.strip() for p in cls.split('|') if p.strip()]
-                for p in parts:
-                    if p not in seen:
-                        seen.append(p)
+        for training_labels in candidates:
+            if os.path.exists(training_labels):
+                with open(training_labels, 'r', encoding='utf-8') as fh:
+                    reader = csv.DictReader(fh)
+                    for row in reader:
+                        # Support both 'class' and 'class_name' columns
+                        cls = row.get('class') or row.get('class_name')
+                        if not cls:
+                            continue
+                        # If multi-label (pipe-separated), take each
+                        parts = [p.strip() for p in cls.split('|') if p.strip()]
+                        for p in parts:
+                            if p not in seen:
+                                seen.append(p)
+                # If we found labels in a specific file, we might want to stop or merge. 
+                # For now, let's merge all unique labels found across files to be safe.
         return seen
     except Exception:
         return []
@@ -164,8 +184,10 @@ try:
         ishape = MODEL_METADATA.get('input_shape') or MODEL_METADATA.get('input_shape')
         try:
             if ishape and isinstance(ishape, (list, tuple)) and len(ishape) >= 3:
-                # assume format [frames, height, width, channels] or [height, width, channels]
-                if len(ishape) == 4:
+                # assume format [batch, frames, height, width, channels] or [frames, height, width, channels] or [height, width, channels]
+                if len(ishape) == 5:
+                    _, _, INPUT_HEIGHT, INPUT_WIDTH, _ = ishape
+                elif len(ishape) == 4:
                     _, INPUT_HEIGHT, INPUT_WIDTH, _ = ishape
                 elif len(ishape) == 3:
                     INPUT_HEIGHT, INPUT_WIDTH, _ = ishape
@@ -202,6 +224,18 @@ models_loaded = False
 keras_video_model_requires_motion_brightness = False
 keras_video_model_has_rescaling = False
 
+import keras
+
+def flatten_time(x):
+    s = keras.ops.shape(x)
+    return keras.ops.reshape(x, (s[0] * s[1], s[2], s[3], s[4]))
+
+def unflatten_time(args):
+    flat, original_input = args
+    s = keras.ops.shape(original_input)
+    f_shape = keras.ops.shape(flat)
+    return keras.ops.reshape(flat, (s[0], s[1], f_shape[1]))
+
 def load_all_models():
     """Carrega modelos Keras a partir de arquivos HDF5 (.h5).
     Estratégia: tenta primeiro os artefatos finetune (audio_model_finetune.h5 / video_model_finetune.h5)
@@ -215,6 +249,8 @@ def load_all_models():
         # Prefer native Keras format (.keras) if present, fall back to legacy HDF5 (.h5)
         # audio model candidates: prefer finetune in MODEL_DIR, then accept models in MODEL_DIR/audio
         audio_candidates = [
+            AUDIO_MODEL_PATH,
+            os.path.join(MODEL_DIR, 'audio', 'heimdall_audio_model_ultra_v1', 'audio_model.keras'),
             os.path.join(MODEL_DIR, 'audio_model_finetune.keras'),
             os.path.join(MODEL_DIR, 'audio_model_finetune.h5'),
             os.path.join(MODEL_DIR, 'audio_model.h5'),
@@ -224,6 +260,8 @@ def load_all_models():
             os.path.join(AUDIO_MODEL_DIR, 'audio_model.h5'),
         ]
         video_candidates = [
+            VIDEO_MODEL_PATH,
+            os.path.join(MODEL_DIR, 'video', 'odin_model_v4.5', 'video_model_finetune.keras'),
             os.path.join(MODEL_DIR, 'video_model_finetune.keras'),
             os.path.join(MODEL_DIR, 'video_model_finetune.h5'),
             os.path.join(MODEL_DIR, 'video_model.h5')
@@ -238,10 +276,25 @@ def load_all_models():
         for p in audio_candidates:
             if os.path.exists(p):
                 try:
-                    keras_audio_model = tf.keras.models.load_model(p)
+                    keras_audio_model = keras.models.load_model(p)
                     print(f"INFO: Modelo de Áudio Keras carregado. Path={p}")
                     try:
                         print(f"INFO: Audio model output shape: {keras_audio_model.output_shape}")
+                        # Update AUDIO_CLASSES if specific labels.csv exists next to the model
+                        model_dir = os.path.dirname(p)
+                        labels_path = os.path.join(model_dir, 'labels.csv')
+                        if os.path.exists(labels_path):
+                            import csv
+                            with open(labels_path, 'r', encoding='utf-8') as fh:
+                                reader = csv.DictReader(fh)
+                                new_classes = []
+                                for row in reader:
+                                    cls = row.get('class') or row.get('class_name')
+                                    if cls: new_classes.append(cls)
+                                if new_classes:
+                                    global AUDIO_CLASSES
+                                    AUDIO_CLASSES = new_classes
+                                    print(f"INFO: Updated AUDIO_CLASSES from {labels_path}: {AUDIO_CLASSES}")
                     except Exception:
                         pass
                     loaded_any = True
@@ -253,10 +306,26 @@ def load_all_models():
         for p in video_candidates:
             if os.path.exists(p):
                 try:
-                    keras_video_model = tf.keras.models.load_model(p)
+                    custom_objects = {'flatten_time': flatten_time, 'unflatten_time': unflatten_time}
+                    keras_video_model = keras.models.load_model(p, custom_objects=custom_objects)
                     print(f"INFO: Modelo de Vídeo Keras carregado. Path={p}")
                     try:
                         print(f"INFO: Video model output shape: {keras_video_model.output_shape}")
+                        # Update VIDEO_CLASSES if specific labels.csv exists next to the model
+                        model_dir = os.path.dirname(p)
+                        labels_path = os.path.join(model_dir, 'labels.csv')
+                        if os.path.exists(labels_path):
+                            import csv
+                            with open(labels_path, 'r', encoding='utf-8') as fh:
+                                reader = csv.DictReader(fh)
+                                new_classes = []
+                                for row in reader:
+                                    cls = row.get('class') or row.get('class_name')
+                                    if cls: new_classes.append(cls)
+                                if new_classes:
+                                    global VIDEO_CLASSES
+                                    VIDEO_CLASSES = new_classes
+                                    print(f"INFO: Updated VIDEO_CLASSES from {labels_path}: {VIDEO_CLASSES}")
                     except Exception:
                         pass
                     loaded_any = True
@@ -553,113 +622,164 @@ def run_tflite_inference_topk(
 # =======================================================
 
 def preprocess_audio_segment(y_segment: np.ndarray, sr: int) -> Optional[np.ndarray]:
-    """ Pré-processa UM segmento de áudio (y). """
+    """
+    Preprocess audio segment for Heimdall Audio Model Ultra V1.
+    Converts audio waveform to Mel Spectrogram with fixed normalization.
+    """
     try:
-        # --- PARÂMETROS (DEVEM SER OS MESMOS DO TREINO) ---
-        # Prefer explicit values from MODEL_METADATA (loaded from metadata.json)
-        N_MELS = int(MODEL_METADATA.get('n_mels', 128))
-        FMAX = int(MODEL_METADATA.get('fmax', 8000))
-        HOP_LENGTH = int(MODEL_METADATA.get('hop_length', 512))
-        N_FFT = int(MODEL_METADATA.get('n_fft', 2048))
-        # --- FIM PARÂMETROS ---
+        # Constants for Ultra V1
+        TARGET_SR = 22050
+        N_MELS = 128
+        N_FFT = 2048
+        HOP_LENGTH = 512
+        FMAX = 8000
+        IMG_SIZE = 128
+        REF_DB = 1.0
+        MIN_DB = -80.0
+        MAX_DB = 80.0
 
-        if len(y_segment) == 0: return None
+        # Resample if necessary
+        if sr != TARGET_SR:
+            y_segment = librosa.resample(y_segment, orig_sr=sr, target_sr=TARGET_SR)
+        
+        # Ensure correct length (3.0s)
+        target_len = int(3.0 * TARGET_SR)
+        if len(y_segment) < target_len:
+            y_segment = np.pad(y_segment, (0, target_len - len(y_segment)))
+        elif len(y_segment) > target_len:
+            y_segment = y_segment[:target_len]
 
-        mel_spec = librosa.feature.melspectrogram(y=y_segment, sr=sr, n_mels=N_MELS, fmax=FMAX, hop_length=HOP_LENGTH, n_fft=N_FFT)
-        mel_spec_db = librosa.power_to_db(mel_spec, ref=np.max)
+        # 1. Mel Spectrogram
+        mel = librosa.feature.melspectrogram(
+            y=y_segment, sr=TARGET_SR, n_mels=N_MELS,
+            n_fft=N_FFT, hop_length=HOP_LENGTH, fmax=FMAX
+        )
+        
+        # 2. Power to DB (Fixed Reference)
+        mel_db = librosa.power_to_db(mel, ref=REF_DB)
+        
+        # 3. Fixed Normalization [-80, 80] -> [0, 1]
+        mel_db = np.clip(mel_db, MIN_DB, MAX_DB)
+        mel_norm = (mel_db - MIN_DB) / (MAX_DB - MIN_DB)
+        
+        # 4. Resize to 128x128
+        mel_resized = cv2.resize(mel_norm, (IMG_SIZE, IMG_SIZE), interpolation=cv2.INTER_LINEAR)
+        
+        # 5. Add batch and channel dims -> (1, 128, 128, 1)
+        return mel_resized.astype(np.float32)[np.newaxis, ..., np.newaxis]
 
-        min_db, max_db = np.min(mel_spec_db), np.max(mel_spec_db)
-        img_gray = np.zeros_like(mel_spec_db, dtype=np.float32)
-        if max_db > min_db: # Evita divisão por zero
-             img_gray = (mel_spec_db - min_db) / (max_db - min_db)
-
-        img_rgb = np.stack([img_gray]*3, axis=-1)
-        # Convert to 0-255 uint8 image then resize
-        img_uint8 = (np.clip(img_rgb, 0.0, 1.0) * 255.0).astype(np.uint8)
-        img_tf = tf.convert_to_tensor(img_uint8, dtype=tf.float32)
-        img_resized_tf = tf.image.resize(img_tf, [INPUT_HEIGHT, INPUT_WIDTH], method=tf.image.ResizeMethod.BILINEAR)
-        img_resized = img_resized_tf.numpy().astype(np.float32)
-        # Apply MobileNetV2 preprocessing per user: (x - 127.5) / 127.5
-        img_preproc = (img_resized - 127.5) / 127.5
-        input_data = np.expand_dims(img_preproc, axis=0)
-
-        return input_data if input_data.shape == (1, INPUT_HEIGHT, INPUT_WIDTH, 3) else None
     except Exception as e:
+        print(f"ERRO no pré-processamento de áudio: {e}")
+        traceback.print_exc()
+        return None
         # print(f"ERRO pré-processando segmento de áudio: {e}") # Log menos verboso
         return None
 
-def analyze_audio_segments(file_path: str) -> Tuple[str, float, Optional[float]]:
-    """ Analisa múltiplos segmentos de áudio e retorna a falha mais confiante. """
+def analyze_audio_segments(file_path: str) -> Tuple[str, float, Optional[float], Optional[float]]:
+    """
+    Analisa múltiplos segmentos de áudio usando estratégia Heurística + Modelo CNN.
+    
+    Retorna: (classe, confiança, tempo_início_erro, tempo_fim_erro)
+    
+    Pipeline conforme INFERENCE_PIPELINE.md do Heimdall Audio Model Ultra V1:
+    - FASE 1: Detecção de silêncio por heurística (RMS + Peak)
+    - FASE 2: Modelo CNN para classificação
+    - FASE 3: Pós-processamento com thresholds e boost de RMS
+    - FASE 4: Suavização temporal (merge de segmentos)
+    """
     if not globals().get('keras_audio_model'):
-        raise RuntimeError("Modelo de áudio Keras não está carregado. Remova dependências TFLite ou instale o modelo Keras em backend/app/ml/models/.")
-
-    best_fault_class = 'normal'
-    max_confidence = 0.0
-    best_event_time_s: Optional[float] = None
-    processed_segments = 0
+        raise RuntimeError("Modelo de áudio Keras não está carregado.")
 
     try:
-        # --- PARÂMETROS DE SEGMENTAÇÃO ---
-        TARGET_SR = int(MODEL_METADATA.get('sample_rate')) if MODEL_METADATA.get('sample_rate') else None
-        SEGMENT_DURATION_S = float(MODEL_METADATA.get('segment_duration', 3.0))
-        # overlap in metadata may be fractional (e.g., 0.5 for 50%), compute hop accordingly
-        overlap = float(MODEL_METADATA.get('overlap', 0.6666667))
-        # overlap defined as fraction of segment (e.g. 0.5 means 50% overlap). Hop = segment * (1 - overlap)
-        try:
-            if overlap <= 0 or overlap >= 1:
-                HOP_DURATION_S = float(MODEL_METADATA.get('hop_duration', 1.0))
-            else:
-                HOP_DURATION_S = max(0.1, SEGMENT_DURATION_S * (1.0 - overlap))
-        except Exception:
-            HOP_DURATION_S = 1.0
-        # --- FIM PARÂMETROS ---
+        # =====================================================
+        # === CONSTANTES DO HEIMDALL ULTRA V1 (INFERENCE_PIPELINE.md) ===
+        # =====================================================
+        TARGET_SR = 22050
+        SEGMENT_DURATION_S = 3.0
+        HOP_DURATION_S = 1.0
+        
+        # --- FASE 1: Detecção de Silêncio por Heurística ---
+        SILENCE_RMS_THRESHOLD = 0.008
+        SILENCE_PEAK_THRESHOLD = 0.15
+        SILENCE_STRICT_RMS = 0.006  # RMS muito baixo = silêncio garantido
+        
+        # --- FASE 3: Thresholds de Confiança por Classe ---
+        MIN_CONFIDENCE = 0.68           # Geral (hiss, sinal_teste)
+        MIN_CONFIDENCE_ECO = 0.85       # Eco precisa de confiança alta
+        MIN_CONFIDENCE_AUSENCIA = 0.75  # Silêncio detectado pelo modelo
+        
+        # --- Regras Especiais para Eco ---
+        ECO_MARGIN_OVER_NORMAL = 0.20   # Eco precisa ter 20% de margem sobre "normal"
+        ECO_MARGIN_OVER_SECOND = 0.15   # Eco precisa ter 15% de margem sobre a 2ª melhor classe
+        
+        # --- Boost de Confiança por RMS ---
+        ECO_MIN_RMS = 0.02
+        ECO_RMS_BOOST = 3.0
+        HISS_MIN_RMS = 0.015
+        HISS_RMS_BOOST = 2.0
+        
+        # --- FASE 4: Suavização Temporal ---
+        CLASS_MIN_SEGMENTS = {
+            'eco_reverb': 1,      # Eco pode ser detectado em 1 segmento
+            'ruido_hiss': 1,      # Chiado pode ser detectado em 1 segmento
+            'ausencia_audio': 2,  # Silêncio precisa de 2 segmentos consecutivos
+            'sinal_teste': 2      # Sinal de teste precisa de 2 segmentos
+        }
+        GAP_TOLERANCE_SEGMENTS = 1  # Tolera 1 segmento "normal" no meio do erro
+        
+        # --- Regras para Segmento Único ---
+        CLASS_SINGLE_SEGMENT_RULES = {
+            'eco_reverb': {'min_confidence': 0.85, 'min_rms': 0.03},
+            'ruido_hiss': {'min_confidence': 0.82, 'min_rms': 0.025}
+        }
+        # =====================================================
+        
+        # Helper: Boost de confiança por RMS (conforme documento)
+        def boosted_confidence(pred_class: str, conf: float, rms: float) -> float:
+            """Segmentos com RMS alto ganham boost de confiança"""
+            if pred_class == 'eco_reverb':
+                return min(1.0, conf + ECO_RMS_BOOST * max(0, rms - ECO_MIN_RMS))
+            if pred_class == 'ruido_hiss':
+                return min(1.0, conf + HISS_RMS_BOOST * max(0, rms - HISS_MIN_RMS))
+            return conf
 
         print(f"DEBUG: Analisando segmentos de áudio: {file_path}")
-        # Carrega o áudio completo uma vez. Use fallback via ffmpeg se librosa falhar
+        
+        # Helper para carregar áudio com fallback ffmpeg
         def _librosa_load_with_ffmpeg_fallback(path, sr=None):
             try:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", UserWarning)
                     warnings.simplefilter("ignore", FutureWarning)
                     y, sr_loaded = librosa.load(path, sr=sr)
-                    # Check if loaded audio is empty - if so, trigger ffmpeg fallback
                     if len(y) == 0:
-                        raise RuntimeError("Librosa returned empty audio array, triggering ffmpeg fallback")
+                        raise RuntimeError("Librosa returned empty audio array")
                     return y, sr_loaded
-            except Exception as e:
+            except Exception:
                 ffmpeg_path = shutil.which('ffmpeg')
                 if not ffmpeg_path:
-                    # no ffmpeg -> re-raise original error
                     raise
                 tmpf = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
                 tmp_path = tmpf.name
                 tmpf.close()
-                cmd = [ffmpeg_path, '-y', '-i', path, '-vn', '-acodec', 'pcm_s16le', '-ar', str(sr or 16000), '-ac', '1', tmp_path]
+                cmd = [ffmpeg_path, '-y', '-i', path, '-vn', '-acodec', 'pcm_s16le', 
+                       '-ar', str(sr or 16000), '-ac', '1', tmp_path]
                 proc = subprocess.run(cmd, check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                stderr = proc.stderr.decode(errors='ignore') if proc.stderr is not None else ''
-                # If ffmpeg failed, inspect stderr: if it says there is no audio stream
-                # treat this as "no audio" and return an empty array so caller will
-                # treat the clip as silent/normal. Otherwise raise for real failures.
+                stderr = proc.stderr.decode(errors='ignore') if proc.stderr else ''
                 if proc.returncode != 0 or not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
-                    no_audio_indicators = [
-                        'Output file does not contain any stream',
-                        'does not contain any stream',
-                        'could not find audio',
-                        'Invalid data found when processing input'
-                    ]
+                    no_audio_indicators = ['does not contain any stream', 'could not find audio', 
+                                           'Invalid data found when processing input']
                     try:
                         if os.path.exists(tmp_path):
                             os.unlink(tmp_path)
                     except Exception:
                         pass
                     if any(ind in stderr for ind in no_audio_indicators):
-                        # Return empty audio (caller maps empty to 'normal')
                         return np.array([], dtype=np.float32), sr or 0
-                    raise RuntimeError(f"ffmpeg failed to extract audio: rc={proc.returncode} stderr={stderr}")
+                    raise RuntimeError(f"ffmpeg failed: {stderr}")
                 try:
                     with warnings.catch_warnings():
                         warnings.simplefilter("ignore", UserWarning)
-                        warnings.simplefilter("ignore", FutureWarning)
                         y, sr_native = librosa.load(tmp_path, sr=sr)
                 finally:
                     try:
@@ -670,50 +790,186 @@ def analyze_audio_segments(file_path: str) -> Tuple[str, float, Optional[float]]
 
         y_full, sr = _librosa_load_with_ffmpeg_fallback(file_path, sr=TARGET_SR)
         if len(y_full) == 0:
-            print(f"AVISO: Áudio completo vazio: {file_path}")
-            return 'normal', 0.0 # Se vazio, é normal
+            print(f"DEBUG: Áudio vazio detectado: {file_path}")
+            return 'ausencia_audio', 0.95, 0.0
 
         segment_samples = int(SEGMENT_DURATION_S * sr)
         hop_samples = int(HOP_DURATION_S * sr)
+        
+        # Armazena todas as detecções por classe para suavização temporal
+        class_detections = {cls: [] for cls in AUDIO_CLASSES}
+        all_segments = []  # Lista de todas as análises
+        processed_segments = 0
 
         for i in range(0, len(y_full) - segment_samples + 1, hop_samples):
             y_segment = y_full[i : i + segment_samples]
-
-            # Pré-processa o segmento
+            seg_start_s = float(i) / float(sr)
+            
+            # === REGRA 1: Detecção de silêncio por RMS (sem modelo) ===
+            rms = float(np.sqrt(np.mean(y_segment ** 2)))
+            peak = float(np.max(np.abs(y_segment)))
+            
+            if rms < SILENCE_RMS_THRESHOLD and peak < SILENCE_PEAK_THRESHOLD:
+                # Silêncio detectado diretamente - não precisa do modelo
+                class_detections['ausencia_audio'].append({
+                    'time': seg_start_s,
+                    'confidence': 0.95,
+                    'method': 'rms_silence'
+                })
+                all_segments.append({
+                    'time': seg_start_s,
+                    'class': 'ausencia_audio',
+                    'confidence': 0.99,  # 99% confiança para silêncio por heurística
+                    'rms': rms,
+                    'method': 'heuristic_silence'
+                })
+                processed_segments += 1
+                continue
+            
+            # === FASE 2: Modelo CNN ===
             input_data = preprocess_audio_segment(y_segment, sr)
             if input_data is None:
-                continue # Pula segmento se pré-processamento falhar
-
-            # Roda a inferência no segmento (Keras preferido)
-            # Keras-only inference
-            pred_class, confidence = run_keras_inference(globals().get('keras_audio_model'), input_data, MODEL_CLASSES)
+                continue
+            
+            model = globals().get('keras_audio_model')
+            probs = model.predict(input_data, verbose=0)[0]
             processed_segments += 1
+            
+            # Mapeia probabilidades para classes
+            class_probs = {AUDIO_CLASSES[j]: float(probs[j]) for j in range(len(AUDIO_CLASSES))}
+            
+            # Ordena por probabilidade
+            sorted_classes = sorted(class_probs.items(), key=lambda x: x[1], reverse=True)
+            top_class, top_prob = sorted_classes[0]
+            second_class, second_prob = sorted_classes[1] if len(sorted_classes) > 1 else (None, 0)
+            normal_prob = class_probs.get('normal', 0)
+            
+            # === FASE 3: Pós-Processamento com Thresholds ===
+            detected_class = 'normal'
+            detected_confidence = normal_prob
+            
+            # Aplica boost de RMS para obter confiança efetiva
+            eff_conf = boosted_confidence(top_class, top_prob, rms)
+            
+            # --- Regras para ECO (classe mais difícil) ---
+            if top_class == 'eco_reverb':
+                # Eco só é aceito se tiver margem clara sobre outras classes
+                eco_prob = class_probs['eco_reverb']
+                passes_threshold = eff_conf >= MIN_CONFIDENCE_ECO
+                passes_normal_margin = (eco_prob - normal_prob) >= ECO_MARGIN_OVER_NORMAL
+                passes_second_margin = (eco_prob - second_prob) >= ECO_MARGIN_OVER_SECOND if second_class != 'normal' else True
+                
+                if passes_threshold and passes_normal_margin and passes_second_margin:
+                    detected_class = 'eco_reverb'
+                    detected_confidence = eff_conf
+            
+            # --- Regras para AUSENCIA_AUDIO (modelo detectou) ---
+            elif top_class == 'ausencia_audio':
+                # Silêncio: ou modelo tem confiança alta OU RMS é muito baixo
+                if eff_conf >= MIN_CONFIDENCE_AUSENCIA or rms <= SILENCE_STRICT_RMS:
+                    detected_class = 'ausencia_audio'
+                    detected_confidence = max(eff_conf, 0.95 if rms <= SILENCE_STRICT_RMS else eff_conf)
+            
+            # --- Regras para HISS e SINAL_TESTE ---
+            elif top_class in ['ruido_hiss', 'sinal_teste']:
+                if eff_conf >= MIN_CONFIDENCE:
+                    detected_class = top_class
+                    detected_confidence = eff_conf
+            
+            # Registra detecção
+            all_segments.append({
+                'time': seg_start_s,
+                'class': detected_class,
+                'confidence': detected_confidence,
+                'rms': rms,
+                'probs': class_probs,
+                'method': 'model'
+            })
+            
+            if detected_class != 'normal':
+                class_detections[detected_class].append({
+                    'time': seg_start_s,
+                    'confidence': detected_confidence,
+                    'rms': rms
+                })
 
-            # Estratégia: Guarda a falha (não-normal) com maior confiança encontrada até agora
-            if pred_class != 'normal' and confidence > max_confidence:
-                max_confidence = confidence
-                best_fault_class = pred_class
-                # compute approximate event time (center of the segment)
-                try:
-                    seg_start_s = float(i) / float(sr)
-                    best_event_time_s = seg_start_s + (SEGMENT_DURATION_S / 2.0)
-                except Exception:
-                    best_event_time_s = None
-            # Se ainda não achamos falha, mas achamos 'normal' com alta confiança, guardamos isso
-            elif best_fault_class == 'normal' and pred_class == 'normal' and confidence > max_confidence:
-                 max_confidence = confidence # Atualiza a confiança do 'normal'
+        # === SUAVIZAÇÃO TEMPORAL: Agregar detecções ===
+        # Conta votos por classe
+        class_votes = {cls: len(dets) for cls, dets in class_detections.items()}
+        total_faults = sum(v for cls, v in class_votes.items() if cls != 'normal')
+        
+        # DEBUG: mostra contagem
+        debug_counts = {cls: v for cls, v in class_votes.items() if v > 0}
+        print(f"DEBUG: Votos por classe: {debug_counts}")
+        
+        # === FASE 4: Suavização Temporal ===
+        if total_faults == 0:
+            # Nenhuma falha detectada
+            avg_confidence = np.mean([s['confidence'] for s in all_segments if s['class'] == 'normal']) if all_segments else 0.5
+            result = ('normal', float(avg_confidence), None)
+        else:
+            # Encontra a classe de falha dominante com regras de suavização
+            best_fault_class = None
+            best_fault_score = 0
+            best_fault_time = None
+            best_fault_end_time = None
+            best_fault_confidence = 0
+            
+            for cls, detections in class_detections.items():
+                if cls == 'normal' or len(detections) == 0:
+                    continue
+                
+                avg_conf = np.mean([d['confidence'] for d in detections])
+                avg_rms = np.mean([d.get('rms', 0) for d in detections])
+                n_segments = len(detections)
+                
+                # Verifica se passa nos critérios de suavização
+                min_segs = CLASS_MIN_SEGMENTS.get(cls, 2)
+                passes_min_segments = n_segments >= min_segs
+                
+                # Regras para segmento único (alta confiança + RMS alto)
+                single_seg_rules = CLASS_SINGLE_SEGMENT_RULES.get(cls)
+                passes_single_segment = False
+                if single_seg_rules and n_segments == 1:
+                    passes_single_segment = (
+                        avg_conf >= single_seg_rules['min_confidence'] and 
+                        avg_rms >= single_seg_rules['min_rms']
+                    )
+                
+                # Aceita se passa em qualquer critério
+                if passes_min_segments or passes_single_segment or avg_conf > 0.92:
+                    score = n_segments * avg_conf
+                    if score > best_fault_score:
+                        best_fault_score = score
+                        best_fault_class = cls
+                        best_fault_confidence = avg_conf
+                        # Pega PRIMEIRO tempo (início do erro)
+                        best_fault_time = detections[0]['time']
+                        # Pega ÚLTIMO tempo (fim do erro) + duração do segmento
+                        # Ordena por tempo para garantir que pegamos o último
+                        sorted_detections = sorted(detections, key=lambda x: x['time'])
+                        last_detection_time = sorted_detections[-1]['time']
+                        # Adiciona a duração do segmento (SEGMENT_DURATION_S = 3s) para pegar o fim real
+                        best_fault_end_time = last_detection_time + SEGMENT_DURATION_S
+            
+            if best_fault_class:
+                result = (best_fault_class, float(best_fault_confidence), float(best_fault_time), float(best_fault_end_time))
+            else:
+                avg_normal = np.mean([s['confidence'] for s in all_segments if s['class'] == 'normal']) if any(s['class'] == 'normal' for s in all_segments) else 0.6
+                result = ('normal', float(avg_normal), None, None)
 
-        print(f"DEBUG: Áudio - {processed_segments} segmentos processados. Resultado: {best_fault_class} ({max_confidence:.4f})")
-        # Retorna (classe, confiança, event_time_s) — event_time_s pode ser None
-        return best_fault_class, max_confidence, best_event_time_s
+        print(f"DEBUG: Áudio - {processed_segments} segmentos processados. "
+              f"Resultado: {result[0]} ({result[1]:.4f}) start={result[2]}s end={result[3]}s")
+        
+        return result
 
     except Exception as e:
         print(f"ERRO durante análise de segmentos de áudio ({file_path}): {e}")
         traceback.print_exc()
-        return "Erro_Análise_Áudio", 0.0, None
+        return "Erro_Análise_Áudio", 0.0, None, None
 
 # =====================================================
-# === NOVAS FUNÇÕES: ANÁLISE DE VÍDEO MULTI-FRAME ===
+# === ANÁLISE DE VÍDEO: ESTRATÉGIA HÍBRIDA (HEURÍSTICA + MODELO) ===
 # =====================================================
 
 def preprocess_video_single_frame(frame: np.ndarray) -> Optional[np.ndarray]:
@@ -784,490 +1040,373 @@ def _compute_edge_density(frame: np.ndarray) -> float:
         return 0.0
 
 def analyze_video_frames(file_path: str, sample_rate_hz: float = 2.0) -> Tuple[str, float, Optional[float]]:
-    """ Analisa múltiplos frames de vídeo e retorna a falha mais confiante.
-    Retorna (pred_class, confidence, event_time_s) onde event_time_s é o tempo em
-    segundos do frame com maior confiança para uma classe não-'normal', ou None.
+    """
+    Analisa múltiplos frames de vídeo usando estratégia Híbrida: Heurística + Modelo.
+    
+    Pipeline conforme ESTRATEGIA_HEURISTICA.md do Odin Model V4.5:
+    - Heurísticas: Freeze (diff < 2.0), Fade (brightness < 15), Blur (sharpness < 130)
+    - Override: Se modelo tem < 95% certeza em "Normal", heurística pode sobrescrever
+    - Regra de negócio: Só reporta erros que persistam por mais de 2 segundos
+    
+    Retorna (pred_class, confidence, event_time_s)
     """
     if not globals().get('keras_video_model'):
-        raise RuntimeError("Modelo de vídeo Keras não está carregado. Remova dependências TFLite ou instale o modelo Keras em backend/app/ml/models/.")
+        raise RuntimeError("Modelo de vídeo Keras não está carregado.")
 
-    best_fault_class = 'normal'
-    max_confidence = 0.0
-    event_time_s: Optional[float] = None
+    # =====================================================
+    # === CONSTANTES DO ODIN V4.5 (ESTRATEGIA_HEURISTICA.md) ===
+    # =====================================================
+    
+    # === THRESHOLDS CALIBRADOS COM BASE EM DADOS REAIS ===
+    # Analisando diagnostics de clips reais:
+    # - Freeze real: motion < 1.5 por vários frames consecutivos (pixels quase idênticos)
+    # - Cena parada normal: motion 1.5-3.0 (há pequenas variações)
+    # - Movimento normal: motion = 5 a 40+
+    # - Zona cinza (slow motion): motion = 3 a 5
+    FREEZE_DIFF_THRESHOLD = 1.5       # Motion < 1.5 = suspeita de freeze (mais conservador)
+    FREEZE_MAX_DIFF_THRESHOLD = 2.5   # Max permitido (menos tolerante a variações)
+    FADE_BRIGHTNESS_THRESHOLD = 15    # Brilho médio < 15 = fade (tela preta)
+    BLUR_SHARPNESS_THRESHOLD = 130.0  # Variância do Laplaciano < 130 = blur
+    
+    # Override: modelo precisa ter >= 95% em "normal" para ignorar heurísticas
+    MODEL_OVERRIDE_THRESHOLD = 0.95
+    
+    # Regra de negócio: só reporta erros > 2 segundos
+    MIN_ERROR_DURATION_S = 2.0
+    # =====================================================
+
+    # Helpers para heurísticas (conforme documento)
+    def _check_freeze(frames: List[np.ndarray]) -> Tuple[bool, float]:
+        """
+        Detecta congelamento comparando o FRAME ATUAL com o ANTERIOR.
+        Freeze real = pixels quase idênticos entre frames (motion < 1.5).
+        
+        Diferença de freeze vs cena parada:
+        - Freeze real: motion ~0.2-1.0 (só ruído de compressão H.264)
+        - Cena parada com câmera fixa: motion ~1.5-3.0 (pequenas variações de iluminação)
+        """
+        if len(frames) < 2:
+            return False, 0.0
+        
+        # Usa os 2 ÚLTIMOS frames (frame atual vs anterior)
+        current_frame = frames[-1]
+        previous_frame = frames[-2]
+        
+        # Se a tela está muito escura, não é freeze - é fade
+        current_brightness = np.mean(current_frame)
+        if current_brightness < 20:
+            return False, 0.0
+        
+        # Converte para grayscale para alinhar com a métrica 'motion' do diagnostic
+        if len(current_frame.shape) == 3:
+            gray_curr = cv2.cvtColor(current_frame.astype(np.uint8), cv2.COLOR_RGB2GRAY)
+            gray_prev = cv2.cvtColor(previous_frame.astype(np.uint8), cv2.COLOR_RGB2GRAY)
+        else:
+            gray_curr = current_frame
+            gray_prev = previous_frame
+        
+        diff = cv2.absdiff(gray_curr, gray_prev)
+        motion_val = float(diff.mean())
+        
+        # Freeze verdadeiro: motion muito baixo (< 1.5)
+        is_freeze = motion_val < FREEZE_DIFF_THRESHOLD
+        
+        # Confiança proporcional: quanto menor o motion, maior a confiança
+        if is_freeze:
+            # motion=0 → conf=1.0, motion=THRESHOLD → conf=0.85
+            conf = 0.85 + 0.15 * (1.0 - motion_val / FREEZE_DIFF_THRESHOLD)
+            conf = min(1.0, max(0.85, conf))
+        else:
+            conf = 0.0
+        
+        return is_freeze, conf
+
+    def _check_fade(frames: List[np.ndarray]) -> Tuple[bool, float]:
+        """
+        Detecta fade/tela preta pelo brilho do ÚLTIMO frame (frame atual).
+        Não usa média do buffer pois dilui detecções em transições.
+        Confiança proporcional à escuridão:
+        - brightness = 0 → conf = 1.0 (tela completamente preta)
+        - brightness = THRESHOLD → conf = 0.85
+        """
+        if len(frames) < 1:
+            return False, 0.0
+        
+        # Usa o ÚLTIMO frame (frame atual), não a média do buffer
+        # Isso permite detectar fade em transições sem diluir com frames normais
+        current_frame = frames[-1]
+        current_brightness = np.mean(current_frame)
+        
+        is_fade = current_brightness < FADE_BRIGHTNESS_THRESHOLD
+        
+        if is_fade:
+            # Confiança proporcional: quanto mais escuro, maior a confiança
+            # brightness=0 → conf=1.0, brightness=THRESHOLD → conf=0.85
+            darkness_ratio = 1.0 - (current_brightness / FADE_BRIGHTNESS_THRESHOLD)
+            conf = 0.85 + (0.15 * darkness_ratio)  # Range: 0.85 a 1.0
+            conf = min(1.0, max(0.85, conf))
+        else:
+            conf = 0.0
+        return is_fade, conf
+
+    def _check_blur(frames: List[np.ndarray]) -> Tuple[bool, float]:
+        """
+        Detecta desfoque usando variância do Laplaciano do FRAME ATUAL.
+        Não usa média do buffer pois dilui detecções em transições.
+        NÃO detecta blur em tela preta (sharpness muito baixo = tela preta, não blur).
+        """
+        if len(frames) < 1:
+            return False, 0.0
+        
+        # Usa o ÚLTIMO frame (frame atual), não a média do buffer
+        current_frame = frames[-1]
+        
+        if len(current_frame.shape) == 3:
+            gray = cv2.cvtColor(current_frame, cv2.COLOR_RGB2GRAY) if current_frame.shape[2] == 3 else current_frame[:,:,0]
+        else:
+            gray = current_frame
+        
+        current_sharpness = cv2.Laplacian(gray, cv2.CV_64F).var()
+        current_brightness = np.mean(current_frame)
+        
+        # Se tela está muito escura, NÃO é blur - é fade/tela preta
+        if current_brightness < 20:
+            return False, 0.0
+        
+        # Blur real: sharpness baixo MAS não zero (zero = tela preta)
+        is_blur = current_sharpness < BLUR_SHARPNESS_THRESHOLD and current_sharpness > 10
+        
+        if is_blur:
+            # Confiança proporcional: quanto menor o sharpness, maior a confiança
+            conf = min(0.99, 1.0 - (current_sharpness / BLUR_SHARPNESS_THRESHOLD))
+            conf = max(0.80, conf)  # Mínimo 0.80 para blur detectado
+        else:
+            conf = 0.0
+        
+        return is_blur, conf
+
+    # Estado da análise
     processed_frames = 0
     frames_read = 0
-    prev_gray = None
-    # window to track recent brightness values for fade detection
-    try:
-        bw_len = max(1, int(core_settings.VIDEO_MOVING_AVG_M))
-    except Exception:
-        bw_len = 5
-    brightness_window = deque(maxlen=bw_len)
-    # counters for heuristic support and first supporting time
-    blur_support = 0
-    fade_support = 0
-    freeze_support = 0
-    first_blur_time = None
-    first_fade_time = None
-    first_freeze_time = None
-    # flag: if any frame showed a sudden brightness drop (strong fade)
-    fade_drop_detected = False
+    recent_frames: List[np.ndarray] = []  # Últimos N frames para heurísticas
+    seq_queue = deque(maxlen=6)  # Para modelo de sequência
+    
+    # Contadores para suavização temporal
+    heuristic_counts = {'freeze': 0, 'fade': 0, 'fora_de_foco': 0}
+    heuristic_first_time = {'freeze': None, 'fade': None, 'fora_de_foco': None}
+    model_predictions = []  # Lista de (class, conf, time)
+    
     try:
         print(f"DEBUG: Analisando frames de vídeo: {file_path} (sample_rate_hz={sample_rate_hz})")
         cap = cv2.VideoCapture(file_path)
         if not cap.isOpened():
-            print(f"ERRO: Não foi possível abrir vídeo para análise de frames: {file_path}")
+            print(f"ERRO: Não foi possível abrir vídeo: {file_path}")
             return "Erro_Abertura_Vídeo", 0.0, None
 
-        # Compute frame skip using video FPS and desired sample rate
         fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-        try:
-            fps = float(fps) if fps > 0 else 30.0
-        except Exception:
-            fps = 30.0
+        fps = float(fps) if fps > 0 else 30.0
         FRAME_SKIP = max(1, int(round(fps / float(max(0.001, sample_rate_hz)))))
 
-        # Determine model and expected input dims once per call
+        # Configuração do modelo
         model = globals().get('keras_video_model')
-        expected_frames = 1
+        expected_frames = 6
         expected_h = INPUT_HEIGHT
         expected_w = INPUT_WIDTH
+        
         try:
             if model is not None and hasattr(model, 'inputs') and len(model.inputs) > 0:
                 shape = getattr(model.inputs[0], 'shape', None)
                 if shape is not None and len(shape) == 5:
-                    try:
-                        expected_frames = int(shape[1]) if shape[1] is not None else 1
-                        expected_h = int(shape[2]) if shape[2] is not None else INPUT_HEIGHT
-                        expected_w = int(shape[3]) if shape[3] is not None else INPUT_WIDTH
-                    except Exception:
-                        expected_frames = 1
-        except Exception:
-            expected_frames = 1
-
-        # one-time diagnostic print of model inputs to aid debugging
-        try:
-            global keras_video_inputs_logged
-            if model is not None and not keras_video_inputs_logged:
-                try:
-                    print("DEBUG: keras_video_model.inputs:", [(getattr(i,'name',None), getattr(i,'shape',None)) for i in model.inputs])
-                except Exception:
-                    pass
-                keras_video_inputs_logged = True
+                    if shape[1] is not None:
+                        expected_frames = int(shape[1])
+                    expected_h = int(shape[2]) if shape[2] is not None else INPUT_HEIGHT
+                    expected_w = int(shape[3]) if shape[3] is not None else INPUT_WIDTH
         except Exception:
             pass
 
-        # prepare deque for sequence frames if needed
-        seq_queue = deque(maxlen=max(1, expected_frames))
+        seq_queue = deque(maxlen=expected_frames)
 
         while True:
-            # Lê o frame
             ret, frame = cap.read()
             if not ret:
-                break # Fim do vídeo
+                break
 
             frames_read += 1
-            # Pula frames de acordo com taxa
             if frames_read % FRAME_SKIP != 0:
                 continue
 
-            # Pré-processa o frame selecionado (frame-level preprocessing uses INPUT_* defaults)
-            input_data = preprocess_video_single_frame(frame)
-            if input_data is None:
-                continue # Pula frame se pré-processamento falhar
-
-            # Heurísticas por frame
-            blur_var = _compute_blur_var(frame)
-            brightness = _compute_brightness(frame)
-            motion = _compute_motion(prev_gray, frame)
-            edge_density = _compute_edge_density(frame)
-
-            # Keras-only inference (handle models that expect auxiliary inputs motion/brightness)
-            model = globals().get('keras_video_model')
-            pred_class, confidence = 'normal', 0.0
-            if model is None:
-                raise RuntimeError("Modelo de vídeo Keras não está carregado.")
+            # Tempo atual do frame
             try:
-                # prepare raw resized RGB frames for both default and expected sizes
-                try:
-                    raw_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                except Exception:
-                    raw_rgb = None
-                try:
-                    raw_resized = cv2.resize(raw_rgb, (INPUT_WIDTH, INPUT_HEIGHT)).astype(np.float32) if raw_rgb is not None else None
-                except Exception:
-                    raw_resized = None
-                try:
-                    raw_resized_expected = cv2.resize(raw_rgb, (expected_w, expected_h)).astype(np.float32) if raw_rgb is not None else None
-                except Exception:
-                    raw_resized_expected = None
+                ms = cap.get(cv2.CAP_PROP_POS_MSEC)
+                current_time_s = float(ms) / 1000.0 if ms is not None else None
+            except Exception:
+                current_time_s = None
 
-                # Append an element suitable for sequence models into seq_queue.
-                # Prefer the expected-size RGB float frame; fall back to default resized.
-                try:
-                    if expected_frames > 1:
-                        if raw_resized_expected is not None:
-                            seq_elem = raw_resized_expected
-                        elif raw_resized is not None:
-                            # resize default resized to expected dims
-                            try:
-                                seq_elem = cv2.resize(raw_resized.astype(np.uint8), (expected_w, expected_h)).astype(np.float32)
-                            except Exception:
-                                seq_elem = raw_resized
-                        else:
-                            # as a last resort, resize the original frame
-                            seq_elem = cv2.resize(raw_rgb, (expected_w, expected_h)).astype(np.float32) if raw_rgb is not None else None
-                        if seq_elem is not None:
-                            # ensure shape (H,W,3)
-                            if seq_elem.ndim == 4:
-                                seq_elem = np.squeeze(seq_elem, axis=0)
-                            seq_queue.append(seq_elem)
-                except Exception:
-                    pass
+            # Prepara frame para heurísticas e modelo
+            try:
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                frame_resized = cv2.resize(frame_rgb, (expected_w, expected_h))
+            except Exception:
+                continue
 
-                # If the model expects auxiliary inputs, build inputs according to model.inputs
-                if globals().get('keras_video_model_requires_motion_brightness'):
-                    # motion normalized to [0,1]
-                    motion_norm = 1.0 if motion == float('inf') else float(motion) / 255.0
-                    motion_arr = np.array([[motion_norm]], dtype=np.float32)
-                    brightness_norm = float(brightness) / 255.0
-                    bright_arr = np.array([[brightness_norm]], dtype=np.float32)
+            # Mantém lista de frames recentes para heurísticas
+            recent_frames.append(frame_resized)
+            if len(recent_frames) > expected_frames:
+                recent_frames.pop(0)
+            
+            # Adiciona ao seq_queue para modelo
+            seq_queue.append(frame_resized.astype(np.float32))
+            
+            processed_frames += 1
 
-                    # image input: choose representation matching expected dims
-                    if expected_frames > 1:
-                        # For sequence models, we'll build a 5D sequence batch using
-                        # the frames in seq_queue (or pad by repeating the last frame).
-                        try:
-                            seq_list = list(seq_queue)
-                            if len(seq_list) == 0:
-                                single_img = np.squeeze(input_data, axis=0)
-                                resized_single = cv2.resize((single_img * 127.5 + 127.5).astype(np.uint8), (expected_w, expected_h)).astype(np.float32)
-                                seq_list = [resized_single]
-                            # pad/trim to expected_frames
-                            if len(seq_list) < expected_frames:
-                                pad_base = seq_list[-1] if len(seq_list) > 0 else np.zeros((expected_h, expected_w, 3), dtype=np.float32)
-                                while len(seq_list) < expected_frames:
-                                    seq_list.insert(0, pad_base)
-                            elif len(seq_list) > expected_frames:
-                                seq_list = seq_list[-expected_frames:]
+            # === HEURÍSTICAS (rodam em paralelo ao modelo) ===
+            is_freeze, freeze_conf = _check_freeze(recent_frames)
+            is_fade, fade_conf = _check_fade(recent_frames)
+            is_blur, blur_conf = _check_blur(recent_frames)
 
-                            seq_arr = np.stack(seq_list, axis=0)  # (frames, H, W, C)
-                            seq_batch = np.expand_dims(seq_arr, axis=0).astype(np.float32)  # (1, frames, H, W, C)
-                            # If model expects rescaled inputs, apply same rescaling used elsewhere
-                            if not globals().get('keras_video_model_has_rescaling'):
-                                seq_batch = (seq_batch - 127.5) / 127.5
-                            img_for = seq_batch
-                        except Exception:
-                            img_for = input_data
-                    else:
-                        if globals().get('keras_video_model_has_rescaling') and raw_resized is not None:
-                            img_for = np.expand_dims(raw_resized, axis=0)
-                        else:
-                            img_for = input_data
+            # Registra detecções de heurísticas
+            if is_freeze:
+                heuristic_counts['freeze'] += 1
+                if heuristic_first_time['freeze'] is None:
+                    heuristic_first_time['freeze'] = current_time_s
+            if is_fade:
+                heuristic_counts['fade'] += 1
+                if heuristic_first_time['fade'] is None:
+                    heuristic_first_time['fade'] = current_time_s
+            if is_blur:
+                heuristic_counts['fora_de_foco'] += 1
+                if heuristic_first_time['fora_de_foco'] is None:
+                    heuristic_first_time['fora_de_foco'] = current_time_s
 
-                    # Build inputs in the order the model expects by inspecting model.inputs
-                    try:
-                        ordered_inputs = []
-                        for inp in model.inputs:
-                            in_name = getattr(inp, 'name', '') or ''
-                            lname = in_name.lower()
-                            shape = getattr(inp, 'shape', None)
-                            # Heuristics to match input by name or shape
-                            if 'motion' in lname:
-                                ordered_inputs.append(motion_arr)
-                            elif 'brightness' in lname or 'bright' in lname:
-                                ordered_inputs.append(bright_arr)
-                            elif ('image' in lname) or ('input' in lname) or (shape is not None and len(shape) == 4):
-                                ordered_inputs.append(img_for)
-                            else:
-                                # Fallback: if input expects a scalar / 1D vector, try brightness/motion
-                                if shape is not None and len(shape) == 2:
-                                    ordered_inputs.append(motion_arr)
-                                else:
-                                    ordered_inputs.append(img_for)
-
-                        # Debug: print shapes of ordered inputs to help diagnose shape mismatches
-                        try:
-                            shapes = []
-                            for o in ordered_inputs:
-                                try:
-                                    shapes.append(getattr(o, 'shape', None))
-                                except Exception:
-                                    shapes.append(None)
-                            print(f"DEBUG: Calling model.predict with ordered input shapes: {shapes}")
-                        except Exception:
-                            pass
-                        preds = model.predict(ordered_inputs, verbose=0)
-                    except Exception:
-                        # As a last resort try dict mapping by common keys, then single-input
-                        try:
-                            preds = model.predict({'image': img_for, 'motion': motion_arr, 'brightness': bright_arr}, verbose=0)
-                        except Exception:
-                            try:
-                                preds = model.predict([img_for, motion_arr, bright_arr], verbose=0)
-                            except Exception:
-                                # If model expects a sequence (5D) but we have only a single frame,
-                                # build a padded sequence by repeating the current frame until expected_frames.
-                                try:
-                                    if expected_frames > 1:
-                                        # form sequence elements consistent with what we appended to seq_queue
-                                        base = img_for if isinstance(img_for, np.ndarray) else np.asarray(img_for)
-                                        elems = [base.squeeze(0) for _ in range(expected_frames)]
-                                        seq_arr = np.stack(elems, axis=0)
-                                        seq_batch = np.expand_dims(seq_arr, axis=0).astype(np.float32)
-                                        preds = run_keras_sequence_inference(model, seq_batch, MODEL_CLASSES)
-                                        # run_keras_sequence_inference returns (class, conf) so coerce
-                                        if isinstance(preds, tuple) and len(preds) == 2:
-                                            pred_class, confidence = preds
-                                            preds = np.zeros((1, len(MODEL_CLASSES)), dtype=np.float32)
-                                            try:
-                                                idx = MODEL_CLASSES.index(pred_class)
-                                                preds[0, idx] = confidence
-                                            except Exception:
-                                                pass
-                                    else:
-                                        # If model expects sequences but img_for is a single 4D frame,
-                                        # coerce to a padded 5D sequence batch to avoid shape errors.
-                                        if expected_frames > 1 and isinstance(img_for, np.ndarray) and img_for.ndim == 4:
-                                            try:
-                                                base = img_for.squeeze(0)
-                                                elems = [base for _ in range(expected_frames)]
-                                                seq_arr = np.stack(elems, axis=0)
-                                                seq_batch = np.expand_dims(seq_arr, axis=0).astype(np.float32)
-                                                if not globals().get('keras_video_model_has_rescaling'):
-                                                    seq_batch = (seq_batch - 127.5) / 127.5
-                                                preds = model.predict(seq_batch, verbose=0)
-                                            except Exception:
-                                                preds = model.predict(img_for, verbose=0)
-                                        else:
-                                            preds = model.predict(img_for, verbose=0)
-                                except Exception:
-                                    # Same safeguard in the outer fallback: coerce 4D->5D when needed
-                                    if expected_frames > 1 and isinstance(img_for, np.ndarray) and img_for.ndim == 4:
-                                        try:
-                                            base = img_for.squeeze(0)
-                                            elems = [base for _ in range(expected_frames)]
-                                            seq_arr = np.stack(elems, axis=0)
-                                            seq_batch = np.expand_dims(seq_arr, axis=0).astype(np.float32)
-                                            if not globals().get('keras_video_model_has_rescaling'):
-                                                seq_batch = (seq_batch - 127.5) / 127.5
-                                            preds = model.predict(seq_batch, verbose=0)
-                                        except Exception:
-                                            preds = model.predict(img_for, verbose=0)
-                                    else:
-                                        preds = model.predict(img_for, verbose=0)
-                else:
-                    # simple single-input model
-                    if globals().get('keras_video_model_has_rescaling') and raw_resized is not None:
-                        img_for = np.expand_dims(raw_resized, axis=0)
-                    else:
-                        img_for = input_data
-                    # If the model is a single-input sequence model (expects 5D),
-                    # coerce the single-frame img_for into a padded 5D sequence batch.
-                    try:
-                        if expected_frames > 1 and isinstance(img_for, np.ndarray) and img_for.ndim == 4:
-                            try:
-                                # attempt to use recent seq_queue if available
-                                seq_list = list(seq_queue) if 'seq_queue' in locals() else []
-                                if len(seq_list) == 0:
-                                    base = img_for.squeeze(0)
-                                    seq_list = [base]
-                                # pad/trim
-                                if len(seq_list) < expected_frames:
-                                    pad_base = seq_list[-1] if len(seq_list) > 0 else np.zeros((expected_h, expected_w, 3), dtype=np.float32)
-                                    while len(seq_list) < expected_frames:
-                                        seq_list.insert(0, pad_base)
-                                elif len(seq_list) > expected_frames:
-                                    seq_list = seq_list[-expected_frames:]
-                                seq_arr = np.stack(seq_list, axis=0)
-                                seq_batch = np.expand_dims(seq_arr, axis=0).astype(np.float32)
-                                if not globals().get('keras_video_model_has_rescaling'):
-                                    seq_batch = (seq_batch - 127.5) / 127.5
-                                img_for = seq_batch
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-                    preds = model.predict(img_for)
-
+            # === MODELO DE DEEP LEARNING ===
+            model_class = 'normal'
+            model_conf = 0.0
+            
+            try:
+                # Prepara sequência para o modelo
+                seq_list = list(seq_queue)
+                if len(seq_list) < expected_frames:
+                    pad_frame = seq_list[-1] if seq_list else np.zeros((expected_h, expected_w, 3), dtype=np.float32)
+                    while len(seq_list) < expected_frames:
+                        seq_list.insert(0, pad_frame)
+                
+                seq_arr = np.stack(seq_list, axis=0)
+                seq_batch = np.expand_dims(seq_arr, axis=0).astype(np.float32)
+                
+                # Normalização MobileNetV2
+                if not globals().get('keras_video_model_has_rescaling'):
+                    seq_batch = (seq_batch - 127.5) / 127.5
+                
+                # Inferência
+                preds = model.predict(seq_batch, verbose=0)
                 scores = np.array(preds[0], dtype=np.float32)
                 probs = _apply_softmax(scores)
                 idx = int(np.argmax(probs))
-                confidence = float(probs[idx])
-                pred_class = MODEL_CLASSES[idx] if idx < len(MODEL_CLASSES) else f"idx_{idx}"
-                # Guard against cases where the video model outputs labels
-                # that belong to the audio label set (e.g. 'ausencia_audio').
-                # For the video pipeline we only care about visual faults
-                # (freeze/fade/fora_foco). If the predicted class is not one
-                # of the expected video classes, treat it as 'normal' so that
-                # audio-only labels do not cause visual occurrences.
-                try:
-                    expected_video = [c.lower() for c in VIDEO_CLASSES]
-                    if str(pred_class).lower() not in expected_video and str(pred_class).lower() != 'normal':
-                        pred_class = 'normal'
-                        confidence = 0.0
-                except Exception:
-                    pass
+                model_conf = float(probs[idx])
+                model_class = VIDEO_CLASSES[idx] if idx < len(VIDEO_CLASSES) else 'normal'
+                
             except Exception as e:
-                print(f"ERRO durante inferência Keras no loop de frames: {e}")
-                traceback.print_exc()
-                pred_class, confidence = 'Erro_Inferência', 0.0
-            processed_frames += 1
+                print(f"ERRO na inferência do modelo: {e}")
+                model_class = 'normal'
+                model_conf = 0.0
 
-            # Combine heuristics with model prediction
-            effective_conf = confidence
-            # If heuristic strongly indicates a condition, boost confidence or override
-            # Blur detection: use either low Laplacian variance OR low edge density
-            blur_thresh = float(core_settings.VIDEO_BLUR_VAR_THRESHOLD)
-            edge_thresh = float(getattr(core_settings, 'VIDEO_EDGE_DENSITY_THRESHOLD', 0.015))
-            is_blur_by_var = (blur_var < blur_thresh)
-            is_blur_by_edges = (edge_density < edge_thresh)
-            if is_blur_by_var or is_blur_by_edges:
-                # If model also predicted blur-like class increase confidence
-                lc = pred_class.lower()
-                if 'fora_foco' in lc or 'fora' in lc or 'borr' in lc:
-                    effective_conf = max(effective_conf, 0.85)
-                else:
-                    # If model didn't predict blur but heuristic strong, propose 'fora_foco' with mid confidence
-                    effective_conf = max(effective_conf, 0.75)
-                    pred_class = 'fora_foco'
-                # debug print for heuristic triggers (helpful during tuning)
-                try:
-                    print(f"DEBUG: Blur heuristic triggered (var={blur_var:.1f} edge_density={edge_density:.4f}) -> pred={pred_class} eff_conf={effective_conf:.3f}")
-                except Exception:
-                    pass
-                blur_support += 1
-                try:
-                    # capture first supporting time
-                    if first_blur_time is None:
-                        ms_tmp = cap.get(cv2.CAP_PROP_POS_MSEC)
-                        first_blur_time = float(ms_tmp) / 1000.0 if ms_tmp is not None else None
-                except Exception:
-                    pass
+            # === LÓGICA DE DECISÃO (ENSEMBLE) ===
+            final_class = model_class
+            final_conf = model_conf
+            method = "model"
 
-            # Freeze (low motion) -> prefer 'freeze'
-            motion_thresh = float(core_settings.VIDEO_MOTION_THRESHOLD)
-            if motion != float('inf') and motion < motion_thresh:
-                if 'freeze' in pred_class.lower():
-                    effective_conf = max(effective_conf, 0.85)
-                else:
-                    effective_conf = max(effective_conf, 0.8)
-                    pred_class = 'freeze'
-                freeze_support += 1
-                try:
-                    if first_freeze_time is None:
-                        ms_tmp = cap.get(cv2.CAP_PROP_POS_MSEC)
-                        first_freeze_time = float(ms_tmp) / 1000.0 if ms_tmp is not None else None
-                except Exception:
-                    pass
+            # OVERRIDE HEURÍSTICO: Heurísticas têm prioridade em casos óbvios
+            # Se heurística detectou fade (tela preta), SEMPRE usar heurística
+            # porque é um caso óbvio que não precisa de modelo
+            if is_fade:
+                final_class = 'fade'
+                final_conf = max(fade_conf, 0.90)
+                method = "heuristic_override"
+            # Para freeze/blur, só override se modelo não tem certeza
+            elif model_class == 'normal' and model_conf < MODEL_OVERRIDE_THRESHOLD:
+                if is_freeze:
+                    final_class = 'freeze'
+                    final_conf = max(freeze_conf, 0.85)
+                    method = "heuristic_override"
+                elif is_blur:
+                    final_class = 'fora_de_foco'
+                    final_conf = max(blur_conf, 0.80)
+                    method = "heuristic_override"
 
-            # Fade detection: sustained low brightness or a sudden drop relative
-            # to a short moving-average window is considered a 'fade' (tela
-            # preta/escurecimento). We use both an absolute low threshold and a
-            # relative drop ratio to catch quick fades.
-            try:
-                brightness_window.append(brightness)
-                avg_brightness = float(sum(brightness_window) / len(brightness_window)) if len(brightness_window) > 0 else float(brightness)
-            except Exception:
-                avg_brightness = float(brightness)
-
-            bright_low = float(core_settings.VIDEO_BRIGHTNESS_LOW)
-            drop_ratio_thr = float(getattr(core_settings, 'VIDEO_BRIGHTNESS_DROP_RATIO', 0.5))
-            # relative drop (how much current brightness dropped vs recent average)
-            try:
-                drop_ratio = (avg_brightness - brightness) / (avg_brightness + 1e-9)
-            except Exception:
-                drop_ratio = 0.0
-
-            is_fade_by_low = (brightness < bright_low)
-            is_fade_by_drop = (avg_brightness > 1.0 and drop_ratio >= drop_ratio_thr)
-
-            if is_fade_by_low or is_fade_by_drop:
-                # If model already predicted 'fade', boost strongly; otherwise set
-                # pred_class to 'fade' and give it a high effective confidence so
-                # it will be preferred by aggregation/voting.
-                if 'fade' in pred_class.lower():
-                    effective_conf = max(effective_conf, 0.95)
-                else:
-                    # stronger boost for relative drop (sudden fade)
-                    if is_fade_by_drop:
-                        effective_conf = max(effective_conf, 0.92)
-                    else:
-                        effective_conf = max(effective_conf, 0.85)
-                    pred_class = 'fade'
-
-                fade_support += 1
-                if is_fade_by_drop:
-                    fade_drop_detected = True
-                try:
-                    if first_fade_time is None:
-                        ms_tmp = cap.get(cv2.CAP_PROP_POS_MSEC)
-                        first_fade_time = float(ms_tmp) / 1000.0 if ms_tmp is not None else None
-                except Exception:
-                    pass
-                try:
-                    print(f"DEBUG: Fade heuristic triggered (bright={brightness:.1f} avg={avg_brightness:.1f} drop_ratio={drop_ratio:.3f}) -> pred={pred_class} eff_conf={effective_conf:.3f}")
-                except Exception:
-                    pass
-
-            # Estratégia: Guarda a falha (não-normal) com maior confiança efetiva
-            if pred_class != 'normal' and effective_conf > max_confidence:
-                max_confidence = effective_conf
-                best_fault_class = pred_class
-                # pega o tempo atual do vídeo em ms
-                try:
-                    ms = cap.get(cv2.CAP_PROP_POS_MSEC)
-                    event_time_s = float(ms) / 1000.0 if ms is not None else None
-                except Exception:
-                    event_time_s = None
-            elif best_fault_class == 'normal' and pred_class == 'normal' and confidence > max_confidence:
-                max_confidence = confidence # Guarda a maior confiança do 'normal'
-
-            # update prev_gray
-            try:
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                prev_gray = cv2.resize(gray, (INPUT_WIDTH, INPUT_HEIGHT))
-            except Exception:
-                prev_gray = None
+            # Registra predição
+            model_predictions.append({
+                'class': final_class,
+                'confidence': final_conf,
+                'time': current_time_s,
+                'method': method,
+                'heuristics': {'freeze': is_freeze, 'fade': is_fade, 'blur': is_blur}
+            })
 
         cap.release()
-        # If heuristics show consistent evidence (N-of-M) prefer that class even
-        # if aggregated model confidences were lower. This helps deterministic
-        # detection for blur/fade/freeze when the frame-level model is noisy.
-        try:
-            vote_k = int(core_settings.VIDEO_VOTE_K)
-        except Exception:
-            vote_k = 2
 
-        # prefer heuristics if they triggered on at least vote_k samples.
-        # When tied, prefer a detected FADE if any frame had a sudden drop; otherwise
-        # prefer freeze over blur because frozen frames often have near-zero motion
-        # while blur can be noisy when frames are black or low-contrast.
-        max_support = max(blur_support, fade_support, freeze_support)
-        if max_support >= vote_k:
-            # decide winner by support counts with tie-breaker that prefers fade drops
-            if fade_support == max_support or (fade_drop_detected and fade_support > 0):
-                chosen = 'fade'
-                ts = first_fade_time
-            elif freeze_support == max_support:
-                chosen = 'freeze'
-                ts = first_freeze_time
-            elif blur_support == max_support:
-                chosen = 'fora_foco'
-                ts = first_blur_time
+        # === AGREGAÇÃO FINAL ===
+        # Conta votos por classe
+        class_votes = {}
+        for pred in model_predictions:
+            cls = pred['class']
+            class_votes[cls] = class_votes.get(cls, 0) + 1
+
+        # Encontra a classe dominante (excluindo 'normal')
+        best_fault_class = 'normal'
+        best_fault_confidence = 0.0
+        best_fault_time = None
+
+        fault_classes = {k: v for k, v in class_votes.items() if k != 'normal'}
+        
+        if fault_classes:
+            # Classe com mais votos
+            dominant_class = max(fault_classes, key=fault_classes.get)
+            dominant_count = fault_classes[dominant_class]
+            
+            # Separa predições por método
+            class_preds = [p for p in model_predictions if p['class'] == dominant_class]
+            heuristic_preds = [p for p in class_preds if p.get('method') == 'heuristic_override']
+            model_preds = [p for p in class_preds if p.get('method') != 'heuristic_override']
+            
+            # Se há muitas detecções de heurística (>= 2 segundos), usar confiança da heurística
+            if len(heuristic_preds) >= 4:
+                # Usa a máxima confiança das heurísticas - tela preta deve ser ~1.0
+                max_heuristic_conf = np.max([p['confidence'] for p in heuristic_preds])
+                avg_heuristic_conf = np.mean([p['confidence'] for p in heuristic_preds])
+                # 80% máx + 20% média para manter alta confiança
+                combined_conf = 0.8 * max_heuristic_conf + 0.2 * avg_heuristic_conf
+            elif len(heuristic_preds) > 0:
+                # Algumas detecções de heurística - média ponderada
+                max_conf = np.max([p['confidence'] for p in class_preds])
+                avg_conf = np.mean([p['confidence'] for p in class_preds])
+                combined_conf = 0.6 * max_conf + 0.4 * avg_conf
             else:
-                # fallback safety
-                chosen = 'fora_foco'
-                ts = first_blur_time
-            # override previous best if heuristics are convincing
-            best_fault_class = chosen
-            # boost confidence to ensure heuristics dominate when convincing
-            max_confidence = max(max_confidence, 0.85 if chosen == 'fade' else 0.80)
-            if ts is not None:
-                event_time_s = event_time_s or ts
+                # Só modelo - usa média simples
+                combined_conf = np.mean([p['confidence'] for p in class_preds])
+            
+            # Verifica se passa na regra de duração mínima (2 segundos)
+            # Cada frame é ~0.5s com sample_rate_hz=2.0, então 4 frames = 2s
+            min_frames_for_error = max(1, int(MIN_ERROR_DURATION_S * sample_rate_hz))
+            
+            if dominant_count >= min_frames_for_error or combined_conf > 0.90:
+                best_fault_class = dominant_class
+                best_fault_confidence = combined_conf
+                # Pega o primeiro tempo de detecção
+                first_detection = next((p for p in model_predictions if p['class'] == dominant_class), None)
+                best_fault_time = first_detection['time'] if first_detection else None
+        
+        # Se não encontrou falha, retorna normal
+        if best_fault_class == 'normal':
+            normal_preds = [p for p in model_predictions if p['class'] == 'normal']
+            best_fault_confidence = np.mean([p['confidence'] for p in normal_preds]) if normal_preds else 0.5
 
-        print(f"DEBUG: Vídeo - {processed_frames} frames processados ({frames_read} lidos). Resultado: {best_fault_class} ({max_confidence:.4f}) time={event_time_s} (supports blur={blur_support} fade={fade_support} freeze={freeze_support})")
-        return best_fault_class, max_confidence, event_time_s
+        # Debug
+        debug_heuristics = {k: v for k, v in heuristic_counts.items() if v > 0}
+        print(f"DEBUG: Vídeo - {processed_frames} frames processados ({frames_read} lidos). "
+              f"Resultado: {best_fault_class} ({best_fault_confidence:.4f}) time={best_fault_time} "
+              f"(heuristics: {debug_heuristics})")
+
+        return best_fault_class, best_fault_confidence, best_fault_time
 
     except Exception as e:
         print(f"ERRO durante análise de frames de vídeo ({file_path}): {e}")
@@ -1285,7 +1424,7 @@ def analyze_video_frames(file_path: str, sample_rate_hz: float = 2.0) -> Tuple[s
 def run_audio_inference_single_segment(input_data: np.ndarray) -> Tuple[str, float]:
     """ Roda inferência em um único segmento de áudio pré-processado. """
     if globals().get('keras_audio_model') is not None:
-        return run_keras_inference(globals().get('keras_audio_model'), input_data, MODEL_CLASSES)
+        return run_keras_inference(globals().get('keras_audio_model'), input_data, AUDIO_CLASSES)
     raise RuntimeError("Modelo de áudio Keras não carregado. Por favor coloque 'audio_model_finetune.keras' ou 'audio_model_finetune.h5' em backend/app/ml/models/.")
 
 def run_video_inference_single_frame(input_data: np.ndarray) -> Tuple[str, float]:
@@ -1357,7 +1496,7 @@ def analyze_video_frames_diagnostic(file_path: str, k: int = 3, sample_rate_hz: 
                 indices = np.argsort(probs)[::-1]
                 top = []
                 for i in indices[:max(1, k)]:
-                    name = MODEL_CLASSES[i] if i < len(MODEL_CLASSES) else f"idx_{i}"
+                    name = VIDEO_CLASSES[i] if i < len(VIDEO_CLASSES) else f"idx_{i}"
                     top.append((name, float(probs[i])))
                 output_len = int(scores.shape[0])
             except Exception:

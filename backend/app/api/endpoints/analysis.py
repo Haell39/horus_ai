@@ -184,13 +184,15 @@ async def upload_analysis(
         # to avoid unnecessary work and to ensure audio cannot influence
         # detection decisions.
         audio_class, audio_conf = 'normal', 0.0
+        audio_event_time = None
+        audio_event_end_time = None
         try:
             if not bool(core_settings.VIDEO_DISABLE_AUDIO_PROCESSING):
-                        # analyze_audio_segments now returns (class, confidence, event_time_s)
+                        # analyze_audio_segments now returns (class, confidence, start_time, end_time)
                 try:
-                    audio_class, audio_conf, audio_event_time = inference.analyze_audio_segments(clip_path)
+                    audio_class, audio_conf, audio_event_time, audio_event_end_time = inference.analyze_audio_segments(clip_path)
                 except Exception:
-                    audio_class, audio_conf, audio_event_time = 'normal', 0.0, None
+                    audio_class, audio_conf, audio_event_time, audio_event_end_time = 'normal', 0.0, None, None
         except Exception:
             audio_class, audio_conf = 'normal', 0.0
 
@@ -293,59 +295,51 @@ async def upload_analysis(
         except Exception:
             audio_thresh = float(core_settings.AUDIO_THRESH_DEFAULT)
 
-        # prefer audio if stronger. Two conditions to promote audio:
-        # 1) audio_conf >= audio_thresh (strong enough on its own)
-        # 2) or audio_conf is significantly higher than video (delta) and reasonably confident
-        # This helps cases where audio identifies 'freeze' but both are below global env thresholds.
+        # === LÓGICA DE DECISÃO EQUILIBRADA: MAIOR CONFIANÇA VENCE ===
+        # Regra simples e justa: quem tem maior confiança decide.
+        # Isso funciona porque:
+        # - Erros óbvios (fade, freeze real, hiss forte) têm alta confiança
+        # - Falsos positivos (câmera parada, ruído baixo) têm confiança menor
+        
         try:
-            # Audio strong-evidence override (applies even if VIDEO_ALLOW_AUDIO_OVERRIDE is False):
-            # - If audio_conf > video_conf and audio_conf >= 0.90:
-            #   * If audio_class != 'normal' => audio error prevails
-            #   * If audio_class == 'normal' => only suppress a visual error when the
-            #     video's confidence is weak (<= 0.75)
-            try:
-                audio_conf_val = float(audio_conf or 0.0)
-            except Exception:
-                audio_conf_val = 0.0
-
-            try:
-                video_conf_val = float(final_confidence or 0.0)
-            except Exception:
-                video_conf_val = 0.0
-
-            try:
-                if audio_class and audio_conf_val > video_conf_val and audio_conf_val >= 0.90:
-                    if str(audio_class).lower() != 'normal':
-                        # strong audio error wins
-                        final_pred_class = audio_class
-                        final_confidence = float(audio_conf_val)
-                    else:
-                        # strong audio normal: only suppress weak visual faults
-                        if str(video_pred).lower() != 'normal' and video_conf_val <= 0.75:
-                            final_pred_class = 'normal'
-                            final_confidence = float(audio_conf_val)
-                        else:
-                            # keep video decision
-                            pass
-                else:
-                    # Fallback to legacy VIDEO_ALLOW_AUDIO_OVERRIDE behavior when enabled
-                    if bool(core_settings.VIDEO_ALLOW_AUDIO_OVERRIDE):
-                        if audio_class and (audio_conf or 0.0) > final_confidence:
-                            delta = (audio_conf or 0.0) - final_confidence
-                            if (audio_conf or 0.0) >= float(audio_thresh) or (delta >= 0.04 and (audio_conf or 0.0) >= max(0.55, float(audio_thresh) - 0.05)):
-                                final_pred_class = audio_class
-                                final_confidence = float(audio_conf or 0.0)
-                    else:
-                        # Audio override disabled: keep video decision but log for debug
-                        if audio_class and (audio_conf or 0.0) > final_confidence:
-                            try:
-                                print(f"DEBUG: Audio override suppressed (audio={audio_class} conf={audio_conf:.3f}) by VIDEO_ALLOW_AUDIO_OVERRIDE=False")
-                            except Exception:
-                                pass
-            except Exception:
-                pass
+            audio_conf_val = float(audio_conf or 0.0)
         except Exception:
+            audio_conf_val = 0.0
+
+        try:
+            video_conf_val = float(final_confidence or 0.0)
+        except Exception:
+            video_conf_val = 0.0
+
+        video_is_error = str(video_pred).lower() != 'normal' if video_pred else False
+        audio_is_error = str(audio_class).lower() != 'normal' if audio_class else False
+        
+        # Threshold mínimo para considerar detecção válida
+        MIN_CONFIDENCE = 0.70
+        
+        # Decisão baseada em confiança:
+        # 1. Se ambos detectam erro → usar o de MAIOR confiança
+        # 2. Se só vídeo detecta erro (conf >= MIN) → usar vídeo
+        # 3. Se só áudio detecta erro (conf >= MIN) → usar áudio  
+        # 4. Se ambos normais → normal
+        
+        if video_is_error and audio_is_error:
+            # Ambos detectaram erro - usar o de maior confiança
+            if audio_conf_val > video_conf_val:
+                final_pred_class = audio_class
+                final_confidence = float(audio_conf_val)
+                print(f"DEBUG: Decisão por confiança: áudio ({audio_class}={audio_conf_val:.2f}) > vídeo ({video_pred}={video_conf_val:.2f})")
+            else:
+                # Manter vídeo (já está setado)
+                print(f"DEBUG: Decisão por confiança: vídeo ({video_pred}={video_conf_val:.2f}) >= áudio ({audio_class}={audio_conf_val:.2f})")
+        elif video_is_error and video_conf_val >= MIN_CONFIDENCE:
+            # Só vídeo detectou erro válido - manter vídeo
             pass
+        elif audio_is_error and audio_conf_val >= MIN_CONFIDENCE:
+            # Só áudio detectou erro válido - usar áudio
+            final_pred_class = audio_class
+            final_confidence = float(audio_conf_val)
+        # else: ambos normal ou confiança muito baixa - manter vídeo (normal)
 
         now = datetime.now(timezone.utc)
 
@@ -373,19 +367,19 @@ async def upload_analysis(
             try:
                 if audio_class and str(audio_class).lower() != 'normal' and float(audio_conf or 0.0) >= float(audio_thresh):
                     # create an audio occurrence and return it. Trim clip around
-                    # the detected audio event (±1s) and cap to MAX_CLIP_S.
+                    # the detected audio event range (start to end) with small margin.
                     dur_calc, severity = calcular_severidade_e_duracao(clip_path)
                     now = datetime.now(timezone.utc)
 
-                    # compute trimming window using audio_event_time when available
+                    # compute trimming window using audio_event_time range when available
                     try:
                         full_dur = _get_duration_seconds(clip_path) or dur_calc or 0.0
                     except Exception:
                         full_dur = dur_calc or 0.0
 
-                    # default margins
-                    pre_s = 1.0
-                    post_s = 1.0
+                    # margins before start and after end
+                    pre_margin_s = 1.0
+                    post_margin_s = 1.0
                     max_clip_s = 65.0
 
                     # default to copying whole clip if no event time
@@ -395,14 +389,17 @@ async def upload_analysis(
                         os.makedirs(public_clips_dir, exist_ok=True)
 
                         if audio_event_time is not None:
-                            start_s = max(0.0, float(audio_event_time) - pre_s)
-                            end_s = min(float(full_dur), float(audio_event_time) + post_s)
+                            # Use full error range: start to end (with margins)
+                            error_start = float(audio_event_time)
+                            error_end = float(audio_event_end_time) if audio_event_end_time is not None else (error_start + 3.0)
+                            
+                            start_s = max(0.0, error_start - pre_margin_s)
+                            end_s = min(float(full_dur), error_end + post_margin_s)
+                            
                             # enforce max length
                             if (end_s - start_s) > max_clip_s:
-                                # center window around event_time
-                                half = max_clip_s / 2.0
-                                start_s = max(0.0, float(audio_event_time) - half)
-                                end_s = min(full_dur, start_s + max_clip_s)
+                                # truncate to max, keeping start
+                                end_s = start_s + max_clip_s
 
                             base = os.path.splitext(os.path.basename(clip_path))[0]
                             out_name = f"{base}_audio_trim_{uid}.mp4"
@@ -465,7 +462,7 @@ async def upload_analysis(
                             # attach diagnostic info in the inline response for convenience
                             out = db_oc.__dict__
                             out['diagnostic'] = diag
-                            out['audio_debug'] = {'class': audio_class, 'confidence': float(audio_conf or 0.0), 'event_time_s': audio_event_time}
+                            out['audio_debug'] = {'class': audio_class, 'confidence': float(audio_conf or 0.0), 'event_start_s': audio_event_time, 'event_end_s': audio_event_end_time}
                             return _sanitize_for_json(out)
                         # return a serializable dict instead of ORM object
                         try:
@@ -490,7 +487,7 @@ async def upload_analysis(
             out = {'status': 'ok', 'message': msg, 'prediction': {'class': final_pred_class, 'confidence': float(final_confidence or 0.0)}}
             if debug:
                 out['diagnostic'] = diag
-                out['audio_debug'] = {'class': audio_class, 'confidence': float(audio_conf or 0.0)}
+                out['audio_debug'] = {'class': audio_class, 'confidence': float(audio_conf or 0.0), 'event_start_s': audio_event_time, 'event_end_s': audio_event_end_time}
             return _sanitize_for_json(out)
 
         # Otherwise, create occurrence and save evidence
@@ -499,8 +496,45 @@ async def upload_analysis(
         default_pre_s = 1.0
         default_post_s = 1.0
         MAX_CLIP_S = 65.0
+        
+        # Determine which event times to use based on final decision
+        # If audio won the decision, use audio event times for trimming
+        use_audio_times = (final_pred_class and audio_class and 
+                          final_pred_class.lower() == audio_class.lower() and 
+                          audio_event_time is not None)
+        
         try:
-            if event_time is not None:
+            if use_audio_times:
+                # Audio venceu - usar tempos de áudio para o corte
+                event_start = float(audio_event_time)
+                event_end = float(audio_event_end_time) if audio_event_end_time is not None else (event_start + 3.0)
+                
+                print(f"DEBUG: Usando tempos de ÁUDIO para corte: start={event_start}s end={event_end}s")
+                
+                # compute cut bounds with margins
+                start = max(0.0, event_start - default_pre_s)
+                desired_end = event_end + default_post_s
+                duration_cut = max(0.1, desired_end - start)
+
+                # cap overall clip length
+                if duration_cut > MAX_CLIP_S:
+                    start = max(0.0, desired_end - MAX_CLIP_S)
+                    duration_cut = MAX_CLIP_S
+
+                ext = os.path.splitext(clip_path)[1] or '.mp4'
+                dest_name = f"clip_{uid}_audio_cut{ext}"
+                dest_path = os.path.join(storage_core.get_clips_dir(), dest_name)
+                try:
+                    subprocess.run([
+                        'ffmpeg', '-y', '-ss', f"{start}", '-t', f"{duration_cut}", '-i', clip_path, '-c', 'copy', dest_path
+                    ], check=True, capture_output=True, timeout=60)
+                    clip_to_save = dest_path
+                    print(f"DEBUG: Clip de áudio cortado: {start}s a {start+duration_cut}s")
+                except Exception as e:
+                    print(f"DEBUG: Falha ao cortar clip de áudio: {e}")
+                    clip_to_save = clip_path
+                    
+            elif event_time is not None:
                 # Try to infer precise event start/end times from per-frame diagnostics when available
                 event_start = None
                 event_end = None
@@ -911,11 +945,12 @@ async def upload_analysis(
                 audio_class = 'normal'
                 audio_conf = 0.0
                 audio_event_time = None
+                audio_event_end_time = None
                 try:
                     if not bool(core_settings.VIDEO_DISABLE_AUDIO_PROCESSING):
-                        audio_class, audio_conf, audio_event_time = inference.analyze_audio_segments(clip_to_save)
+                        audio_class, audio_conf, audio_event_time, audio_event_end_time = inference.analyze_audio_segments(clip_to_save)
                 except Exception:
-                    audio_class, audio_conf, audio_event_time = 'normal', 0.0, None
+                    audio_class, audio_conf, audio_event_time, audio_event_end_time = 'normal', 0.0, None, None
 
                 # Determine audio threshold
                 try:
@@ -948,7 +983,8 @@ async def upload_analysis(
                             'original_filename': clip_name_local,
                             'audio_pred': audio_class,
                             'audio_confidence': float(audio_conf or 0.0),
-                            'audio_event_time_s': audio_event_time,
+                            'audio_event_start_s': audio_event_time,
+                            'audio_event_end_s': audio_event_end_time,
                             'clip_duration_s': float(clip_dur or 0.0),
                         }
 

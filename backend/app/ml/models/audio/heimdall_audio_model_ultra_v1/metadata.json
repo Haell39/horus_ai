@@ -1,0 +1,33 @@
+{
+  "model_name": "Heimdall Audio Model Ultra V1",
+  "version": "Ultra_V1",
+  "author": "Heimdall AI",
+  "sample_rate": 22050,
+  "duration": 3.0,
+  "n_mels": 128,
+  "n_fft": 2048,
+  "hop_length": 512,
+  "fmax": 8000,
+  "input_shape": [
+    128,
+    128,
+    1
+  ],
+  "preprocessing": {
+    "type": "mel_spectrogram_fixed_norm",
+    "ref_db": 1.0,
+    "min_db": -80.0,
+    "max_db": 80.0,
+    "resize": [
+      128,
+      128
+    ]
+  },
+  "labels": [
+    "ausencia_audio",
+    "eco_reverb",
+    "ruido_hiss",
+    "sinal_teste",
+    "normal"
+  ]
+}

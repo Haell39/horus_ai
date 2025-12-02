@@ -18,7 +18,7 @@ from app.core import storage as storage_core
 
 
 class SRTIngestor:
-    def __init__(self, fps: float = 1.0, confidence_threshold: float = 0.6):
+    def __init__(self, fps: float = 4.0, confidence_threshold: float = 0.6):
         self.fps = fps
         self.confidence_threshold = confidence_threshold
         self._proc: Optional[subprocess.Popen] = None

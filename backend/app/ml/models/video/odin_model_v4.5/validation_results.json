@@ -1,0 +1,78 @@
+{
+  "total_errors": 7,
+  "detected": 7,
+  "detection_rate": 1.0,
+  "avg_iou": 0.6519593229145817,
+  "matches": [
+    {
+      "video": "unknown",
+      "error_type": "fade",
+      "gt_start": 3.0,
+      "gt_end": 6.0,
+      "pred_start": 3.0,
+      "pred_end": 7.25,
+      "iou": 0.7058823529411765,
+      "detected": true
+    },
+    {
+      "video": "unknown",
+      "error_type": "fade",
+      "gt_start": 7.0,
+      "gt_end": 16.0,
+      "pred_start": 6.5,
+      "pred_end": 18.0,
+      "iou": 0.782608695652174,
+      "detected": true
+    },
+    {
+      "video": "unknown",
+      "error_type": "freeze",
+      "gt_start": 6.0,
+      "gt_end": 12.0,
+      "pred_start": 6.75,
+      "pred_end": 13.75,
+      "iou": 0.6774193548387096,
+      "detected": true
+    },
+    {
+      "video": "unknown",
+      "error_type": "freeze",
+      "gt_start": 7.0,
+      "gt_end": 10.0,
+      "pred_start": 6.25,
+      "pred_end": 11.5,
+      "iou": 0.5714285714285714,
+      "detected": true
+    },
+    {
+      "video": "unknown",
+      "error_type": "fora_de_foco",
+      "gt_start": 2.0,
+      "gt_end": 6.0,
+      "pred_start": 4.75,
+      "pred_end": 6.75,
+      "iou": 0.2631578947368421,
+      "detected": true
+    },
+    {
+      "video": "unknown",
+      "error_type": "fora_de_foco",
+      "gt_start": 2.0,
+      "gt_end": 5.0,
+      "pred_start": 2.75,
+      "pred_end": 4.75,
+      "iou": 0.6666666666666666,
+      "detected": true
+    },
+    {
+      "video": "unknown",
+      "error_type": "fora_de_foco",
+      "gt_start": 0.0,
+      "gt_end": 7.0,
+      "pred_start": 0.5,
+      "pred_end": 7.25,
+      "iou": 0.896551724137931,
+      "detected": true
+    }
+  ]
+}

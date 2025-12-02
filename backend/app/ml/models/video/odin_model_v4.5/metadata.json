@@ -1,0 +1,13 @@
+{
+  "model_name": "horus_v4_5",
+  "type": "TimeDistributed_MobileNetV2_LSTM",
+  "input_shape": [null, 6, 192, 192, 3],
+  "classes": ["normal", "freeze", "fade", "fora_de_foco"],
+  "inference": {
+    "sequence_length": 6,
+    "img_size": [192, 192],
+    "fps": 4,
+    "step_size": 0.25
+  },
+  "notes": "Optimized for temporal precision (1.5s window). Class order differs from general spec."
+}

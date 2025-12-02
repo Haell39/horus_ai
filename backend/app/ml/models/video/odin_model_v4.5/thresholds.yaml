@@ -1,0 +1,6 @@
+freeze_diff_threshold: 2.0
+freeze_min_frames: 4
+fade_brightness_threshold: 15
+fade_min_frames: 3
+blur_sharpness_threshold: 130.0
+heuristic_override_threshold: 0.95
