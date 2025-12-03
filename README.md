@@ -1,147 +1,468 @@
-# Horus AI
+👁️ Horus AI
 
-## Resumo
+**Sistema Inteligente de Monitoramento e Detecção de Anomalias em Transmissões de Vídeo**
 
-Horus AI é uma aplicação de monitoramento em tempo real para ingestão de streams SRT, geração de HLS para visualização no navegador, execução de inferência leve com modelos TFLite e persistência de ocorrências em banco de dados. O projeto contém um backend (FastAPI) responsável pela ingestão, inferência e APIs, e um frontend (Angular) para visualização e monitoramento.
+---
 
-## O que há de novo / estado atual
+## 📋 Índice
 
-- Frontend: dashboard com páginas `Monitoramento` e `Dados`.
+- [Sobre o Projeto](#-sobre-o-projeto)
+- [Tecnologias Utilizadas](#-tecnologias-utilizadas)
+- [Pré-requisitos](#-pré-requisitos)
+- [Guia de Instalação Completo](#-guia-de-instalação-completo)
+- [Configuração](#-configuração)
+- [Executando o Projeto](#-executando-o-projeto)
+- [Uso do Sistema](#-uso-do-sistema)
+- [Estrutura do Projeto](#-estrutura-do-projeto)
+- [Troubleshooting](#-troubleshooting)
 
-  - `Monitoramento`: gráfico de séries temporais (backfilled + live via WebSocket) com deduplicação local para evitar double-counting de ocorrências reemitidas.
-  - `Dados`: gráficos adicionais (donut, top horizontal, "Ocorrências por Hora do Dia") e dois cartões KPI ("Total de Ocorrências" e "% Ocorrências Graves") com sparklines e delta comparativo.
-  - Tooltip do ApexCharts ajustado globalmente para tema escuro e marcadores (bolinhas) preservando as cores por severidade (X=Vermelho, A=Amarelo, B=Azul, C=Verde).
+---
 
-- Backend: FastAPI com endpoints para controlar ingest (start/stop/status), upload/analysis e WebSocket para broadcast de ocorrências. O backend também gera HLS e clips via ffmpeg.
+## 🎯 Sobre o Projeto
 
-## Estrutura principal
+O **Horus AI** é um sistema de monitoramento automatizado que detecta falhas técnicas em transmissões de vídeo ao vivo. Três modelos de machine learning analisam o stream simultaneamente — **vídeo**, **áudio** e **lipsync** — identificando anomalias e gerando alertas em tempo real.
 
-- `backend/` — FastAPI app, ML (TFLite), ingest de stream (ffmpeg), APIs e mount de arquivos estáticos.
+### Anomalias Detectadas
 
-  - `backend/app/streams/srt_reader.py` — controladora de ingest SRT → HLS + extractor de frames para inferência.
-  - `backend/app/api/endpoints/streams.py` — endpoints `start`/`stop`/`status` para ingest.
-  - `backend/app/api/endpoints/ws.py` — WebSocket para broadcast de ocorrências.
-  - `backend/app/ml/` — wrappers para carregar e executar modelos TFLite.
-  - `backend/static/hls/` — playlist e segmentos HLS gerados (ignorado pelo git).
-  - `backend/static/clips/` — clips gerados a partir de frames.
+| Tipo        | Anomalias                                                 |
+| ----------- | --------------------------------------------------------- |
+| **Vídeo**   | Freeze (congelamento), Fade (tela preta), Blur (desfoque) |
+| **Áudio**   | Ausência de som, Volume baixo, Ruído/Chiado, Eco/Reverb   |
+| **Lipsync** | Dessincronização entre áudio e vídeo                      |
 
-- `frontend/` — Angular app (NG v19), página `Monitoramento` que se conecta ao HLS e ao WebSocket; páginas adicionais em `frontend/src/app/pages`.
+### Principais Funcionalidades
 
-## Requisitos
+- ✅ Monitoramento de streams SRT em tempo real
+- ✅ Detecção automática de anomalias com IA (estratégia híbrida: heurísticas + ML)
+- ✅ Geração automática de clipes das falhas como evidência
+- ✅ Dashboard com estatísticas, gráficos e KPIs
+- ✅ Alertas em tempo real via WebSocket
+- ✅ Upload e análise de vídeos offline
+- ✅ Página de cortes para revisão e download de clipes
+- ✅ Exportação de relatórios em PDF
+- ✅ Acessibilidade com VLibras integrado
 
-- Windows ou Linux
-- Python 3.11+
-- Node.js + npm
-- ffmpeg disponível no PATH (necessário para SRT/HLS e geração de frames/clips)
-- Postgres (opcional, para persistência de ocorrências) — configurar `DATABASE_URL` no `.env`
+---
 
-## Quick Start (desenvolvimento) — PowerShell
+## 🛠 Tecnologias Utilizadas
 
-1. Backend
+### Backend
+
+| Tecnologia       | Versão | Uso                                      |
+| ---------------- | ------ | ---------------------------------------- |
+| Python           | 3.11+  | Linguagem principal                      |
+| FastAPI          | Latest | API REST e WebSocket                     |
+| SQLAlchemy       | Latest | ORM para banco de dados                  |
+| PostgreSQL       | 14+    | Banco de dados relacional                |
+| TensorFlow/Keras | 2.x    | Modelos de ML (vídeo e áudio)            |
+| TensorFlow Lite  | 2.x    | Modelo de Lipsync (quantizado)           |
+| OpenCV           | 4.x    | Processamento de vídeo e heurísticas     |
+| Librosa          | Latest | Processamento de áudio                   |
+| FFmpeg           | 5.0+   | Conversão SRT → HLS e extração de frames |
+
+### Frontend
+
+| Tecnologia | Versão | Uso                      |
+| ---------- | ------ | ------------------------ |
+| Angular    | 19     | Framework frontend       |
+| TypeScript | 5.x    | Linguagem                |
+| RxJS       | 7.8    | Programação reativa      |
+| ApexCharts | 3.54   | Gráficos e visualizações |
+| HLS.js     | Latest | Player de vídeo HLS      |
+| jsPDF      | 3.0    | Exportação de relatórios |
+
+---
+
+## 📦 Pré-requisitos
+
+Antes de começar, certifique-se de ter instalado:
+
+| Software       | Versão Mínima | Download                                               |
+| -------------- | ------------- | ------------------------------------------------------ |
+| **Python**     | 3.11+         | [python.org](https://www.python.org/downloads/)        |
+| **Node.js**    | 18+           | [nodejs.org](https://nodejs.org/)                      |
+| **PostgreSQL** | 14+           | [postgresql.org](https://www.postgresql.org/download/) |
+| **FFmpeg**     | 5.0+          | [ffmpeg.org](https://ffmpeg.org/download.html)         |
+| **Git**        | 2.0+          | [git-scm.com](https://git-scm.com/downloads)           |
+
+### Verificando as instalações
+
+**Windows (PowerShell):**
+
+```powershell
+python --version      # Python 3.11.x
+node --version        # v18.x.x ou superior
+npm --version         # 9.x.x ou superior
+psql --version        # psql (PostgreSQL) 14.x
+ffmpeg -version       # ffmpeg version 5.x
+git --version         # git version 2.x.x
+```
+
+**Linux/Mac (Bash):**
+
+```bash
+python3 --version
+node --version
+npm --version
+psql --version
+ffmpeg -version
+git --version
+```
+
+---
+
+## 🚀 Guia de Instalação Completo
+
+### Passo 1: Clonar o Repositório
+
+**Windows:**
+
+```powershell
+cd C:\Projetos
+git clone https://github.com/Haell39/horus_ai.git
+cd horus_ai
+```
+
+**Linux/Mac:**
+
+```bash
+cd ~/projetos
+git clone https://github.com/Haell39/horus_ai.git
+cd horus_ai
+```
+
+---
+
+### Passo 2: Configurar o Banco de Dados PostgreSQL
+
+#### Windows (pgAdmin ou psql)
+
+1. Abra o **pgAdmin** ou **SQL Shell (psql)**
+2. Execute os comandos:
+
+```sql
+CREATE USER horus_user WITH PASSWORD 'sua_senha_segura';
+CREATE DATABASE horus_db OWNER horus_user;
+GRANT ALL PRIVILEGES ON DATABASE horus_db TO horus_user;
+```
+
+#### Linux/Mac
+
+```bash
+sudo -u postgres psql
+```
+
+```sql
+CREATE USER horus_user WITH PASSWORD 'sua_senha_segura';
+CREATE DATABASE horus_db OWNER horus_user;
+GRANT ALL PRIVILEGES ON DATABASE horus_db TO horus_user;
+\q
+```
+
+---
+
+### Passo 3: Configurar o Backend
+
+#### 3.1 Criar ambiente virtual Python
+
+**Windows PowerShell:**
 
 ```powershell
 cd backend
-# criar e ativar venv (PowerShell)
-python -m venv .venv; .\.venv\Scripts\Activate.ps1
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+**Linux/Mac:**
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+#### 3.2 Instalar dependências
+
+```bash
+pip install --upgrade pip
 pip install -r requirements.txt
-# NOTA: NÃO use --reload ao testar ingest/ffmpeg/WS — o reload reinicia o processo Python e fecha subprocessos ffmpeg e sockets.
+```
+
+#### 3.3 Criar arquivo de configuração
+
+**Windows:**
+
+```powershell
+Copy-Item .env.example .env
+```
+
+**Linux/Mac:**
+
+```bash
+cp .env.example .env
+```
+
+#### 3.4 Editar o arquivo `.env`
+
+Abra `backend/.env` no seu editor e configure:
+
+```dotenv
+# === OBRIGATÓRIO: Conexão com PostgreSQL ===
+DATABASE_URL=postgresql://horus_user:sua_senha_segura@localhost:5432/horus_db
+
+# === OPCIONAL: URL do stream SRT (pode configurar depois na UI) ===
+SRT_STREAM_URL_GLOBO=srt://seu.servidor.srt:porta?mode=caller
+
+# === Configurações de Detecção (valores recomendados) ===
+VIDEO_VOTE_K=3
+VIDEO_MOVING_AVG_M=5
+VIDEO_DISABLE_AUDIO_PROCESSING=false
+VIDEO_ALLOW_AUDIO_OVERRIDE=false
+
+# === Thresholds de Áudio ===
+AUDIO_THRESH_DEFAULT=0.60
+AUDIO_THRESH_AUSENCIA_AUDIO=0.80
+AUDIO_THRESH_ECO_REVERB=0.85
+AUDIO_THRESH_RUIDO_HISS=0.80
+
+# === Thresholds de Vídeo ===
+VIDEO_THRESH_FREEZE=0.80
+VIDEO_THRESH_FADE=0.80
+VIDEO_THRESH_FORA_DE_FOCO=0.75
+
+# === Debounce para Stream (evita falsos positivos) ===
+STREAM_DEBOUNCE_DURATION_S=3.0
+STREAM_DEBOUNCE_GAP_S=25.0
+
+# === FPS dos Clipes Gerados ===
+CLIP_OUTPUT_FPS=15
+```
+
+---
+
+### Passo 4: Configurar o Frontend
+
+```bash
+cd ../frontend
+npm install
+```
+
+---
+
+### Passo 5: Verificar FFmpeg no PATH
+
+O FFmpeg deve estar acessível globalmente:
+
+```bash
+ffmpeg -version
+ffprobe -version
+```
+
+**Se não estiver no PATH:**
+
+- **Windows**: Adicione a pasta `bin` do FFmpeg em:
+  - Configurações → Sistema → Sobre → Configurações avançadas → Variáveis de Ambiente → Path
+- **Linux/Mac**: Adicione ao `~/.bashrc` ou `~/.zshrc`:
+  ```bash
+  export PATH=$PATH:/caminho/para/ffmpeg/bin
+  ```
+
+---
+
+## ▶️ Executando o Projeto
+
+### Execução para Desenvolvimento
+
+Abra **dois terminais**:
+
+#### Terminal 1 — Backend
+
+**Windows PowerShell:**
+
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-2. Frontend (dev server)
+**Linux/Mac:**
 
-```powershell
+```bash
+cd backend
+source .venv/bin/activate
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+> ⚠️ **IMPORTANTE**: NÃO use `--reload` ao testar streams! O reload reinicia o processo e fecha conexões FFmpeg/WebSocket.
+
+#### Terminal 2 — Frontend
+
+```bash
 cd frontend
-npm install
-npm start   # roda o ng serve (dev server, http://localhost:4200)
+npm start
 ```
 
-3. Testar endpoints
+---
 
-- Health:
+### Acessando o Sistema
+
+| Serviço                           | URL                                   |
+| --------------------------------- | ------------------------------------- |
+| **🖥️ Interface Web**              | http://localhost:4200                 |
+| **📡 API Backend**                | http://localhost:8000                 |
+| **📚 Documentação API (Swagger)** | http://localhost:8000/docs            |
+| **📺 Stream HLS**                 | http://localhost:8000/hls/stream.m3u8 |
+| **🔌 WebSocket**                  | ws://localhost:8000/ws/ocorrencias    |
+
+---
+
+## 📖 Uso do Sistema
+
+### Páginas Disponíveis
+
+| Página            | Descrição                                           |
+| ----------------- | --------------------------------------------------- |
+| **Monitoramento** | Player ao vivo + lista de ocorrências em tempo real |
+| **Dados**         | Dashboards com gráficos e estatísticas              |
+| **Cortes**        | Gerenciamento de clipes gerados                     |
+| **Configurações** | Ajustes do sistema                                  |
+
+### Iniciar/Parar Stream via API
 
 ```powershell
-Invoke-RestMethod -Method Get -Uri http://localhost:8000/
-```
-
-- Iniciar ingest (SRT → HLS):
-
-```powershell
-# substitua a URL SRT real
-$body = @{ url = 'srt://MEU.SRT.ENDPOINT:PORT?mode=caller&passphrase=...' ; fps = 1.0 } | ConvertTo-Json
+# Iniciar stream
+$body = @{ url = 'srt://servidor:porta?mode=caller'; fps = 1.0 } | ConvertTo-Json
 Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/v1/streams/start -Body $body -ContentType 'application/json'
-```
 
-- Parar ingest:
-
-```powershell
+# Parar stream
 Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/v1/streams/stop
-```
 
-- Status:
-
-```powershell
+# Verificar status
 Invoke-RestMethod -Method Get -Uri http://localhost:8000/api/v1/streams/status
 ```
 
-## Acesso ao player e WS
+### Upload de Vídeo para Análise Offline
 
-- HLS: `http://<backend-host>:8000/hls/stream.m3u8`
-- Clips: `http://<backend-host>:8000/clips/<clip_name>.mp4`
-- WebSocket para ocorrências: `ws://<backend-host>:8000/ws/ocorrencias`
+Na interface web: **Monitoramento** → Botão de Upload
 
-## Análise por arquivo (upload)
+Ou via API:
 
-O backend fornece um endpoint para upload de vídeos e análise offline:
-
-- POST `/api/v1/analysis/upload` (multipart/form-data) — campo `file` com o vídeo. Retorna a ocorrência criada (caso o processamento seja síncrono para arquivos pequenos) ou um objeto indicando que o processamento foi enfileirado.
-
-Recomendações:
-
-- Limite síncrono (MVP): até 50 MB ou 30s de duração — arquivos maiores são aceitos e processados em segundo plano.
-- Tipos suportados: arquivos com MIME `video/*`.
-
-## Dicas de desenvolvimento & troubleshooting
-
-- NÃO use `--reload` no uvicorn enquanto estiver testando ingest de streams. O reload reinicia o processo Python, fechando WebSockets e os subprocessos ffmpeg em execução.
-- Se os segmentos `.ts` ou o `stream.m3u8` não aparecem, verifique `backend/static/hls/hls_ffmpeg.log` para mensagens do ffmpeg.
-- Mensagens comuns do ffmpeg que indicam problemas do stream remoto:
-  - `ERROR:BACKLOG` — o servidor SRT remoto rejeitou a handshake (backlog cheio).
-  - `Missing reference picture`, `sps_id 0 out of range`, `non-existing PPS` — problemas nos NALs H.264 vindos do emissor; podem causar frames perdidos.
-- Para inspecionar rapidamente (PowerShell):
-
-```powershell
-Get-ChildItem backend\static\hls\
-Get-Content backend\static\hls\hls_ffmpeg.log -Tail 200
-Get-Content backend\static\hls\stream.m3u8 -Raw
-Get-Process -Name ffmpeg -ErrorAction SilentlyContinue | Select-Object Id,ProcessName,StartTime
+```bash
+curl -X POST "http://localhost:8000/api/v1/analysis/upload" -F "file=@video.mp4"
 ```
 
-- Para matar ffmpeg(s) pendentes:
+---
 
-```powershell
-Get-Process -Name ffmpeg -ErrorAction SilentlyContinue | Stop-Process -Force
+## 📁 Estrutura do Projeto
+
+```
+horus_ai/
+├── backend/                      # API FastAPI + ML
+│   ├── app/
+│   │   ├── api/endpoints/        # Endpoints REST e WebSocket
+│   │   │   ├── analysis.py       # Upload e análise de vídeos
+│   │   │   ├── ocorrencias.py    # CRUD de ocorrências
+│   │   │   ├── streams.py        # Controle de ingestão SRT
+│   │   │   └── ws.py             # WebSocket para alertas
+│   │   ├── core/                 # Configurações
+│   │   ├── db/                   # Modelos e schemas do banco
+│   │   ├── ml/                   # Inferência e modelos de IA
+│   │   │   └── models/           # Arquivos .keras e .tflite
+│   │   │       ├── video/        # Modelo de vídeo (Keras)
+│   │   │       ├── audio/        # Modelo de áudio (Keras)
+│   │   │       └── lipsync/      # Modelo de lipsync (TFLite quantizado)
+│   │   └── streams/              # Ingestão SRT e processamento
+│   │       └── srt_reader.py     # Controlador FFmpeg + análise
+│   ├── static/
+│   │   ├── hls/                  # Playlist e segmentos HLS
+│   │   └── clips/                # Clipes de evidência gerados
+│   ├── .env                      # Configurações locais (NÃO committar)
+│   ├── .env.example              # Exemplo de configuração
+│   └── requirements.txt          # Dependências Python
+│
+├── frontend/                     # App Angular 19
+│   ├── src/app/
+│   │   ├── pages/
+│   │   │   ├── monitoramento/    # Player + ocorrências ao vivo
+│   │   │   ├── dados/            # Dashboards e gráficos
+│   │   │   ├── cortes/           # Gerenciamento de clipes
+│   │   │   └── configuracoes/    # Configurações
+│   │   ├── components/           # Componentes reutilizáveis
+│   │   ├── services/             # Serviços (API, WebSocket)
+│   │   └── models/               # Interfaces TypeScript
+│   └── package.json
+│
+├── docs/                         # Documentação adicional
+├── docker-compose.yml            # Orquestração Docker (opcional)
+└── README.md                     # Este arquivo
 ```
 
-## Observações sobre o frontend (UI)
+---
 
-- Os tooltips do ApexCharts são estilizados globalmente em `frontend/src/styles.css` (porque o Apex injetaa nodes no `body`), configurados para tema escuro e marcadores preservando cores por severidade.
-- O frontend usa RxJS para buffering de eventos e atualizações dos gráficos para manter a UI responsiva durante bursts de eventos.
+## 🔧 Troubleshooting
 
-## Segurança e produção
+### ❌ Backend não inicia
 
-- Em produção mova credenciais e passphrases SRT para variáveis de ambiente seguras / Vault e NÃO as exponha no frontend.
-- Restrinja `CORS` em `backend/app/main.py` para os domínios do frontend em produção (não use `*`).
-- Considere usar um process manager (systemd, docker, or supervisor) para garantir ffmpeg e o backend iniciem, e logrotate para `hls_ffmpeg.log`.
+```powershell
+# Verificar se PostgreSQL está rodando
+Get-Service -Name postgresql*  # Windows
+sudo systemctl status postgresql  # Linux
 
-## Próximos passos recomendados
+# Testar conexão com o banco
+psql -U horus_user -d horus_db -h localhost
+```
 
-- Adicionar endpoint `/api/v1/streams/cleanup` para kill + cleanup remoto (útil para recuperação manual).
-- Implementar retry/backoff no `SRTIngestor.start()` para lidar com rejeições SRT transientes.
-- Adicionar um endpoint de agregação (por exemplo, contagens por hora/dia) para facilitar backfills do frontend sem transferir todo o histórico.
-- Adicionar testes de integração leve que simulam um SRT/HLS small stream e validam o fluxo `/streams/start` -> `stream.m3u8` disponível.
-- Adicionar documentação de runbook (DevOps) com checks e comandos de recuperação rápida.
+### ❌ Stream não aparece no player
 
-## Contato / Contribuição
+```powershell
+# Verificar se ffmpeg está rodando
+Get-Process -Name ffmpeg
 
-Abra issues e PRs no repositório. Se for contribuir com mudanças em ffmpeg/startup behavior, teste localmente sem `--reload` e valide que o frontend consegue se conectar automaticamente depois do `start`.
+# Ver logs do ffmpeg
+Get-Content backend\static\hls\hls_ffmpeg.log -Tail 50
+
+# Verificar se playlist existe
+Test-Path backend\static\hls\stream.m3u8
+```
+
+### ❌ Matar processos FFmpeg pendentes
+
+```powershell
+# Windows
+Get-Process -Name ffmpeg | Stop-Process -Force
+
+# Linux/Mac
+pkill -9 ffmpeg
+```
+
+### ❌ Erro de CORS no frontend
+
+Verifique se o backend está rodando na porta 8000.
+
+### ❌ Modelos não carregam
+
+```powershell
+# Verificar se os arquivos existem
+Get-ChildItem backend\app\ml\models -Recurse -Filter "*.keras"
+Get-ChildItem backend\app\ml\models -Recurse -Filter "*.tflite"
+```
+
+### ❌ Dependências Python com erro
+
+```bash
+pip install --upgrade pip setuptools wheel
+pip install -r requirements.txt --force-reinstall
+```
+
+---
+
+## 📄 Licença
+
+Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
+
+---
+
+<p align="center">
+  <b>🦅 Horus AI</b> — Monitoramento Inteligente de Broadcast<br>
+  <i>Projeto Acadêmico</i>
+</p>
