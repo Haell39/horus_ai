@@ -147,8 +147,8 @@ async def upload_analysis(
     duration_s = _get_duration_seconds(tmp_path)
 
     HARD_LIMIT_MB = 1024
-    SYNC_LIMIT_MB = 50
-    SYNC_LIMIT_SECONDS = 30
+    SYNC_LIMIT_MB = 200       # Aumentado de 50 para 200MB
+    SYNC_LIMIT_SECONDS = 120  # Aumentado de 30 para 120 segundos (2 min)
 
     if size_mb > HARD_LIMIT_MB:
         try:
@@ -351,6 +351,80 @@ async def upload_analysis(
             final_pred_class = audio_class
             final_confidence = float(audio_conf_val)
         # else: ambos normal ou confiança muito baixa - manter vídeo (normal)
+
+        # === LIPSYNC ANALYSIS (INLINE) ===
+        # Run lipsync ONLY if video and audio are both normal (no other errors detected)
+        # This prevents false positives when there are other issues like freeze, hiss, etc.
+        lipsync_status = None
+        lipsync_conf = 0.0
+        lipsync_offset_ms = 0.0
+        LIPSYNC_CONFIDENCE_THRESHOLD = 0.75
+        
+        # Only run lipsync if no other errors detected
+        video_is_normal = str(final_pred_class).lower() == 'normal' or video_conf_val < MIN_CONFIDENCE
+        audio_is_normal = str(audio_class).lower() == 'normal' or audio_conf_val < MIN_CONFIDENCE
+        
+        if video_is_normal and audio_is_normal:
+            try:
+                if inference.is_lipsync_model_loaded():
+                    lipsync_status, lipsync_conf, lipsync_offset_ms = inference.analyze_lipsync(clip_path)
+                    print(f"DEBUG: Lipsync analysis - status={lipsync_status}, conf={lipsync_conf:.2%}, offset={lipsync_offset_ms:.1f}ms")
+            except Exception as e:
+                print(f"DEBUG: Lipsync analysis failed (non-fatal): {e}")
+                lipsync_status, lipsync_conf, lipsync_offset_ms = None, 0.0, 0.0
+        else:
+            print(f"DEBUG: Lipsync analysis SKIPPED - other error detected (video={final_pred_class}, audio={audio_class})")
+        
+        # If lipsync detects dessincronizado with high confidence, create occurrence and return
+        if lipsync_status and lipsync_status.lower() == 'dessincronizado' and float(lipsync_conf or 0.0) >= LIPSYNC_CONFIDENCE_THRESHOLD:
+            # Use same clips directory that the server mounts at /clips
+            try:
+                lipsync_clips_dir = storage_core.get_clips_dir()
+            except Exception:
+                lipsync_clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'static', 'clips'))
+            os.makedirs(lipsync_clips_dir, exist_ok=True)
+            lipsync_clip_name = f"lipsync_{uid}{ext}"
+            lipsync_public_path = os.path.join(lipsync_clips_dir, lipsync_clip_name)
+            try:
+                shutil.copy2(clip_path, lipsync_public_path)
+                lipsync_clip_to_serve = lipsync_public_path
+            except Exception:
+                lipsync_clip_to_serve = clip_path
+
+            lipsync_clip_dur = _get_duration_seconds(lipsync_clip_to_serve)
+            lipsync_dur_calc, lipsync_severity = calcular_severidade_e_duracao(lipsync_clip_to_serve)
+            now_lipsync = datetime.now(timezone.utc)
+            start_ts_lipsync = now_lipsync - timedelta(seconds=lipsync_dur_calc or 0)
+
+            lipsync_evidence = {
+                'clip_path': f'/clips/{os.path.basename(lipsync_clip_to_serve)}',
+                'original_filename': file.filename,
+                'lipsync_status': lipsync_status,
+                'lipsync_confidence': float(lipsync_conf or 0.0),
+                'lipsync_offset_ms': float(lipsync_offset_ms or 0.0),
+                'clip_duration_s': float(lipsync_clip_dur or 0.0),
+            }
+
+            try:
+                db_oc_lipsync = models.Ocorrencia(
+                    start_ts=start_ts_lipsync, end_ts=now_lipsync, 
+                    duration_s=lipsync_dur_calc or lipsync_clip_dur or 0.0,
+                    category='lipsync-file', type='dessincronizado', severity=lipsync_severity,
+                    confidence=float(lipsync_conf or 0.0), evidence=lipsync_evidence
+                )
+                db.add(db_oc_lipsync)
+                db.commit()
+                db.refresh(db_oc_lipsync)
+                print(f"DEBUG: Ocorrência de LIPSYNC criada id={db_oc_lipsync.id} tipo={db_oc_lipsync.type}")
+                # Return lipsync occurrence - priority over video/audio
+                try:
+                    return _sanitize_for_json(dict(db_oc_lipsync.__dict__))
+                except Exception:
+                    return _sanitize_for_json(db_oc_lipsync.__dict__)
+            except Exception as e:
+                db.rollback()
+                print(f"DEBUG: Falha ao salvar ocorrência de lipsync: {e}")
+                # Continue to video/audio processing if lipsync save fails
 
         now = datetime.now(timezone.utc)
 
@@ -963,6 +1037,70 @@ async def upload_analysis(
                 except Exception:
                     audio_class, audio_conf, audio_event_time, audio_event_end_time = 'normal', 0.0, None, None
 
+                # === LIPSYNC ANALYSIS ===
+                # Run lipsync analysis on ORIGINAL video (not the cut clip which may contain freeze/fade)
+                # This ensures we analyze the full video for lip sync issues
+                lipsync_status = None
+                lipsync_conf = 0.0
+                lipsync_offset_ms = 0.0
+                try:
+                    if inference.is_lipsync_model_loaded():
+                        # Use original video for lipsync - the cut clip may be just the error segment
+                        lipsync_status, lipsync_conf, lipsync_offset_ms = inference.analyze_lipsync(clip_path_local)
+                        print(f"Background worker: lipsync analysis - status={lipsync_status}, conf={lipsync_conf:.2%}, offset={lipsync_offset_ms:.1f}ms")
+                except Exception as e:
+                    print(f"Background worker: lipsync analysis failed (non-fatal): {e}")
+                    lipsync_status, lipsync_conf, lipsync_offset_ms = None, 0.0, 0.0
+
+                # === LIPSYNC OCCURRENCE (PRIORITY) ===
+                # If lipsync detects desync with high confidence, create ONLY lipsync occurrence and return
+                LIPSYNC_CONFIDENCE_THRESHOLD = 0.75  # 75% threshold for lipsync
+                try:
+                    if lipsync_status and lipsync_status.lower() == 'dessincronizado' and float(lipsync_conf or 0.0) >= LIPSYNC_CONFIDENCE_THRESHOLD:
+                        # Copy original video to public clips for serving
+                        public_clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'static', 'clips'))
+                        os.makedirs(public_clips_dir, exist_ok=True)
+                        lipsync_clip_name = f"lipsync_{job_id_local}{os.path.splitext(clip_name_local)[1]}"
+                        lipsync_public_path = os.path.join(public_clips_dir, lipsync_clip_name)
+                        try:
+                            shutil.copy2(clip_path_local, lipsync_public_path)
+                            lipsync_clip_to_serve = lipsync_public_path
+                        except Exception:
+                            lipsync_clip_to_serve = clip_path_local
+
+                        lipsync_clip_dur = _get_duration_seconds(lipsync_clip_to_serve)
+                        lipsync_dur_calc, lipsync_severity = calcular_severidade_e_duracao(lipsync_clip_to_serve)
+                        now_lipsync = datetime.now(timezone.utc)
+                        start_ts_lipsync = now_lipsync - timedelta(seconds=lipsync_dur_calc or 0)
+
+                        lipsync_evidence = {
+                            'clip_path': f'/clips/{os.path.basename(lipsync_clip_to_serve)}',
+                            'original_filename': clip_name_local,
+                            'lipsync_status': lipsync_status,
+                            'lipsync_confidence': float(lipsync_conf or 0.0),
+                            'lipsync_offset_ms': float(lipsync_offset_ms or 0.0),
+                            'clip_duration_s': float(lipsync_clip_dur or 0.0),
+                        }
+
+                        try:
+                            db_oc_lipsync = models.Ocorrencia(
+                                start_ts=start_ts_lipsync, end_ts=now_lipsync, 
+                                duration_s=lipsync_dur_calc or lipsync_clip_dur or 0.0,
+                                category='lipsync-file', type='dessincronizado', severity=lipsync_severity,
+                                confidence=float(lipsync_conf or 0.0), evidence=lipsync_evidence
+                            )
+                            db_session.add(db_oc_lipsync)
+                            db_session.commit()
+                            db_session.refresh(db_oc_lipsync)
+                            print(f"Background worker: ocorrência de LIPSYNC criada id={db_oc_lipsync.id} tipo={db_oc_lipsync.type}")
+                            # LIPSYNC has priority - return here, don't create video/audio occurrence
+                            return
+                        except Exception as e:
+                            db_session.rollback()
+                            print(f"Background worker: falha ao salvar ocorrência de lipsync: {e}")
+                except Exception as e:
+                    print(f"Background worker: lipsync occurrence creation failed (non-fatal): {e}")
+
                 # Determine audio threshold
                 try:
                     audio_thresh_map = core_settings.audio_thresholds()
@@ -997,6 +1135,9 @@ async def upload_analysis(
                             'audio_event_start_s': audio_event_time,
                             'audio_event_end_s': audio_event_end_time,
                             'clip_duration_s': float(clip_dur or 0.0),
+                            'lipsync_status': lipsync_status,
+                            'lipsync_confidence': float(lipsync_conf or 0.0),
+                            'lipsync_offset_ms': float(lipsync_offset_ms or 0.0),
                         }
 
                         try:
@@ -1040,6 +1181,9 @@ async def upload_analysis(
                     'original_filename': clip_name_local,
                     'confidence_raw': float(confidence),
                     'clip_duration_s': float(clip_dur or 0.0),
+                    'lipsync_status': lipsync_status,
+                    'lipsync_confidence': float(lipsync_conf or 0.0),
+                    'lipsync_offset_ms': float(lipsync_offset_ms or 0.0),
                 }
 
                 try:
