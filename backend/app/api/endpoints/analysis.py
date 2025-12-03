@@ -317,13 +317,24 @@ async def upload_analysis(
         # Threshold mínimo para considerar detecção válida
         MIN_CONFIDENCE = 0.70
         
-        # Decisão baseada em confiança:
-        # 1. Se ambos detectam erro → usar o de MAIOR confiança
-        # 2. Se só vídeo detecta erro (conf >= MIN) → usar vídeo
-        # 3. Se só áudio detecta erro (conf >= MIN) → usar áudio  
-        # 4. Se ambos normais → normal
+        # REGRA DE PRIORIDADE: freeze e fade de vídeo têm prioridade sobre ausencia_audio
+        # Isso evita que ausência de áudio sobrescreva erros visuais importantes
+        VIDEO_PRIORITY_CLASSES = {'freeze', 'fade'}
+        video_has_priority = str(video_pred).lower() in VIDEO_PRIORITY_CLASSES and video_conf_val >= MIN_CONFIDENCE
+        audio_is_ausencia = str(audio_class).lower() == 'ausencia_audio'
         
-        if video_is_error and audio_is_error:
+        # Decisão baseada em confiança:
+        # 1. Se vídeo tem freeze/fade e áudio é ausencia_audio → prioridade vídeo
+        # 2. Se ambos detectam erro → usar o de MAIOR confiança (exceto regra acima)
+        # 3. Se só vídeo detecta erro (conf >= MIN) → usar vídeo
+        # 4. Se só áudio detecta erro (conf >= MIN) → usar áudio  
+        # 5. Se ambos normais → normal
+        
+        if video_has_priority and audio_is_ausencia:
+            # Regra de prioridade: freeze/fade > ausencia_audio
+            print(f"DEBUG: PRIORIDADE VÍDEO - {video_pred} ({video_conf_val:.2f}) tem prioridade sobre ausencia_audio ({audio_conf_val:.2f})")
+            # Manter vídeo (já está setado)
+        elif video_is_error and audio_is_error:
             # Ambos detectaram erro - usar o de maior confiança
             if audio_conf_val > video_conf_val:
                 final_pred_class = audio_class
