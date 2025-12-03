@@ -437,11 +437,22 @@ def run_keras_inference(model: tf.keras.Model, input_data: np.ndarray, classes: 
     if model is None:
         raise RuntimeError("Modelo Keras não está carregado.")
     try:
+        # Detectar se o modelo espera input 5D (batch, frames, H, W, C) vs 4D (batch, H, W, C)
+        # Se input_data é 4D mas modelo espera 5D, adicionar dimensão de frames
+        inputs_spec = getattr(model, 'inputs', None)
+        if inputs_spec and len(inputs_spec) >= 1:
+            first_input = inputs_spec[0]
+            expected_shape = getattr(first_input, 'shape', None)
+            if expected_shape is not None and len(expected_shape) == 5 and len(input_data.shape) == 4:
+                # Modelo espera 5D mas recebeu 4D - adicionar dimensão de frames
+                # Shape: (batch, H, W, C) -> (batch, 1, H, W, C)
+                input_data = np.expand_dims(input_data, axis=1)
+                # print(f"DEBUG: Reshape 4D->5D para modelo de sequência: {input_data.shape}")
+        
         # If the model expects multiple inputs but we received a single ndarray,
         # attempt to build a list of ordered inputs (image, motion, brightness)
         preds = None
         try:
-            inputs_spec = getattr(model, 'inputs', None)
             if inputs_spec and len(inputs_spec) > 1 and isinstance(input_data, np.ndarray):
                 # build fallback auxiliary inputs (zeros) matching common small shapes
                 ordered = []
@@ -453,11 +464,11 @@ def run_keras_inference(model: tf.keras.Model, input_data: np.ndarray, classes: 
                         ordered.append(np.zeros((1, 1), dtype=np.float32))
                     elif ('bright' in lname) or ('brightness' in lname):
                         ordered.append(np.zeros((1, 1), dtype=np.float32))
-                    elif ('image' in lname) or ('input' in lname) or (shape is not None and len(shape) == 4):
+                    elif ('image' in lname) or ('input' in lname) or (shape is not None and len(shape) in (4, 5)):
                         ordered.append(input_data)
                     else:
-                        # default fallback: if expects 4D assume image, else scalar zero
-                        if shape is not None and len(shape) == 4:
+                        # default fallback: if expects 4D/5D assume image, else scalar zero
+                        if shape is not None and len(shape) in (4, 5):
                             ordered.append(input_data)
                         else:
                             ordered.append(np.zeros((1, 1), dtype=np.float32))
@@ -486,8 +497,16 @@ def run_keras_inference_topk(model: tf.keras.Model, input_data: np.ndarray, clas
     if model is None:
         return []
     try:
-        # same multi-input guard as run_keras_inference
+        # Detectar se o modelo espera input 5D (batch, frames, H, W, C) vs 4D (batch, H, W, C)
         inputs_spec = getattr(model, 'inputs', None)
+        if inputs_spec and len(inputs_spec) >= 1:
+            first_input = inputs_spec[0]
+            expected_shape = getattr(first_input, 'shape', None)
+            if expected_shape is not None and len(expected_shape) == 5 and len(input_data.shape) == 4:
+                # Modelo espera 5D mas recebeu 4D - adicionar dimensão de frames
+                input_data = np.expand_dims(input_data, axis=1)
+        
+        # same multi-input guard as run_keras_inference
         if inputs_spec and len(inputs_spec) > 1 and isinstance(input_data, np.ndarray):
             ordered = []
             for inp in inputs_spec:
@@ -498,16 +517,16 @@ def run_keras_inference_topk(model: tf.keras.Model, input_data: np.ndarray, clas
                     ordered.append(np.zeros((1, 1), dtype=np.float32))
                 elif ('bright' in lname) or ('brightness' in lname):
                     ordered.append(np.zeros((1, 1), dtype=np.float32))
-                elif ('image' in lname) or ('input' in lname) or (shape is not None and len(shape) == 4):
+                elif ('image' in lname) or ('input' in lname) or (shape is not None and len(shape) in (4, 5)):
                     ordered.append(input_data)
                 else:
-                    if shape is not None and len(shape) == 4:
+                    if shape is not None and len(shape) in (4, 5):
                         ordered.append(input_data)
                     else:
                         ordered.append(np.zeros((1, 1), dtype=np.float32))
-            preds = model.predict(ordered)
+            preds = model.predict(ordered, verbose=0)
         else:
-            preds = model.predict(input_data)
+            preds = model.predict(input_data, verbose=0)
         scores = np.array(preds[0], dtype=np.float32)
         probs = _apply_softmax(scores)
         indices = np.argsort(probs)[::-1]
