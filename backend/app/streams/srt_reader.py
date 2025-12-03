@@ -98,6 +98,16 @@ class SRTIngestor:
         except Exception:
             self.stream_buffer_s = 20
         self._last_stream_analysis_ts = None
+        
+        # === DEBOUNCE para evitar falsos positivos em stream ===
+        # Tempo mínimo que ausencia_audio/freeze deve persistir antes de disparar (segundos)
+        self._debounce_duration_s = float(os.getenv('STREAM_DEBOUNCE_DURATION_S', '3.0'))
+        # Gap máximo entre detecções antes de resetar (deve ser > stream_buffer_s)
+        self._debounce_gap_s = float(os.getenv('STREAM_DEBOUNCE_GAP_S', '25.0'))
+        # Classes que requerem debounce (problemas que podem ser momentâneos)
+        self._debounce_classes = {'ausencia_audio', 'freeze'}
+        # Estado do debounce: {classe: {'first_seen': datetime, 'last_seen': datetime, 'count': int}}
+        self._debounce_state = {}
 
     def start(self, url: str):
         if self._running:
@@ -1024,6 +1034,37 @@ class SRTIngestor:
                     now = datetime.now(timezone.utc)
                     if self._last_report_ts and (now - self._last_report_ts).total_seconds() < max(1.0, float(self.stream_buffer_s) / 2.0):
                         return
+                    
+                    # === DEBOUNCE: Aguardar X segundos antes de disparar para classes sensíveis ===
+                    pred_lower = str(final_pred).lower()
+                    if pred_lower in self._debounce_classes:
+                        if pred_lower not in self._debounce_state:
+                            # Primeira detecção - inicia contagem
+                            self._debounce_state[pred_lower] = {'first_seen': now, 'last_seen': now, 'count': 1}
+                            print(f"DEBUG: DEBOUNCE iniciado para '{pred_lower}' - aguardando {self._debounce_duration_s}s")
+                            return  # Não dispara ainda
+                        else:
+                            state = self._debounce_state[pred_lower]
+                            elapsed = (now - state['first_seen']).total_seconds()
+                            # Verifica se o problema é contínuo (última detecção foi recente)
+                            gap = (now - state['last_seen']).total_seconds()
+                            if gap > self._debounce_gap_s:  # Se passou mais de X segundos sem detectar, reseta
+                                self._debounce_state[pred_lower] = {'first_seen': now, 'last_seen': now, 'count': 1}
+                                print(f"DEBUG: DEBOUNCE resetado para '{pred_lower}' (gap de {gap:.1f}s > {self._debounce_gap_s}s)")
+                                return
+                            # Atualiza estado
+                            state['last_seen'] = now
+                            state['count'] += 1
+                            if elapsed < self._debounce_duration_s:
+                                print(f"DEBUG: DEBOUNCE '{pred_lower}' - {elapsed:.1f}s/{self._debounce_duration_s}s")
+                                return  # Ainda não passou tempo suficiente
+                            else:
+                                # Passou o debounce! Limpa estado e continua para criar ocorrência
+                                print(f"DEBUG: DEBOUNCE '{pred_lower}' CONFIRMADO após {elapsed:.1f}s ({state['count']} detecções)")
+                                del self._debounce_state[pred_lower]
+                    else:
+                        # Classe não requer debounce - limpa estados pendentes de outras classes
+                        self._debounce_state.clear()
 
                     # compute clip duration (ffprobe)
                     clip_dur = 0.0
