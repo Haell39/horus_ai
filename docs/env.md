@@ -1,38 +1,68 @@
 # Ambiente (.env) — Horus AI
 
-Este documento explica como usar o `backend/.env.example` para criar seu `backend/.env` local (não comitar).
-
-1. Copiar o exemplo
+## 1. Criar o arquivo
 
 ```powershell
 Copy-Item backend\.env.example backend\.env
-notepad backend\.env   # edite no Windows com seus valores
+notepad backend\.env
 ```
 
-2. Variáveis importantes (descrição curta)
+---
 
-- `DATABASE_URL` — URL do Postgres (ex.: postgresql://user:pass@localhost:5432/dbname)
-- `SRT_STREAM_URL_GLOBO` — exemplo SRT com passphrase (mantenha secreto)
+## 2. Variáveis Obrigatórias
 
-Tuning de vídeo (detecção)
+| Variável       | Descrição         | Exemplo                                          |
+| -------------- | ----------------- | ------------------------------------------------ |
+| `DATABASE_URL` | URL do PostgreSQL | `postgresql://user:pass@localhost:5432/horus_db` |
 
-- `VIDEO_VOTE_K` — número de frames consecutivos (K) necessários para considerar um evento. Ex.: `VIDEO_VOTE_K=3`.
-- `VIDEO_MOVING_AVG_M` — janela M para média móvel de confiança. Ex.: `VIDEO_MOVING_AVG_M=5`.
-- `VIDEO_THRESH_<CLASSE>` — limiar por classe. Ex.: `VIDEO_THRESH_BORRADO=0.7`.
-- `VIDEO_THRESH_DEFAULT` — fallback quando não há threshold por classe.
+---
 
-3. Recomendações
+## 3. Tuning de Detecção - Vídeo
 
-- NÃO comite `backend/.env`.
-- Use `backend/.env.example` como fonte de verdade para quais chaves existem.
-- Reinicie o backend após editar `.env`.
+| Variável                    | Descrição                          | Default |
+| --------------------------- | ---------------------------------- | ------- |
+| `VIDEO_VOTE_K`              | Frames consecutivos para confirmar | `3`     |
+| `VIDEO_MOVING_AVG_M`        | Janela para média móvel            | `5`     |
+| `VIDEO_THRESH_FREEZE`       | Threshold freeze                   | `0.80`  |
+| `VIDEO_THRESH_FADE`         | Threshold fade                     | `0.80`  |
+| `VIDEO_THRESH_FORA_DE_FOCO` | Threshold blur                     | `0.75`  |
 
-4. Exemplo mínimo no `backend/.env`
+---
 
-```
-DATABASE_URL=postgresql://globo_user:senha123@localhost:5432/globo_mvp
+## 4. Tuning de Detecção - Áudio
+
+| Variável                      | Default |
+| ----------------------------- | ------- |
+| `AUDIO_THRESH_AUSENCIA_AUDIO` | `0.80`  |
+| `AUDIO_THRESH_ECO_REVERB`     | `0.85`  |
+| `AUDIO_THRESH_RUIDO_HISS`     | `0.80`  |
+
+---
+
+## 5. Sistema de Debounce (Stream)
+
+| Variável                     | Descrição      | Default |
+| ---------------------------- | -------------- | ------- |
+| `STREAM_DEBOUNCE_DURATION_S` | Duração mínima | `3.0`   |
+| `STREAM_DEBOUNCE_GAP_S`      | Gap máximo     | `25.0`  |
+
+---
+
+## 6. Clips
+
+| Variável          | Default |
+| ----------------- | ------- |
+| `CLIP_OUTPUT_FPS` | `15`    |
+
+---
+
+## Exemplo Mínimo
+
+```dotenv
+DATABASE_URL=postgresql://horus_user:senha@localhost:5432/horus_db
 VIDEO_VOTE_K=3
-VIDEO_MOVING_AVG_M=5
-VIDEO_THRESH_BORRADO=0.7
-VIDEO_THRESH_BLOCO=0.7
+STREAM_DEBOUNCE_DURATION_S=3.0
+CLIP_OUTPUT_FPS=15
 ```
+
+⚠️ **NÃO comite** `backend/.env`

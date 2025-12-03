@@ -1,42 +1,77 @@
-# API — Endpoints úteis (exemplos)
+# API — Endpoints do Horus AI
 
 Base: `http://<backend-host>:8000`
 
-1. Start ingest (SRT → HLS)
+---
 
-- POST `/api/v1/streams/start`
+## 1. Stream Control
+
+### Start Ingest (SRT → HLS)
+
+- **POST** `/api/v1/streams/start`
 - Body (JSON): `{ "url": "srt://...", "fps": 1.0 }`
 
-PowerShell example:
-
 ```powershell
-$body = @{ url = 'srt://MEU.SRT.ENDPOINT:PORT?mode=caller&passphrase=...' ; fps = 1.0 } | ConvertTo-Json
+$body = @{ url = 'srt://SEU.SRT.ENDPOINT:PORT?mode=caller&passphrase=...' ; fps = 1.0 } | ConvertTo-Json
 Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/v1/streams/start -Body $body -ContentType 'application/json'
 ```
 
-2. Stop ingest
+### Stop Ingest
 
-- POST `/api/v1/streams/stop`
+- **POST** `/api/v1/streams/stop`
 
-3. Status
+### Status
 
-- GET `/api/v1/streams/status` -> `{ "running": true, "fps": 1.0 }`
+- **GET** `/api/v1/streams/status`
+- Response: `{ "running": true, "fps": 1.0 }`
 
-4. Ocorrências
+---
 
-- GET `/api/v1/ocorrencias` -> lista JSON de ocorrências (id, start_ts, end_ts, duration_s, category, type, severity, confidence, evidence)
-- POST `/api/v1/ocorrencias` -> cria ocorrência (usado internamente)
+## 2. Ocorrências
 
-5. WebSocket (realtime)
+### Listar
 
-- `ws://<backend-host>:8000/ws/ocorrencias` — broadcast para novas ocorrências (mensagem: { type: 'nova_ocorrencia', data: { ... } })
+- **GET** `/api/v1/ocorrencias`
+- Response: Lista JSON de ocorrências (id, start_ts, end_ts, duration_s, category, type, severity, confidence, evidence)
 
-6. HLS & Clips
+### Criar (interno)
 
-- HLS playlist: `http://<backend-host>:8000/hls/stream.m3u8`
-- Clips: `http://<backend-host>:8000/clips/<clip_name>.mp4`
+- **POST** `/api/v1/ocorrencias`
 
-7. Observações
+---
 
-- Start retorna sucesso somente quando playlist ficou pronta (evita attach race no frontend).
-- Não exponha passphrases/segredos em chamadas que vão para o frontend; envie apenas pelo backend via `.env` ou vault.
+## 3. WebSocket (Realtime)
+
+- **URL**: `ws://<backend-host>:8000/ws/ocorrencias`
+- Broadcast para novas ocorrências
+- Mensagem: `{ "type": "nova_ocorrencia", "data": { ... } }`
+
+---
+
+## 4. Análise Manual
+
+### Upload de Vídeo
+
+- **POST** `/api/v1/analysis/upload`
+- Multipart form com arquivo de vídeo
+
+---
+
+## 5. Informações ML
+
+- **GET** `/api/v1/ml/info` - Status dos modelos carregados
+
+---
+
+## 6. Arquivos Estáticos
+
+| Recurso      | URL                                                |
+| ------------ | -------------------------------------------------- |
+| HLS playlist | `http://<backend-host>:8000/hls/stream.m3u8`       |
+| Clips        | `http://<backend-host>:8000/clips/<clip_name>.mp4` |
+
+---
+
+## 7. Admin
+
+- **POST** `/api/v1/admin/clear` - Limpar dados

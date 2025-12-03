@@ -1,16 +1,48 @@
 # Horus AI — Documentação
 
-Bem-vindo ao conjunto de documentação do Horus AI. Aqui estão os principais documentos para devs e ops:
+Sistema Inteligente de Monitoramento e Detecção de Anomalias em Transmissões de Vídeo.
 
-- [Runbook Ops](runbook-ops.md) — comandos rápidos para iniciar/parar e recuperar serviços.
-- [Ambiente (.env)](env.md) — como usar `.env.example` e quais variáveis preencher.
-- [API (endpoints)](api.md) — exemplos de chamadas úteis (start/stop/status, ocorrências).
-- [Arquivo de mapa (filemap)](filemap.md) — mapa completo do repositório (arquivos e responsabilidades).
-- [Troubleshooting](troubleshooting.md) — problemas comuns e como diagnosticar.
-- [Modelos ML](ml_models.md) — onde colocar os .tflite, como testar e trocar modelos.
+---
 
-Use essa pasta como ponto único de referência operacional. Se quiser, posso gerar um site MkDocs a partir daqui.
+## 📚 Índice
 
+| Documento                 | Descrição                   |
+| ------------------------- | --------------------------- |
+| [Ambiente (.env)](env.md) | Configuração de variáveis   |
+| [API (endpoints)](api.md) | Referência REST e WebSocket |
 
+---
 
-continuar com esse index dps... pra melhoria futura!
+## 🔧 Arquitetura
+
+```
+┌─────────────────┐     ┌─────────────────┐
+│    Frontend     │────▶│     Backend     │
+│   Angular 19    │◀────│    FastAPI      │
+└─────────────────┘     └────────┬────────┘
+                                 │
+        ┌────────────────────────┼────────────────────────┐
+        ▼                        ▼                        ▼
+┌───────────────┐    ┌───────────────────┐    ┌───────────────┐
+│  PostgreSQL   │    │   ML Inference    │    │    FFmpeg     │
+│   Database    │    │ Video/Audio/Sync  │    │   SRT→HLS     │
+└───────────────┘    └───────────────────┘    └───────────────┘
+```
+
+---
+
+## 📊 Modelos de IA
+
+| Modelo                | Formato                | Uso                |
+| --------------------- | ---------------------- | ------------------ |
+| **Odin v4.5**         | `.keras`               | Anomalias de vídeo |
+| **Heimdall Ultra v1** | `.keras`               | Anomalias de áudio |
+| **SyncNet v2**        | `.tflite` (quantizado) | Lipsync            |
+
+---
+
+## 🎯 Anomalias Detectadas
+
+**Vídeo:** freeze, fade, fora_de_foco  
+**Áudio:** ausencia_audio, eco_reverb, ruido_hiss, sinal_teste  
+**Lipsync:** dessincronização
