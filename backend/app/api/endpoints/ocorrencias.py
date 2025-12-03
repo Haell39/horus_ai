@@ -162,9 +162,13 @@ def update_ocorrencia(
 
         # Atualiza/insere descrição humana em evidence
         if payload.human_description is not None:
-            ev = db_oc.evidence or {}
+            ev = dict(db_oc.evidence or {})  # Cria cópia para forçar detecção de mudança
             ev["human_description"] = payload.human_description
-            db_oc.evidence = ev
+            db_oc.evidence = ev  # Reatribui para SQLAlchemy detectar a mudança
+
+        # Força SQLAlchemy a detectar mudança no JSON
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(db_oc, "evidence")
 
         db.add(db_oc)
         db.commit()

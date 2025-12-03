@@ -70,8 +70,8 @@
             <span class="data-hora"
               >{{ falha.data }} | {{ falha.horario }}</span
             >
-            <p class="descricao-card">
-              {{ getDescricaoCurta(falha.descricao || "", 80) }}
+            <p class="descricao-card" *ngIf="falha.descricao">
+              {{ getDescricaoCurta(falha.descricao, 80) }}
             </p>
             <p class="categoria-card" *ngIf="falha.categoria">
               <small>{{ falha.categoria }}</small>

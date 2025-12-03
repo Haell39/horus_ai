@@ -70,7 +70,7 @@ export class CortesComponent implements OnInit {
   ];
 
   // Categorias possíveis
-  tiposCategoria: string[] = ['Áudio Técnico', 'Vídeo Técnico'];
+  tiposCategoria: string[] = ['Áudio', 'Vídeo', 'Stream'];
 
   // filtro de categoria
   filtroCategoria = '';
@@ -311,23 +311,37 @@ export class CortesComponent implements OnInit {
       const t = oc.type.toLowerCase();
       const audioTypes = [
         'ausência áudio',
+        'ausencia_audio',
         'volume baixo',
         'eco',
+        'eco_reverb',
         'ruido/chiado',
+        'ruido_hiss',
         'sinal de teste 1khz',
+        'sinal_teste',
       ];
       const videoTypes = [
         'freeze',
         'fade',
         'efeito bloco/variação',
         'fora de foco/imagem borrada',
+        'fora_de_foco',
         'borrado',
         'bloco',
       ];
+      const streamTypes = [
+        'dessincronizado',
+        'stream',
+        'conexão',
+        'perda',
+        'latência',
+      ];
       if (audioTypes.find((a) => t.includes(a)))
-        inferredCategory = 'Áudio Técnico';
+        inferredCategory = 'Áudio';
       else if (videoTypes.find((v) => t.includes(v)))
-        inferredCategory = 'Vídeo Técnico';
+        inferredCategory = 'Vídeo';
+      else if (streamTypes.find((s) => t.includes(s)))
+        inferredCategory = 'Stream';
     }
 
     const titulo = `${oc.type || inferredCategory || 'Ocorrência'} #${oc.id}`;
