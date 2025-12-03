@@ -7,15 +7,14 @@ import sys
 import glob
 
 # Adiciona o backend ao path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
 from app.ml import inference
 
 def test_video_errors():
     """Testa clipes de erro de vídeo"""
-    video_dir = os.path.join(os.path.dirname(__file__), 'validate_model_video')
+    video_dir = os.path.join(os.path.dirname(__file__), '..', 'videos_test', 'validate_model_video')
     
-    # Só arquivos na raiz (não entra em normal_clips/)
     video_files = [f for f in glob.glob(os.path.join(video_dir, '*.mp4'))]
     
     if not video_files:
@@ -24,6 +23,7 @@ def test_video_errors():
     
     print("=" * 80)
     print("📹 VALIDAÇÃO DE ERROS DE VÍDEO")
+    print(f"Pasta: {os.path.abspath(video_dir)}")
     print(f"Total de arquivos: {len(video_files)}")
     print("=" * 80)
     
@@ -47,7 +47,6 @@ def test_video_errors():
         try:
             video_class, video_conf, video_time = inference.analyze_video_frames(video_path, sample_rate_hz=2.0)
             
-            # Verifica se detectou corretamente
             detected_error = video_class.lower() != 'normal'
             correct_class = expected is None or video_class.lower() == expected.lower()
             
@@ -73,7 +72,6 @@ def test_video_errors():
         
         print(f"  Resultado: {status}")
     
-    # Resumo
     total = len(video_files)
     print(f"\n{'='*60}")
     print(f"RESUMO VÍDEO: {results['correct']}/{total} ({results['correct']/total:.1%})")
@@ -84,9 +82,8 @@ def test_video_errors():
 
 def test_audio_errors():
     """Testa clipes de erro de áudio"""
-    audio_dir = os.path.join(os.path.dirname(__file__), 'validade_model_audio')
+    audio_dir = os.path.join(os.path.dirname(__file__), '..', 'videos_test', 'validate_model_audio')
     
-    # Só arquivos na raiz (não entra em normal_clips/)
     audio_files = [f for f in glob.glob(os.path.join(audio_dir, '*.mp4'))]
     
     if not audio_files:
@@ -95,6 +92,7 @@ def test_audio_errors():
     
     print("\n" + "=" * 80)
     print("🔊 VALIDAÇÃO DE ERROS DE ÁUDIO")
+    print(f"Pasta: {os.path.abspath(audio_dir)}")
     print(f"Total de arquivos: {len(audio_files)}")
     print("=" * 80)
     
@@ -103,7 +101,6 @@ def test_audio_errors():
     for i, audio_path in enumerate(sorted(audio_files), 1):
         filename = os.path.basename(audio_path)
         
-        # Determina o erro esperado pelo nome do arquivo
         expected = None
         if 'eco' in filename.lower():
             expected = 'eco_reverb'
@@ -120,7 +117,6 @@ def test_audio_errors():
         try:
             audio_class, audio_conf, audio_start, audio_end = inference.analyze_audio_segments(audio_path)
             
-            # Verifica se detectou corretamente
             detected_error = audio_class.lower() != 'normal'
             correct_class = expected is None or audio_class.lower() == expected.lower()
             
@@ -149,7 +145,6 @@ def test_audio_errors():
         
         print(f"  Resultado: {status}")
     
-    # Resumo
     total = len(audio_files)
     print(f"\n{'='*60}")
     print(f"RESUMO ÁUDIO: {results['correct']}/{total} ({results['correct']/total:.1%})")

@@ -7,15 +7,13 @@ import sys
 import glob
 
 # Adiciona o backend ao path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
 from app.ml import inference
 
 def main():
-    # Pasta com clipes normais
-    validate_dir = os.path.join(os.path.dirname(__file__), 'validate_normal')
+    validate_dir = os.path.join(os.path.dirname(__file__), '..', 'videos_test', 'validate_normal')
     
-    # Encontra todos os vídeos
     patterns = ['*.mp4', '*.mkv', '*.avi', '*.mov', '*.webm']
     video_files = []
     for pattern in patterns:
@@ -27,12 +25,11 @@ def main():
     
     print(f"=" * 80)
     print(f"VALIDAÇÃO DE CLIPES NORMAIS")
-    print(f"Pasta: {validate_dir}")
+    print(f"Pasta: {os.path.abspath(validate_dir)}")
     print(f"Total de arquivos: {len(video_files)}")
     print(f"=" * 80)
     print()
     
-    # Contadores
     results = {
         'video': {'normal': 0, 'errors': {}, 'failed': 0},
         'audio': {'normal': 0, 'errors': {}, 'failed': 0}
@@ -103,7 +100,6 @@ def main():
     if results['audio']['failed']:
         print(f"  Erros de processamento: {results['audio']['failed']}")
     
-    # Taxa de acerto
     video_accuracy = results['video']['normal'] / total if total > 0 else 0
     audio_accuracy = results['audio']['normal'] / total if total > 0 else 0
     
@@ -112,7 +108,6 @@ def main():
     print(f"  Áudio: {audio_accuracy:.1%}")
     print(f"  Combinado (ambos normal): ", end="")
     
-    # Conta quantos foram normais em AMBOS
     both_normal = min(results['video']['normal'], results['audio']['normal'])
     print(f"{both_normal}/{total} ({both_normal/total:.1%})" if total > 0 else "N/A")
 
