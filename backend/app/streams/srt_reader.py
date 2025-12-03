@@ -645,9 +645,12 @@ class SRTIngestor:
                                             # Attempt audio analysis on generated clip (conservative, non-blocking)
                                             try:
                                                 from app.ml import inference as ml_infer
-                                                # analyze_audio_segments expects a path to a file and returns (class, conf, event_time_s)
+                                                # analyze_audio_segments returns 4 values: (class, conf, start_time, end_time)
                                                 try:
-                                                    audio_cls, audio_conf, audio_time = ml_infer.analyze_audio_segments(dest_path)
+                                                    audio_result = ml_infer.analyze_audio_segments(dest_path)
+                                                    audio_cls = audio_result[0]
+                                                    audio_conf = audio_result[1]
+                                                    audio_time = audio_result[2]  # start_time
                                                 except Exception:
                                                     audio_cls, audio_conf, audio_time = 'normal', 0.0, None
                                                 evidence_obj['audio_analysis'] = {
@@ -885,8 +888,13 @@ class SRTIngestor:
             try:
                 if not bool(getattr(core_settings, 'VIDEO_DISABLE_AUDIO_PROCESSING', False)):
                     try:
-                        audio_pred, audio_conf, audio_time = inference.analyze_audio_segments(dest_path)
-                    except Exception:
+                        # analyze_audio_segments returns 4 values: (class, confidence, start_time, end_time)
+                        audio_result = inference.analyze_audio_segments(dest_path)
+                        audio_pred = audio_result[0]
+                        audio_conf = audio_result[1]
+                        audio_time = audio_result[2]  # start_time
+                    except Exception as e:
+                        print(f"DEBUG: Audio analysis exception: {e}")
                         audio_pred, audio_conf, audio_time = 'normal', 0.0, None
                     else:
                         # Log that audio analysis was executed (helpful to debug stream vs upload parity)
@@ -947,14 +955,18 @@ class SRTIngestor:
             except Exception:
                 pass
 
-            # strong video-normal suppression of audio
+            # VIDEO_PRIORITY: Se vídeo tem erro (freeze/fade/fora_de_foco), ele tem prioridade sobre áudio
+            # Mas se vídeo é NORMAL, permitir que erros de áudio sejam reportados
             try:
                 per_class_thresh = core_settings.video_thresholds()
                 video_thr = float(per_class_thresh.get(str(video_pred).upper(), per_class_thresh.get('DEFAULT', float(core_settings.VIDEO_THRESH_DEFAULT))))
-                if (str(video_pred).lower() == 'normal') and (final_conf >= video_thr):
-                    final_pred = 'normal'
-                    final_conf = float(final_conf)
+                
+                # Só suprime áudio se vídeo tiver um ERRO real (não normal) com alta confiança
+                if (str(video_pred).lower() != 'normal') and (final_conf >= video_thr):
+                    # Vídeo tem erro real - mantém o erro de vídeo, ignora áudio
                     audio_pred, audio_conf = 'normal', 0.0
+                    print(f"DEBUG: VIDEO_PRIORITY - Video error '{video_pred}' takes precedence over audio")
+                # Se vídeo é normal, NÃO suprimir áudio - permite ausencia_audio/hiss/etc serem detectados
             except Exception:
                 pass
 
@@ -975,10 +987,12 @@ class SRTIngestor:
                 video_conf_val = 0.0
 
             try:
+                print(f"DEBUG: Audio override check - audio_pred={audio_pred}, audio_conf={audio_conf_val:.3f}, video_conf={video_conf_val:.3f}")
                 if audio_pred and audio_conf_val > video_conf_val and audio_conf_val >= 0.90:
                     if str(audio_pred).lower() != 'normal':
                         final_pred = audio_pred
                         final_conf = float(audio_conf_val)
+                        print(f"DEBUG: AUDIO OVERRIDE - Using audio prediction: {final_pred} ({final_conf:.3f})")
                     else:
                         if str(video_pred).lower() != 'normal' and video_conf_val <= 0.75:
                             final_pred = 'normal'
@@ -990,6 +1004,7 @@ class SRTIngestor:
                             if (audio_conf or 0.0) >= float(audio_thresh) or (delta >= 0.04 and (audio_conf or 0.0) >= max(0.55, float(audio_thresh) - 0.05)):
                                 final_pred = audio_pred
                                 final_conf = float(audio_conf or 0.0)
+                                print(f"DEBUG: AUDIO OVERRIDE (secondary) - Using audio prediction: {final_pred} ({final_conf:.3f})")
             except Exception:
                 pass
 
