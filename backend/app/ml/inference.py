@@ -24,18 +24,22 @@ MODEL_DIR = os.path.join(os.path.dirname(__file__), 'models')
 MOBILENET_DIR = os.path.join(MODEL_DIR, 'mobilenetv2')
 # Per-model subtype directories (allow audio models under models/audio/)
 AUDIO_MODEL_DIR = os.path.join(MODEL_DIR, 'audio')
+LIPSYNC_MODEL_DIR = os.path.join(MODEL_DIR, 'lipsync', 'lipsync_model_v2')
 
 # New model filenames (user supplied INT8 quantized models)
 VIDEO_MODEL_FILENAME = os.path.join('video', 'odin_model_v4.5', 'video_model_finetune_fixed.keras')
 AUDIO_MODEL_FILENAME = os.path.join('audio', 'heimdall_audio_model_ultra_v1', 'audio_model_fixed.keras')
+LIPSYNC_MODEL_FILENAME = os.path.join('lipsync', 'lipsync_model_v2', 'syncnet_v2_q.tflite')  # Modelo quantizado (menor)
 
 VIDEO_MODEL_PATH = os.path.join(MODEL_DIR, VIDEO_MODEL_FILENAME)
 AUDIO_MODEL_PATH = os.path.join(MODEL_DIR, AUDIO_MODEL_FILENAME)
+LIPSYNC_MODEL_PATH = os.path.join(MODEL_DIR, LIPSYNC_MODEL_FILENAME)
 
 # Classes for the new models (as provided)
 # Default fallbacks (kept for backward compat) — real class list is loaded from training_files/labels.csv when available
 AUDIO_CLASSES = ['ausencia_audio', 'eco_reverb', 'ruido_hiss', 'sinal_teste', 'normal']
 VIDEO_CLASSES = ['normal', 'freeze', 'fade', 'fora_de_foco']
+LIPSYNC_CLASSES = ['sincronizado', 'dessincronizado', 'sem_fala']
 
 # Additional package folder (user-provided model bundle). If you placed a model package
 # at repository root `horus_package_video_model_v2` we attempt to use its metadata/labels
@@ -210,9 +214,11 @@ except NameError:
 # Keras models (preferred if present)
 keras_audio_model = None
 keras_video_model = None
+keras_lipsync_model = None  # Modelo de lipsync (SyncNet v2)
 
 audio_interpreter = None
 video_interpreter = None
+lipsync_interpreter = None  # TFLite interpreter para lipsync
 # ... (restante das variáveis globais e função load_all_models idêntica à anterior) ...
 audio_input_details = None
 audio_output_details = None
@@ -332,6 +338,29 @@ def load_all_models():
                     break
                 except Exception as e:
                     print(f"AVISO: falha ao carregar modelo Keras de vídeo {p}: {e}")
+
+        # ===== LIPSYNC MODEL (TFLite) =====
+        global lipsync_interpreter, keras_lipsync_model
+        lipsync_candidates = [
+            LIPSYNC_MODEL_PATH,
+            os.path.join(LIPSYNC_MODEL_DIR, 'syncnet_v2_q.tflite'),
+            os.path.join(LIPSYNC_MODEL_DIR, 'syncnet_v2.tflite'),
+            os.path.join(LIPSYNC_MODEL_DIR, 'syncnet_v2.keras'),
+        ]
+        for p in lipsync_candidates:
+            if os.path.exists(p):
+                try:
+                    if p.endswith('.tflite'):
+                        lipsync_interpreter = tf.lite.Interpreter(model_path=p)
+                        lipsync_interpreter.allocate_tensors()
+                        print(f"INFO: Modelo de Lipsync TFLite carregado. Path={p}")
+                    else:
+                        keras_lipsync_model = keras.models.load_model(p)
+                        print(f"INFO: Modelo de Lipsync Keras carregado. Path={p}")
+                    loaded_any = True
+                    break
+                except Exception as e:
+                    print(f"AVISO: falha ao carregar modelo de lipsync {p}: {e}")
 
         models_loaded = loaded_any
         if models_loaded:
@@ -1572,3 +1601,164 @@ def analyze_video_frames_diagnostic(file_path: str, k: int = 3, sample_rate_hz: 
         except Exception:
             pass
         return results
+
+
+# =====================================================================
+# LIPSYNC ANALYSIS FUNCTIONS
+# =====================================================================
+
+def _extract_lipsync_video_features(video_path: str) -> Optional[np.ndarray]:
+    """Extrai 5 frames do vídeo para análise de lipsync (224x224 RGB normalized)."""
+    try:
+        cap = cv2.VideoCapture(video_path)
+        frames = []
+        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        if total < 5:
+            cap.release()
+            return None
+        
+        # 5 frames uniformemente distribuídos
+        for idx in np.linspace(0, total-1, 5, dtype=int):
+            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+            ret, frame = cap.read()
+            if ret:
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                frame = cv2.resize(frame, (224, 224))
+                frames.append(frame / 255.0)
+        
+        cap.release()
+        
+        if len(frames) < 5:
+            return None
+        
+        return np.array(frames[:5], dtype=np.float32)
+    except Exception as e:
+        print(f"AVISO: Erro extraindo frames para lipsync: {e}")
+        return None
+
+
+def _extract_lipsync_audio_features(video_path: str) -> Optional[np.ndarray]:
+    """Extrai MFCC do áudio para análise de lipsync (13 coeficientes x 20 frames)."""
+    try:
+        y, sr = librosa.load(video_path, sr=16000, mono=True, duration=2.0)
+        
+        if len(y) < 8000:  # Menos de 0.5s
+            return None
+        
+        # MFCC: 13 coeficientes, 20 time steps
+        mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, n_fft=512, hop_length=256)
+        
+        # Padding/truncate para 20 frames
+        if mfcc.shape[1] < 20:
+            mfcc = np.pad(mfcc, ((0,0), (0, 20-mfcc.shape[1])), mode='edge')
+        else:
+            mfcc = mfcc[:, :20]
+        
+        # Normalização
+        mfcc = (mfcc - mfcc.mean()) / (mfcc.std() + 1e-8)
+        
+        return mfcc[:,:,np.newaxis].astype(np.float32)
+    except Exception as e:
+        print(f"AVISO: Erro extraindo áudio para lipsync: {e}")
+        return None
+
+
+def analyze_lipsync(video_path: str) -> Tuple[str, float, float]:
+    """
+    Analisa sincronização de áudio/vídeo (lipsync) em um arquivo de vídeo.
+    
+    Args:
+        video_path: Caminho do arquivo de vídeo
+        
+    Returns:
+        Tuple de (status, confidence, offset_ms)
+        - status: 'sincronizado', 'dessincronizado' ou 'sem_fala'
+        - confidence: Confiança da predição (0.0 a 1.0)
+        - offset_ms: Offset estimado em milissegundos
+    """
+    global lipsync_interpreter, keras_lipsync_model
+    
+    # Verificar se modelo está carregado
+    if lipsync_interpreter is None and keras_lipsync_model is None:
+        print("AVISO: Modelo de lipsync não carregado")
+        return 'sem_fala', 0.0, 0.0
+    
+    # Extrair features
+    video_feat = _extract_lipsync_video_features(video_path)
+    audio_feat = _extract_lipsync_audio_features(video_path)
+    
+    if video_feat is None or audio_feat is None:
+        return 'sem_fala', 0.0, 0.0
+    
+    # Batch de 1
+    audio_batch = audio_feat[np.newaxis, ...]  # (1, 13, 20, 1)
+    video_batch = video_feat[np.newaxis, ...]  # (1, 5, 224, 224, 3)
+    
+    try:
+        if lipsync_interpreter is not None:
+            # TFLite inference
+            input_details = lipsync_interpreter.get_input_details()
+            output_details = lipsync_interpreter.get_output_details()
+            
+            # Encontrar índices corretos dos inputs
+            audio_idx = None
+            video_idx = None
+            
+            for detail in input_details:
+                shape = detail['shape']
+                if len(shape) == 4 and shape[1] == 13:  # Audio: (1, 13, 20, 1)
+                    audio_idx = detail['index']
+                elif len(shape) == 5:  # Video: (1, 5, 224, 224, 3)
+                    video_idx = detail['index']
+            
+            if audio_idx is None or video_idx is None:
+                print("AVISO: Não foi possível identificar inputs do modelo lipsync")
+                return 'sem_fala', 0.0, 0.0
+            
+            lipsync_interpreter.set_tensor(audio_idx, audio_batch)
+            lipsync_interpreter.set_tensor(video_idx, video_batch)
+            lipsync_interpreter.invoke()
+            
+            # Encontrar outputs
+            probs = None
+            offset = 0.0
+            
+            for detail in output_details:
+                tensor = lipsync_interpreter.get_tensor(detail['index'])
+                if tensor.shape[-1] == 3:
+                    probs = tensor[0]
+                elif tensor.shape[-1] == 1:
+                    offset = float(tensor[0][0])
+            
+            if probs is None:
+                return 'sem_fala', 0.0, 0.0
+                
+        else:
+            # Keras inference
+            outputs = keras_lipsync_model.predict([audio_batch, video_batch], verbose=0)
+            if isinstance(outputs, dict):
+                probs = outputs.get('classification', outputs.get('output_0'))[0]
+                offset = outputs.get('offset_prediction', outputs.get('output_1', [[0]]))[0][0]
+            else:
+                probs = outputs[0][0] if len(outputs) > 0 else np.array([0.33, 0.33, 0.34])
+                offset = outputs[1][0][0] if len(outputs) > 1 else 0.0
+        
+        # Decisão
+        class_idx = int(np.argmax(probs))
+        confidence = float(probs[class_idx])
+        offset_ms = float(offset * 1000)
+        
+        status = LIPSYNC_CLASSES[class_idx] if class_idx < len(LIPSYNC_CLASSES) else 'sem_fala'
+        
+        return status, confidence, offset_ms
+        
+    except Exception as e:
+        print(f"ERRO na inferência de lipsync: {e}")
+        traceback.print_exc()
+        return 'sem_fala', 0.0, 0.0
+
+
+def is_lipsync_model_loaded() -> bool:
+    """Verifica se o modelo de lipsync está carregado."""
+    return lipsync_interpreter is not None or keras_lipsync_model is not None

@@ -1,0 +1,589 @@
+{
+  "timestamp": "2025-12-02T21:34:44.819945",
+  "video_validation": [
+    {
+      "file": "falha_video_fade_BDPE_02.mp4",
+      "type": "video_error",
+      "expected": "fade",
+      "detected": "fade",
+      "confidence": 0.9000000000000001,
+      "correct": true
+    },
+    {
+      "file": "falha_video_fade_comercial_01.mp4",
+      "type": "video_error",
+      "expected": "fade",
+      "detected": "fade",
+      "confidence": 0.9999999150028935,
+      "correct": true
+    },
+    {
+      "file": "falha_video_freeze_BDPE_SemPerda_01.mp4",
+      "type": "video_error",
+      "expected": "freeze",
+      "detected": "freeze",
+      "confidence": 0.9670131655092593,
+      "correct": true
+    },
+    {
+      "file": "falha_video_freeze_SemPerda_01.mp4",
+      "type": "video_error",
+      "expected": "freeze",
+      "detected": "freeze",
+      "confidence": 0.9139504665798612,
+      "correct": true
+    },
+    {
+      "file": "fora-foco2.mp4",
+      "type": "video_error",
+      "expected": "fora_de_foco",
+      "detected": "fora_de_foco",
+      "confidence": 0.8000000000000002,
+      "correct": true
+    },
+    {
+      "file": "fora-foco3.mp4",
+      "type": "video_error",
+      "expected": "fora_de_foco",
+      "detected": "fora_de_foco",
+      "confidence": 0.8023735697595482,
+      "correct": true
+    },
+    {
+      "file": "fora_foco.mp4",
+      "type": "video_error",
+      "expected": "fora_de_foco",
+      "detected": "fora_de_foco",
+      "confidence": 0.8000000000000002,
+      "correct": true
+    },
+    {
+      "file": "normal_clips/clip_1.mp4",
+      "type": "video_normal",
+      "expected": "normal",
+      "detected": "normal",
+      "confidence": 0.4743768890698751,
+      "correct": true
+    },
+    {
+      "file": "normal_clips/clip_2.mp4",
+      "type": "video_normal",
+      "expected": "normal",
+      "detected": "normal",
+      "confidence": 0.4751825084288915,
+      "correct": true
+    },
+    {
+      "file": "normal_clips/clip_3.mp4",
+      "type": "video_normal",
+      "expected": "normal",
+      "detected": "normal",
+      "confidence": 0.47526154716809593,
+      "correct": true
+    },
+    {
+      "file": "normal_clips/clip_4.mp4",
+      "type": "video_normal",
+      "expected": "normal",
+      "detected": "normal",
+      "confidence": 0.47519377171993255,
+      "correct": true
+    },
+    {
+      "file": "normal_clips/clip_5.mp4",
+      "type": "video_normal",
+      "expected": "normal",
+      "detected": "normal",
+      "confidence": 0.47526200115680695,
+      "correct": true
+    }
+  ],
+  "audio_validation": [
+    {
+      "file": "demo_echo.mp4",
+      "type": "audio_error",
+      "expected": "eco_reverb",
+      "detected": "eco_reverb",
+      "confidence": 0.9725726993267352,
+      "correct": true
+    },
+    {
+      "file": "echo.mp4",
+      "type": "audio_error",
+      "expected": "eco_reverb",
+      "detected": "eco_reverb",
+      "confidence": 1.0,
+      "correct": true
+    },
+    {
+      "file": "falha_audio_mudo_jornal_07.mp4",
+      "type": "audio_error",
+      "expected": "ausencia_audio",
+      "detected": "ausencia_audio",
+      "confidence": 0.9126481962203981,
+      "correct": true
+    },
+    {
+      "file": "falha_audio_mudo_jornal_09.mp4",
+      "type": "audio_error",
+      "expected": "ausencia_audio",
+      "detected": "ausencia_audio",
+      "confidence": 0.9085715770721436,
+      "correct": true
+    },
+    {
+      "file": "hiss1.mp4",
+      "type": "audio_error",
+      "expected": "ruido_hiss",
+      "detected": "ruido_hiss",
+      "confidence": 1.0,
+      "correct": true
+    },
+    {
+      "file": "hiss2.mp4",
+      "type": "audio_error",
+      "expected": "ruido_hiss",
+      "detected": "ruido_hiss",
+      "confidence": 0.9526260796189308,
+      "correct": true
+    },
+    {
+      "file": "hiss3.mp4",
+      "type": "audio_error",
+      "expected": "ruido_hiss",
+      "detected": "ruido_hiss",
+      "confidence": 1.0,
+      "correct": true
+    },
+    {
+      "file": "sinalerro1.mp4",
+      "type": "audio_error",
+      "expected": "sinal_teste",
+      "detected": "sinal_teste",
+      "confidence": 0.9966202974319458,
+      "correct": true
+    },
+    {
+      "file": "sinalerro2.mp4",
+      "type": "audio_error",
+      "expected": "sinal_teste",
+      "detected": "sinal_teste",
+      "confidence": 0.9660994410514832,
+      "correct": true
+    },
+    {
+      "file": "normal_clips/clip_1.mp4",
+      "type": "audio_normal",
+      "expected": "normal",
+      "detected": "normal",
+      "confidence": 0.9759735877697284,
+      "correct": true
+    },
+    {
+      "file": "normal_clips/clip_2.mp4",
+      "type": "audio_normal",
+      "expected": "normal",
+      "detected": "normal",
+      "confidence": 0.7318312812309998,
+      "correct": true
+    },
+    {
+      "file": "normal_clips/clip_3.mp4",
+      "type": "audio_normal",
+      "expected": "normal",
+      "detected": "normal",
+      "confidence": 0.9527811132944547,
+      "correct": true
+    },
+    {
+      "file": "normal_clips/clip_4.mp4",
+      "type": "audio_normal",
+      "expected": "normal",
+      "detected": "normal",
+      "confidence": 0.9836063018211951,
+      "correct": true
+    },
+    {
+      "file": "normal_clips/clip_5.mp4",
+      "type": "audio_normal",
+      "expected": "normal",
+      "detected": "normal",
+      "confidence": 0.9475033283233643,
+      "correct": true
+    }
+  ],
+  "normal_validation": [
+    {
+      "file": "T1_clip_1.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.4751761506001155,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.9895547353304349,
+      "audio_correct": true
+    },
+    {
+      "file": "T1_clip_10.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.4752256777779809,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.966651595555819,
+      "audio_correct": true
+    },
+    {
+      "file": "T1_clip_2.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.47520359655221306,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.9602494881703303,
+      "audio_correct": true
+    },
+    {
+      "file": "T1_clip_3.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.4751317540804545,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.9795330854562613,
+      "audio_correct": true
+    },
+    {
+      "file": "T1_clip_4.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.4753139615058899,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.9811968482457675,
+      "audio_correct": true
+    },
+    {
+      "file": "T1_clip_5.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.47523125608762107,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.9870030696575458,
+      "audio_correct": true
+    },
+    {
+      "file": "T1_clip_6.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.47521655360857645,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.9805696193988507,
+      "audio_correct": true
+    },
+    {
+      "file": "T1_clip_7.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.4752489646275838,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.990394807778872,
+      "audio_correct": true
+    },
+    {
+      "file": "T1_clip_8.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.4748229219995696,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.9438449969658484,
+      "audio_correct": true
+    },
+    {
+      "file": "T1_clip_9.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.4751382867495219,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.9201210485054896,
+      "audio_correct": true
+    },
+    {
+      "file": "T2_clip_1.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.4752102186282476,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.980634854390071,
+      "audio_correct": true
+    },
+    {
+      "file": "T2_clip_10.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.4752922038237254,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.9760098549035879,
+      "audio_correct": true
+    },
+    {
+      "file": "T2_clip_2.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.4752296358346939,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.9793805113205543,
+      "audio_correct": true
+    },
+    {
+      "file": "T2_clip_3.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.47511356274286903,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.9580981960663428,
+      "audio_correct": true
+    },
+    {
+      "file": "T2_clip_4.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.47519000669320427,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.9090540088140048,
+      "audio_correct": true
+    },
+    {
+      "file": "T2_clip_5.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.46798097689946494,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.9959029005124018,
+      "audio_correct": true
+    },
+    {
+      "file": "T2_clip_6.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.47519725958506265,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "ausencia_audio",
+      "audio_confidence": 0.95,
+      "audio_correct": false
+    },
+    {
+      "file": "T2_clip_7.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.4752232273419698,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.9497864704865676,
+      "audio_correct": true
+    },
+    {
+      "file": "T2_clip_8.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.4752180169026057,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.9869911349736727,
+      "audio_correct": true
+    },
+    {
+      "file": "T2_clip_9.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.4750845630963643,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.9929216458247259,
+      "audio_correct": true
+    },
+    {
+      "file": "T3_clip_1.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.4752420137325923,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.8529788484940162,
+      "audio_correct": true
+    },
+    {
+      "file": "T3_clip_10.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.4703395767458554,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.9906460046768188,
+      "audio_correct": true
+    },
+    {
+      "file": "T3_clip_2.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.47513695855935417,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.9767292921359723,
+      "audio_correct": true
+    },
+    {
+      "file": "T3_clip_3.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.475082141160965,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.845684174161691,
+      "audio_correct": true
+    },
+    {
+      "file": "T3_clip_4.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.4749700387318929,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "ruido_hiss",
+      "audio_confidence": 0.851141759455204,
+      "audio_correct": false
+    },
+    {
+      "file": "T3_clip_5.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "freeze",
+      "video_confidence": 0.9361528862847222,
+      "video_correct": false,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.8651491632828345,
+      "audio_correct": true
+    },
+    {
+      "file": "T3_clip_6.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.4751349925994873,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.9916791778344375,
+      "audio_correct": true
+    },
+    {
+      "file": "T3_clip_7.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.4751951436201731,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "ruido_hiss",
+      "audio_confidence": 1.0,
+      "audio_correct": false
+    },
+    {
+      "file": "T3_clip_8.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.47197249631086985,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "normal",
+      "audio_confidence": 0.9980040696951059,
+      "audio_correct": true
+    },
+    {
+      "file": "T3_clip_9.mp4",
+      "type": "pure_normal",
+      "video_expected": "normal",
+      "video_detected": "normal",
+      "video_confidence": 0.4689543962478638,
+      "video_correct": true,
+      "audio_expected": "normal",
+      "audio_detected": "ruido_hiss",
+      "audio_confidence": 0.8355648529529571,
+      "audio_correct": false
+    }
+  ],
+  "lipsync_validation": [
+    {
+      "file": "lipsync_1.mp4",
+      "status": "dessincronizado",
+      "confidence": 0.9006996154785156,
+      "offset_ms": 1.7572023207321763
+    }
+  ],
+  "summary": {
+    "video_accuracy": 0.9761904761904762,
+    "audio_accuracy": 0.9090909090909091
+  }
+}
