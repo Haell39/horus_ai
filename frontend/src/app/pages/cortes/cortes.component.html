@@ -17,8 +17,8 @@
     <div class="tipo">
       <select [(ngModel)]="filtroTipo">
         <option value="">Tipos de falha</option>
-        <option *ngFor="let tipo of tiposFalha" [value]="tipo">
-          {{ tipo }}
+        <option *ngFor="let tipo of tiposFalhaMap" [value]="tipo.value">
+          {{ tipo.label }}
         </option>
       </select>
     </div>

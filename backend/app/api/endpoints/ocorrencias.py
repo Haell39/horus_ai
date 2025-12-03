@@ -1,6 +1,7 @@
 # backend/app/api/endpoints/ocorrencias.py
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 from typing import List, Optional
 from pydantic import BaseModel
 import csv
@@ -165,10 +166,7 @@ def update_ocorrencia(
             ev = dict(db_oc.evidence or {})  # Cria cópia para forçar detecção de mudança
             ev["human_description"] = payload.human_description
             db_oc.evidence = ev  # Reatribui para SQLAlchemy detectar a mudança
-
-        # Força SQLAlchemy a detectar mudança no JSON
-        from sqlalchemy.orm.attributes import flag_modified
-        flag_modified(db_oc, "evidence")
+            flag_modified(db_oc, "evidence")  # Força SQLAlchemy a detectar mudança no JSON
 
         db.add(db_oc)
         db.commit()

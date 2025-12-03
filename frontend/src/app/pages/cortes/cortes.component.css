@@ -74,6 +74,7 @@
   grid-template-columns: 340px 1fr;
   gap: 25px;
   transition: all 0.3s ease;
+  min-height: 75vh;
 }
 
 .conteudo.expandido {
@@ -90,7 +91,8 @@
   padding: 15px;
   border-radius: 12px;
   overflow-y: auto;
-  max-height: 65vh;
+  max-height: 75vh;
+  min-height: 60vh;
 }
 
 .lista-falhas li {
@@ -205,8 +207,10 @@
   flex-direction: column;
   gap: 15px;
   box-shadow: 0 3px 14px rgba(0, 0, 0, 0.4);
-  max-height: 75vh;
+  max-height: 80vh;
+  min-height: 60vh;
   animation: slideIn 0.3s ease forwards;
+  overflow-y: auto;
 }
 
 @keyframes slideIn {
@@ -264,6 +268,49 @@ video {
 .info-bloco p {
   margin: 4px 0;
   color: var(--cor-10, #d0d4dc);
+}
+
+/* === Formulário de Edição === */
+.info-bloco label {
+  display: block;
+  margin-top: 12px;
+  margin-bottom: 4px;
+  color: var(--cor-10, #b6bac6);
+  font-size: 0.9rem;
+}
+
+.info-bloco input,
+.info-bloco select {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--input-bg, #2c313b);
+  border: 1px solid var(--cor-3, #3a3f4a);
+  border-radius: 8px;
+  color: var(--texto-cor, #e5e7eb);
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.info-bloco input:focus,
+.info-bloco select:focus,
+.info-bloco textarea:focus {
+  border-color: var(--btn-bg, #3399ff);
+}
+
+.info-bloco textarea {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--input-bg, #2c313b);
+  border: 1px solid var(--cor-3, #3a3f4a);
+  border-radius: 8px;
+  color: var(--texto-cor, #e5e7eb);
+  font-size: 0.95rem;
+  outline: none;
+  resize: vertical;
+  min-height: 80px;
+  font-family: inherit;
+  transition: border-color 0.2s;
 }
 
 /* === Ações === */

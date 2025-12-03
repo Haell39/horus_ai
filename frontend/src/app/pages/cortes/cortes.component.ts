@@ -48,17 +48,17 @@ export class CortesComponent implements OnInit {
   itensPorPagina = 10;
   paginaAtual = 1;
   mostrarDropdown = false;
-  // Lista completa de tipos solicitada pelo usuário
-  tiposFalha: string[] = [
-    'Ausência áudio',
-    'Volume baixo',
-    'Eco',
-    'Ruido/chiado',
-    'Sinal de teste 1khz',
-    'Freeze',
-    'Fade',
-    'Efeito bloco/variação',
-    'Fora de foco/imagem borrada',
+
+  // Mapeamento de tipos: valor backend -> label exibido
+  tiposFalhaMap: { value: string; label: string }[] = [
+    { value: 'ausencia_audio', label: 'Ausência de Áudio' },
+    { value: 'eco_reverb', label: 'Eco / Reverb' },
+    { value: 'ruido_hiss', label: 'Ruído / Hiss' },
+    { value: 'sinal_teste', label: 'Sinal de Teste' },
+    { value: 'freeze', label: 'Freeze' },
+    { value: 'fade', label: 'Fade' },
+    { value: 'fora_de_foco', label: 'Fora de Foco' },
+    { value: 'dessincronizado', label: 'Dessincronizado' },
   ];
 
   // Severidade conforme o backend envia (human readable)
@@ -94,12 +94,13 @@ export class CortesComponent implements OnInit {
       (s || '')
         .toString()
         .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/\//g, ' ')
+        .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+        .replace(/[_\-\/]/g, ' ') // Substitui _ - / por espaço
         .toLowerCase()
         .trim();
 
-    const matchesFilter = (
+    // Verifica se o valor contém o filtro (busca parcial)
+    const containsFilter = (
       value: string | undefined,
       filter: string | undefined
     ) => {
@@ -110,6 +111,7 @@ export class CortesComponent implements OnInit {
       return nVal.includes(nFil) || nFil.includes(nVal);
     };
 
+    // Filtro de texto (título ou descrição)
     const textoOk = (f: Falha) => {
       if (!this.filtroTexto) return true;
       const q = normalize(this.filtroTexto);
@@ -118,18 +120,52 @@ export class CortesComponent implements OnInit {
       );
     };
 
+    // Filtro de tipo - compara de forma flexível
+    const tipoOk = (f: Falha) => {
+      if (!this.filtroTipo) return true;
+      return containsFilter(f.tipo, this.filtroTipo);
+    };
+
+    // Filtro de categoria
+    const categoriaOk = (f: Falha) => {
+      if (!this.filtroCategoria) return true;
+      return containsFilter(f.categoria, this.filtroCategoria);
+    };
+
+    // Filtro de data - compara o formato ISO (YYYY-MM-DD)
+    const dataOk = (f: Falha) => {
+      if (!this.filtroData) return true;
+      return f.dataISO === this.filtroData;
+    };
+
+    // Filtro de severidade - extrai a letra (X, A, B, C) para comparar
+    const severidadeOk = (f: Falha) => {
+      if (!this.filtroSeveridade) return true;
+
+      // Extrai a letra do filtro selecionado: "Gravíssima (X)" -> "x"
+      const filtroLetra =
+        this.filtroSeveridade.match(/\(([XABC])\)/i)?.[1]?.toLowerCase() || '';
+      // Extrai a letra da severidade do item: "Gravíssima (X)" -> "x"
+      const itemLetra =
+        (f.severidade || '').match(/\(([XABC])\)/i)?.[1]?.toLowerCase() || '';
+
+      // Se conseguiu extrair letras, compara por letra
+      if (filtroLetra && itemLetra) {
+        return filtroLetra === itemLetra;
+      }
+
+      // Fallback: comparação por texto normalizado
+      return containsFilter(f.severidade, this.filtroSeveridade);
+    };
+
     const filtradas = this.falhas.filter((f) => {
-      const okTexto = textoOk(f);
-      const okTipo = matchesFilter(f.tipo, this.filtroTipo);
-      const okCategoria = matchesFilter(
-        f.categoria || '',
-        this.filtroCategoria
+      return (
+        textoOk(f) &&
+        tipoOk(f) &&
+        categoriaOk(f) &&
+        dataOk(f) &&
+        severidadeOk(f)
       );
-      const okData = !this.filtroData || f.dataISO === this.filtroData;
-      const okSev =
-        !this.filtroSeveridade ||
-        normalize(f.severidade) === normalize(this.filtroSeveridade);
-      return okTexto && okTipo && okCategoria && okData && okSev;
     });
 
     this.totalPaginas = Math.max(
@@ -336,8 +372,7 @@ export class CortesComponent implements OnInit {
         'perda',
         'latência',
       ];
-      if (audioTypes.find((a) => t.includes(a)))
-        inferredCategory = 'Áudio';
+      if (audioTypes.find((a) => t.includes(a))) inferredCategory = 'Áudio';
       else if (videoTypes.find((v) => t.includes(v)))
         inferredCategory = 'Vídeo';
       else if (streamTypes.find((s) => t.includes(s)))
@@ -501,11 +536,17 @@ export class CortesComponent implements OnInit {
 
     this.ocorrenciaService.updateOcorrencia(id, payload).subscribe({
       next: (updated) => {
+        console.log('DEBUG: Resposta do backend:', updated);
+        console.log('DEBUG: Evidence:', updated.evidence);
         // atualiza a entrada local e sai do modo edição
-        this.falhas = this.falhas.map((f) =>
-          f.id === id ? this.mapOcorrenciaToFalha(updated) : f
-        );
+        const mappedFalha = this.mapOcorrenciaToFalha(updated);
+        console.log('DEBUG: Falha mapeada:', mappedFalha);
+        this.falhas = this.falhas.map((f) => (f.id === id ? mappedFalha : f));
         this.falhaSelecionada = this.falhas.find((f) => f.id === id) || null;
+        console.log(
+          'DEBUG: falhaSelecionada.descricao:',
+          this.falhaSelecionada?.descricao
+        );
         this.editMode = false;
       },
       error: (err) => {
