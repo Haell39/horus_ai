@@ -1,8 +1,0 @@
-{
-  "tf_version": "2.20.0",
-  "gpus": [],
-  "duration_seconds": 5.2668678760528564,
-  "model_path": "d:/GitHub Desktop/modelos_perplexity/models/vision_mobilenetv2/model_retrain_dryrun.h5",
-  "history_json": "outputs/results/training_history_vision.json",
-  "history_png": "outputs/results/training_history_vision.png"
-}

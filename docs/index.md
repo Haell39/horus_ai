@@ -10,3 +10,7 @@ Bem-vindo ao conjunto de documentação do Horus AI. Aqui estão os principais d
 - [Modelos ML](ml_models.md) — onde colocar os .tflite, como testar e trocar modelos.
 
 Use essa pasta como ponto único de referência operacional. Se quiser, posso gerar um site MkDocs a partir daqui.
+
+
+
+continuar com esse index dps... pra melhoria futura!

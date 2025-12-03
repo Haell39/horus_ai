@@ -1,5 +1,0 @@
-ausencia_audio
-eco_reverb
-ruido_hiss
-sinal_teste
-normal
