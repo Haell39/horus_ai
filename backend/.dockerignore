@@ -1,0 +1,45 @@
+# Backend .dockerignore - Horus AI
+
+# Ambiente virtual Python
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Arquivos de configuração local
+.env
+.env.local
+*.env
+
+# Arquivos gerados em runtime
+static/hls/*
+static/clips/*
+*.log
+
+# IDE e editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Testes e cobertura
+.pytest_cache/
+.coverage
+htmlcov/
+tests/
+
+# Git
+.git/
+.gitignore
+
+# Documentação
+docs/
+*.md
+!README.md
+
+# Banco de dados local (se existir)
+*.db
+*.sqlite3

@@ -1,0 +1,21 @@
+# Root .dockerignore - Horus AI
+
+# Git
+.git/
+.gitignore
+
+# Documentação
+docs/
+*.md
+!README.md
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Ambiente local
+.env
+.env.*

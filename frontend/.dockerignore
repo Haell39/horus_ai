@@ -1,0 +1,35 @@
+# Frontend .dockerignore - Horus AI
+
+# Dependências (serão instaladas no container)
+node_modules/
+
+# Build local
+dist/
+.angular/
+
+# Configuração local
+.env
+.env.local
+
+# IDE e editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Testes
+coverage/
+.nyc_output/
+
+# Git
+.git/
+.gitignore
+
+# Documentação
+docs/
+*.md
+!README.md
+
+# Arquivos de log
+*.log
+npm-debug.log*

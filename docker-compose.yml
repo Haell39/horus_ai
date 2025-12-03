@@ -1,0 +1,72 @@
+# Docker Compose - Horus AI
+# Orquestra Backend + Frontend + PostgreSQL
+#
+# USO FUTURO - Não afeta o sistema atual
+# Para rodar: docker-compose up -d
+
+version: "3.8"
+
+services:
+  # ===== BANCO DE DADOS =====
+  postgres:
+    image: postgres:15-alpine
+    container_name: horus_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: horus_user
+      POSTGRES_PASSWORD: horus_senha_segura
+      POSTGRES_DB: horus_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U horus_user -d horus_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===== BACKEND (FastAPI) =====
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: horus_backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://horus_user:horus_senha_segura@postgres:5432/horus_db
+      VIDEO_VOTE_K: 3
+      VIDEO_MOVING_AVG_M: 5
+      VIDEO_THRESH_DEFAULT: 0.65
+    volumes:
+      # Persistir HLS e clips gerados
+      - hls_data:/app/static/hls
+      - clips_data:/app/static/clips
+      # Modelos de ML (opcional - pode buildar junto)
+      - ./backend/app/ml/models:/app/app/ml/models:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ===== FRONTEND (Angular + Nginx) =====
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: horus_frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+# ===== VOLUMES PERSISTENTES =====
+volumes:
+  postgres_data:
+    name: horus_postgres_data
+  hls_data:
+    name: horus_hls_data
+  clips_data:
+    name: horus_clips_data

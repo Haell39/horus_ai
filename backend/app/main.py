@@ -1,210 +1,107 @@
-# backend/app/main.py
-# (Versão Completa com Rota de Análise Incluída)
-
 from fastapi import FastAPI
 import asyncio
-import socket
 from fastapi.middleware.cors import CORSMiddleware
-
-# Importa NOSSOS routers
-from app.api.endpoints import ocorrencias
-from app.api.endpoints import analysis # <<< ESSA LINHA É CRUCIAL
-from app.api.endpoints import docs
-from app.api.endpoints import ws
-from app.api.endpoints import streams
-from app.api.endpoints import admin
-from app.api.endpoints import ml_info
+from app.api.endpoints import ocorrencias, analysis, docs, ws, streams, admin, ml_info
 from fastapi.staticfiles import StaticFiles
 import os
 from app.core import storage as storage_core
-
-# Importa a base do banco para criação de tabelas
 from app.db.base import Base, engine
-# Garante carregamento do .env e configurações logo no startup
-from app.core.config import settings  # noqa: F401
+from app.core.config import settings
 
-# --- Criação das Tabelas ---
-print("INFO: Verificando e criando tabelas no banco de dados (se necessário)...")
+print("INFO: Criando tabelas no banco de dados...")
 try:
     Base.metadata.create_all(bind=engine)
     print("INFO: Tabelas OK.")
 except Exception as e:
-    print(f"ERRO: Não foi possível conectar ou criar tabelas: {e}")
-    # Considerar parar a aplicação aqui em caso de erro crítico de DB
+    print(f"ERRO: Falha ao criar tabelas: {e}")
 
-# --- Instância Principal do FastAPI ---
 app = FastAPI(
     title="Horus AI - Backend",
-    description="API para monitoramento, análise e registro de ocorrências da Globo.",
+    description="API para monitoramento e análise de ocorrências.",
     version="0.1.0"
 )
 
-# --- Configuração do CORS ---
-# Permite que seu frontend (ex: localhost:4200) acesse esta API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Em prod, restrinja para o domínio do seu frontend
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"], # Permite GET, POST, PUT, DELETE, etc.
-    allow_headers=["*"], # Permite todos os cabeçalhos comuns
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
-# Some browsers (and certain fetch usages) may still hit StaticFiles without
-# receiving the CORS headers in some environments; add a small middleware that
-# ensures static HLS/CLIPS responses contain an Access-Control-Allow-Origin
-# header so the frontend can load .m3u8/.ts segments from another origin.
 @app.middleware("http")
 async def ensure_static_cors(request, call_next):
+    """Garante headers CORS para arquivos estáticos HLS/clips."""
     response = await call_next(request)
     try:
         path = request.url.path or ''
         if path.startswith('/hls') or path.startswith('/clips'):
-            # be permissive for local dev; in prod scope this to your frontend origin
-            response.headers['Access-Control-Allow-Origin'] = '*' 
+            response.headers['Access-Control-Allow-Origin'] = '*'
             response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
             response.headers['Access-Control-Allow-Headers'] = '*'
-            # Ensure HLS playlists/segments are not cached by the browser so the
-            # player always requests the latest playlist/segments.
             if path.startswith('/hls'):
                 response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     except Exception:
         pass
     return response
 
-# --- Inclusão dos Routers ---
+app.include_router(ocorrencias.router, prefix="/api/v1", tags=["Ocorrências"])
+app.include_router(analysis.router, prefix="/api/v1", tags=["Análise ML"])
+app.include_router(ml_info.router, prefix="/api/v1", tags=["ML Info"])
+app.include_router(docs.router, prefix="/api/v1", tags=["Docs"])
+app.include_router(ws.router, tags=["WebSockets"])
+app.include_router(streams.router, prefix="/api/v1", tags=["Streams"])
+app.include_router(admin.router, prefix="/api/v1", tags=["Admin"])
 
-# Router para Ocorrências (CRUD)
-app.include_router(
-    ocorrencias.router,
-    prefix="/api/v1",       # Prefixo comum para a API
-    tags=["Ocorrências"]    # Agrupa na documentação /docs
-)
-
-# <<< BLOCO ADICIONADO PARA O ROUTER DE ANÁLISE ML >>>
-app.include_router(
-    analysis.router,
-    prefix="/api/v1",       # Mesmo prefixo da API
-    tags=["Análise ML"]     # Tag separada na documentação
-)
-
-# Small diagnostics/info about model shapes and class mapping
-app.include_router(
-    ml_info.router,
-    prefix="/api/v1",
-    tags=["ML Info"]
-)
-
-# Docs viewer endpoints (lists markdown files under repo folders)
-app.include_router(
-    docs.router,
-    prefix="/api/v1",
-    tags=["Docs"]
-)
-# <<< FIM DO BLOCO ADICIONADO >>>
-
-app.include_router(
-    ws.router,
-    # Nota: WebSockets não costumam ter prefixo /api/v1
-    # O endpoint será /ws/ocorrencias
-    tags=["WebSockets"]
-)
-# Streams control endpoints (start/stop)
-app.include_router(
-    streams.router,
-    prefix="/api/v1",
-    tags=["Streams"]
-)
-app.include_router(
-    admin.router,
-    prefix="/api/v1",
-    tags=["Admin"]
-)
-# <<< FIM DO BLOCO ADICIONADO >>>
-
-# --- Endpoint Raiz (Saúde) ---
 @app.get("/", tags=["Root"])
 def read_root():
-    """Verifica se a API está online."""
     return {"message": "Horus AI API - Online"}
 
-print("INFO: Aplicação FastAPI iniciada e rotas configuradas.")
+print("INFO: Rotas configuradas.")
 
-# --- Monta rota para servir clipes estáticos (ex: /clips/clip_123.mp4) ---
-# Usa a configuração de storage para decidir o diretório público de clipes.
-# Isso permite que clipes sejam gravados em um local configurado (ex: D:\Videos)
-# e ainda sejam servidos pela rota `/clips`.
 try:
     clips_dir = storage_core.get_clips_dir()
 except Exception:
     clips_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'static', 'clips'))
 os.makedirs(clips_dir, exist_ok=True)
 app.mount("/clips", StaticFiles(directory=clips_dir), name="clips")
-print(f"INFO: Static clips mount configured at /clips -> {clips_dir}")
 
-# HLS mount (stream output)
 hls_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'static', 'hls'))
 os.makedirs(hls_dir, exist_ok=True)
 app.mount("/hls", StaticFiles(directory=hls_dir), name="hls")
-print(f"INFO: HLS mount configured at /hls -> {hls_dir}")
 
-# === Opcional: Evento Startup para Carregar Modelos ===
-# (Carrega modelos na inicialização do servidor)
 @app.on_event("startup")
 async def startup_event():
-    print("INFO: Evento startup - Carregando modelos de ML...")
-    # Importa DENTRO da função para garantir que tudo esteja pronto
+    """Carrega modelos ML e configura exception handler."""
     from app.ml import inference
-    # Chama a função load_all_models apenas se não foram carregados ainda
     if not inference.models_loaded:
-         inference.load_all_models() # Tenta carregar
-
+        inference.load_all_models()
+    
     if not inference.models_loaded:
-        print("ALERTA CRÍTICO: Modelos de ML não puderam ser carregados no startup! Endpoint /analyze pode falhar.")
+        print("ALERTA: Modelos de ML não carregados!")
     else:
-        print("INFO: Modelos de ML verificados/carregados no startup.")
-    # --- Log não-sensível das configurações relevantes para vídeo ---
+        print("INFO: Modelos ML carregados.")
+    
+    # Log de configurações
     try:
-        # settings está importado no topo do arquivo
-        v_vote = settings.VIDEO_VOTE_K
-        v_mov = settings.VIDEO_MOVING_AVG_M
-        v_thresh_default = settings.VIDEO_THRESH_DEFAULT
-        v_thresh_map = settings.video_thresholds()
-        print(f"INFO: VIDEO_VOTE_K={v_vote}, VIDEO_MOVING_AVG_M={v_mov}, VIDEO_THRESH_DEFAULT={v_thresh_default}")
-        # list a few per-class thresholds (limit output to 20 entries)
-        sample = list(v_thresh_map.items())[:20]
-        if sample:
-            print("INFO: VIDEO_THRESH (sample): " + ", ".join(f"{k}:{v}" for k, v in sample))
-    except Exception as _:
-        # do not crash startup on logging
+        print(f"INFO: VIDEO_VOTE_K={settings.VIDEO_VOTE_K}, VIDEO_MOVING_AVG_M={settings.VIDEO_MOVING_AVG_M}")
+    except Exception:
         pass
-    # --- Install a friendly asyncio exception handler to silence harmless
-    # ConnectionResetError / WinError 10054 noisy stacktraces when clients
-    # (browsers) abort range requests or cancel downloads. This prevents the
-    # server log from filling with tracebacks while keeping other errors visible.
+    
+    # Handler para ignorar ConnectionResetError (cliente desconectou)
     try:
         loop = asyncio.get_running_loop()
-
         def _asyncio_exception_handler(loop, context):
             ex = context.get('exception')
-            # If it's a ConnectionResetError (often caused by client aborting
-            # a download) or a Broken pipe on Windows, just log debug and return.
             if isinstance(ex, ConnectionResetError):
-                print(f"DEBUG: Ignored client connection reset: {ex}")
                 return
-            # Some Windows cancellations raise OSError with WinError 10054
             if isinstance(ex, OSError) and getattr(ex, 'winerror', None) == 10054:
-                print(f"DEBUG: Ignored WinError 10054 (connection reset by peer): {ex}")
                 return
-            # Fallback to default handler for anything else
             try:
                 loop.default_exception_handler(context)
             except Exception:
-                # last resort: print the context
-                print("ERROR in asyncio exception handler:", context)
-
+                print("ERROR:", context)
         loop.set_exception_handler(_asyncio_exception_handler)
     except Exception:
-        # If we can't set the handler, don't crash startup.
         pass
-# === Fim do Bloco Opcional ===
