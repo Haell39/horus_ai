@@ -463,6 +463,6 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 ---
 
 <p align="center">
-  <b>🦅 Horus AI</b> — Monitoramento Inteligente de Broadcast<br>
+  <b>👁️ Horus AI</b> — Monitoramento Inteligente de Broadcast<br>
   <i>Projeto Acadêmico</i>
 </p>
