@@ -1,7 +1,5 @@
 👁️ Horus AI
 
-**Sistema Inteligente de Monitoramento e Detecção de Anomalias em Transmissões de Vídeo**
-
 ---
 
 ## 📋 Índice
