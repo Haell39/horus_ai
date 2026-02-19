@@ -1,8 +1,0 @@
-video_filename,t_start,t_end,class,notes,source
-falha_video_fade_BDPE_02.mp4,00:00:03,00:00:06,fade,,globo
-falha_video_fade_comercial_01.mp4,00:00:07,00:00:16,fade,,globo
-falha_video_freeze_BDPE_SemPerda_01.mp4,00:00:06,00:00:12,freeze,,globo
-falha_video_freeze_SemPerda_01.mp4,00:00:07,00:00:10,freeze,,globo
-fora_foco.mp4,00:00:02,00:00:06,blur,,globo
-fora_foco2.mp4,00:00:02,00:00:05,blur,,globo
-fora_foco3.mp4,00:00:00,00:00:07,blur,,globo
