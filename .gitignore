@@ -13,4 +13,17 @@ venv/
 # Node modules
 /frontend/node_modules/
 
+# IDE
+.vscode/
+
+# Test / cache
+.pytest_cache/
+__pycache__/
+*.pyc
+
+# Temp
+temp/
+tmp/
+DEBUG/
+
 #backend
