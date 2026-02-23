@@ -4,12 +4,11 @@
 
 Três modelos de Machine Learning analisam o stream simultaneamente — vídeo, áudio e lipsync — identificando falhas e gerando alertas em tempo real.
 
-| Tipo | Anomalias Detectadas |
-|------|----------------------|
-| **Vídeo** | Freeze, Fade (tela preta), Fora de foco |
-| **Áudio** | Ausência de som, Eco/Reverb, Ruído/Chiado, Sinal de teste |
-| **Lipsync** | Dessincronização entre áudio e vídeo |
-
+| Tipo        | Anomalias Detectadas                                      |
+| ----------- | --------------------------------------------------------- |
+| **Vídeo**   | Freeze, Fade (tela preta), Fora de foco                   |
+| **Áudio**   | Ausência de som, Eco/Reverb, Ruído/Chiado, Sinal de teste |
+| **Lipsync** | Dessincronização entre áudio e vídeo                      |
 
 ---
 
@@ -74,11 +73,11 @@ cd backend && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 cd frontend && npm start
 ```
 
-| Serviço | URL |
-|---------|-----|
-| Interface Web | http://localhost:4200 |
-| API + Swagger | http://localhost:8000/docs |
-| Stream HLS | http://localhost:8000/hls/stream.m3u8 |
+| Serviço       | URL                                   |
+| ------------- | ------------------------------------- |
+| Interface Web | http://localhost:4200                 |
+| API + Swagger | http://localhost:8000/docs            |
+| Stream HLS    | http://localhost:8000/hls/stream.m3u8 |
 
 ---
 
@@ -109,11 +108,11 @@ horus_ai/
 
 ## 🤖 Modelos de IA
 
-| Modelo | Formato | Acurácia |
-|--------|---------|----------|
-| Odin v4.5 (vídeo) | `.keras` | 97.6% |
-| Heimdall Ultra v1 (áudio) | `.keras` | 90.9% |
-| SyncNet v2 (lipsync) | `.tflite` quantizado | 100% |
+| Modelo                    | Formato              | Acurácia |
+| ------------------------- | -------------------- | -------- |
+| Odin v4.5 (vídeo)         | `.keras`             | 97.6%    |
+| Heimdall Ultra v1 (áudio) | `.keras`             | 90.9%    |
+| SyncNet v2 (lipsync)      | `.tflite` quantizado | 100%     |
 
 Estratégia híbrida: heurísticas OpenCV (detecção rápida) + ML (confirmação com votação temporal).
 
@@ -122,7 +121,6 @@ Estratégia híbrida: heurísticas OpenCV (detecção rápida) + ML (confirmaç�
 ## 📄 Licença
 
 MIT — veja [LICENSE](LICENSE).
-
 
 O **Horus AI** é um sistema de monitoramento automatizado que detecta falhas técnicas em transmissões de vídeo ao vivo. Três modelos de machine learning analisam o stream simultaneamente — **vídeo**, **áudio** e **lipsync** — identificando anomalias e gerando alertas em tempo real.
 
@@ -147,4 +145,3 @@ O **Horus AI** é um sistema de monitoramento automatizado que detecta falhas t�
 - ✅ Acessibilidade com VLibras integrado
 
 ---
-
