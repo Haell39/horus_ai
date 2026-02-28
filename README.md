@@ -2,7 +2,7 @@
 
 **Sistema inteligente de monitoramento e detecção de anomalias em transmissões de vídeo ao vivo.**
 
-Três modelos de Machine Learning analisam o stream simultaneamente — vídeo, áudio e lipsync — identificando falhas e gerando alertas em tempo real.
+Três modelos de Machine Learning analisam o stream simultaneamente vídeo, áudio e lipsync identificando falhas e gerando alertas em tempo real.
 
 | Tipo        | Anomalias Detectadas                                      |
 | ----------- | --------------------------------------------------------- |
